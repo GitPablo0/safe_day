@@ -1,0 +1,83 @@
+/**
+ * @fileoverview Firestore Security Rules for NeuroSense Dashboard.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model, ensuring that users can only access and modify data associated with their own accounts.
+ *
+ * Data Structure:
+ * - Users are stored in `/users/{userId}`.
+ * - Threshold configurations for each user are stored in `/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}`.
+ *
+ * Key Security Decisions:
+ * - Users can only create, read, update, and delete their own threshold configurations.
+ * - Listing threshold configurations is restricted to the owner of the configurations.
+ * - The `userId` field in `ThresholdConfiguration` documents must match the `userId` in the path.
+ *
+ * Denormalization for Authorization:
+ * - The `ThresholdConfiguration` documents contain a `userId` field, which is used to enforce ownership. This avoids the need for complex `get()` calls to determine ownership.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Secures user profile information.
+     * @path /users/{userId}
+     * @allow (create) User with matching UID can create their profile.
+     * @allow (get, list) User with matching UID can read their profile.
+     * @allow (update, delete) User with matching UID can update/delete their profile.
+     * @deny (create) User cannot create a profile with a mismatched UID.
+     * @deny (get, list) Another user cannot read this user's profile.
+     * @deny (update, delete) Another user cannot update/delete this user's profile.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get: if isOwner(userId);
+      allow list: if false; // Listing all users is not permitted
+
+      allow create: if isOwner(userId) && request.resource.data.id == request.auth.uid;
+      allow update: if isOwner(userId) && resource.data.id == userId;
+      allow delete: if isOwner(userId);
+    }
+
+    /**
+     * @description Secures threshold configurations for each user.
+     * @path /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}
+     * @allow (create) User with matching UID can create threshold configurations.
+     * @allow (get, list) User with matching UID can read their own threshold configurations.
+     * @allow (update, delete) User with matching UID can update/delete their own threshold configurations.
+     * @deny (create) User cannot create threshold configurations with a mismatched UID.
+     * @deny (get, list) Another user cannot read this user's threshold configurations.
+     * @deny (update, delete) Another user cannot update/delete this user's threshold configurations.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId}/thresholdConfigurations/{thresholdConfigurationId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == userId;
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}

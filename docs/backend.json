@@ -94,6 +94,31 @@
         "email",
         "name"
       ]
+    },
+    "SensorData": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SensorData",
+      "type": "object",
+      "description": "Represents the real-time sensor readings from the hardware device.",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "description": "The current temperature reading in Celsius."
+        },
+        "humidity": {
+          "type": "number",
+          "description": "The current humidity reading in percentage."
+        },
+        "soundLevel": {
+          "type": "number",
+          "description": "The current sound level reading (raw value)."
+        }
+      },
+      "required": [
+        "temperature",
+        "humidity",
+        "soundLevel"
+      ]
     }
   },
   "auth": {
@@ -139,8 +164,19 @@
             }
           ]
         }
+      },
+      {
+        "path": "/sensorData/latest",
+        "definition": {
+          "entityName": "SensorData",
+          "schema": {
+            "$ref": "#/backend/entities/SensorData"
+          },
+          "description": "Stores the most recent sensor data from the device. This document is intended to be updated frequently by the hardware.",
+          "params": []
+        }
       }
     ],
-    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds for an Arduino-based environmental stress detection system, the following Firestore structure is recommended. This design prioritizes authorization independence and simplifies security rules.  The core structure revolves around storing `ThresholdConfiguration` documents owned by individual users.\n\n1.  **Authorization Independence:** Threshold configurations are owned by a specific user. The `userId` field within the `ThresholdConfiguration` document explicitly denotes ownership.  This eliminates the need for complex hierarchical authorization checks (`get()` calls) and ensures that security rules can be based solely on the `request.auth.uid` and the document's `userId`. This fulfills Authorization Independence (CRITICAL).\n\n2.  **Structural Segregation:**  All `ThresholdConfiguration` documents within the `/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}` collection share the same security requirements: only the owning user can read, write, or delete them. This homogeneity simplifies the security rules.\n\n3.  **Access Modeling:** The data structure uses Path-Based ownership (`/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}`). Each user has their own collection of threshold configurations.  This structure is highly secure and makes ownership-based security rules simple and efficient.\n\n4.  **QAPs (Rules are not Filters):** The design supports secure `list` operations. Because the `thresholdConfigurations` subcollection is user-specific, listing documents is inherently limited to the authenticated user's configurations.  The security rules can simply verify that `request.auth.uid == userId` to allow listing, preventing unauthorized access to other users' configurations.\n\n5. **Invariants:** Because the ownership is explicity declared with `userId` in `thresholdConfigurations`, integrity of ownership is enforced by security rules."
+    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds for an Arduino-based environmental stress detection system and see real-time data, the following Firestore structure is recommended. This design prioritizes authorization independence and simplifies security rules.  The core structure revolves around storing `ThresholdConfiguration` documents owned by individual users and a single document for the latest `SensorData`.\n\n1.  **Authorization Independence:** Threshold configurations are owned by a specific user. The `userId` field within the `ThresholdConfiguration` document explicitly denotes ownership.  This eliminates the need for complex hierarchical authorization checks (`get()` calls) and ensures that security rules can be based solely on the `request.auth.uid` and the document's `userId`. This fulfills Authorization Independence (CRITICAL).\n\n2.  **Structural Segregation:**  All `ThresholdConfiguration` documents within the `/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}` collection share the same security requirements: only the owning user can read, write, or delete them. This homogeneity simplifies the security rules.\n\n3.  **Access Modeling:** The data structure uses Path-Based ownership (`/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}`). Each user has their own collection of threshold configurations.  This structure is highly secure and makes ownership-based security rules simple and efficient.\n\n4.  **QAPs (Rules are not Filters):** The design supports secure `list` operations. Because the `thresholdConfigurations` subcollection is user-specific, listing documents is inherently limited to the authenticated user's configurations.  The security rules can simply verify that `request.auth.uid == userId` to allow listing, preventing unauthorized access to other users' configurations.\n\n5. **Real-time Sensor Data**: A single document at `/sensorData/latest` is used to store the most recent readings. This is efficient for the dashboard to listen to for real-time updates without needing to query a large collection. The hardware device will have write-only access to this document."
   }
 }

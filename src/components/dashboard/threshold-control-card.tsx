@@ -8,11 +8,15 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Save } from "lucide-react";
 
+type SoundThresholds = { low: number; medium: number };
+type TempThresholds = { green: number; orange: number };
+
 interface ThresholdControlCardProps {
-  soundThresholds: { low: number; medium: number };
-  setSoundThresholds: (value: { low: number; medium: number }) => void;
-  tempThresholds: { green: number; orange: number };
-  setTempThresholds: (value: { green: number; orange: number }) => void;
+  soundThresholds: SoundThresholds;
+  setSoundThresholds: (value: SoundThresholds) => void;
+  tempThresholds: TempThresholds;
+  setTempThresholds: (value: TempThresholds) => void;
+  onSave: (soundThresholds: SoundThresholds, tempThresholds: TempThresholds) => void;
 }
 
 export default function ThresholdControlCard({
@@ -20,12 +24,12 @@ export default function ThresholdControlCard({
   setSoundThresholds,
   tempThresholds,
   setTempThresholds,
+  onSave,
 }: ThresholdControlCardProps) {
   const { toast } = useToast();
 
   const handleSave = () => {
-    // In a real application, this would trigger a server action to save to a database.
-    console.log("Saving configuration:", { soundThresholds, tempThresholds });
+    onSave(soundThresholds, tempThresholds);
     toast({
       title: "Configuration Saved",
       description: "Your new threshold settings have been saved successfully.",

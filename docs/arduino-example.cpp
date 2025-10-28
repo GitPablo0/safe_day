@@ -50,6 +50,17 @@ const int TEMP_SENSOR_PIN = 4;
 const int SOUND_SENSOR_PIN = 34;
 const int HUMIDITY_SENSOR_PIN = 4;
 
+// Pines para los LEDs de estado
+const int LED_VERDE_PIN = 12;
+const int LED_NARANJA_PIN = 13;
+const int LED_ROJO_PIN = 14;
+
+// Umbrales por defecto (se intentarán leer desde Firebase)
+float soundThresholdLow = 300;
+float soundThresholdMedium = 380;
+float tempThresholdVerde = 24;
+float tempThresholdNaranja = 28;
+
 // ===============================================================
 // 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
@@ -59,6 +70,14 @@ const long sendDataInterval = 15000;
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
+
+  // Configurar pines de LEDs como salida
+  pinMode(LED_VERDE_PIN, OUTPUT);
+  pinMode(LED_NARANJA_PIN, OUTPUT);
+  pinMode(LED_ROJO_PIN, OUTPUT);
+  digitalWrite(LED_VERDE_PIN, LOW);
+  digitalWrite(LED_NARANJA_PIN, LOW);
+  digitalWrite(LED_ROJO_PIN, LOW);
 
   // Conectar a Wi-Fi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -75,21 +94,16 @@ void setup() {
   Serial.println("Inicializando Firebase...");
 
   // Asignar la API Key y la URL de la base de datos a la configuración.
-  Serial.println("Paso 1: Asignando API Key y Database URL.");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
 
-  // Registrarse como usuario anónimo. Esto es más robusto para dispositivos.
-  Serial.println("Paso 2: Configurando autenticación anónima.");
+  // Registrarse como usuario anónimo.
   auth.user.email = "";
   auth.user.password = "";
 
   // Iniciar Firebase con la configuración y la autenticación.
-  Serial.println("Paso 3: Llamando a Firebase.begin(). Este paso puede tardar...");
   Firebase.begin(&config, &auth);
   
-  Serial.println("Paso 4: Firebase.begin() completado.");
-
   Firebase.reconnectWiFi(true);
 }
 
@@ -111,6 +125,23 @@ void loop() {
     Serial.print("Nivel de sonido: "); Serial.println(soundLevel);
     Serial.println("------------------------------------");
 
+    // Lógica para controlar los LEDs
+    int estadoSonido = 1; // 1: Verde, 2: Naranja, 3: Rojo
+    if (soundLevel >= soundThresholdLow) estadoSonido = 2;
+    if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
+
+    int estadoTemp = 1;
+    if (temperature >= tempThresholdVerde) estadoTemp = 2;
+    if (temperature >= tempThresholdNaranja) estadoTemp = 3;
+    
+    int ledStatus = max(estadoSonido, estadoTemp);
+
+    digitalWrite(LED_VERDE_PIN, ledStatus == 1);
+    digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
+    digitalWrite(LED_ROJO_PIN, ledStatus == 3);
+
+    Serial.printf("Estado de LEDs determinado: %d\n", ledStatus);
+
     // 2. Crear el objeto JSON de contenido de Firestore
     String jsonData = "";
     jsonData += "{'fields': {";
@@ -123,8 +154,8 @@ void loop() {
     String documentPath = "sensorData/latest";
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
-    // Usamos patch para actualizar el documento.
-    if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "temperature,humidity,soundLevel")) {
+    // Usamos patch para actualizar el documento. Esto es más eficiente y creará el documento si no existe.
+    if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {
         Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());

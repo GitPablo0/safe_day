@@ -6,21 +6,19 @@
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
  * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
  * 2. ArduinoJson by Benoit Blanchon
+ * 3. DHT sensor library by Adafruit
  * 
  * --- SOLUCIÓN DE PROBLEMAS ---
  * Si encuentras errores de "SSL/TLS Handshake Failed" o "SSL internal timeout",
  * la causa más común es que el microcontrolador no tiene la hora correcta.
  * La conexión segura (SSL) requiere una hora precisa para validar los certificados.
- * 
- * Esta versión del código incluye una configuración de zona horaria para ayudar
- * a la biblioteca de Firebase a sincronizar la hora correctamente a través de NTP.
- * Asegúrate de tener la última versión de la biblioteca "Firebase ESP Client".
  * ==================================================================================
  */
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
+#include "DHT.h"
 
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI
@@ -43,12 +41,13 @@ FirebaseAuth auth;
 FirebaseConfig config;
 
 // ===============================================================
-// 3. PINES Y SENSORES (EJEMPLO)
+// 3. PINES Y SENSORES (DHT22 y KY-037)
 // ===============================================================
-// Reemplaza con los pines reales que estés usando.
-const int TEMP_SENSOR_PIN = 4;
-const int SOUND_SENSOR_PIN = 34;
-const int HUMIDITY_SENSOR_PIN = 4;
+#define DHTPIN 4         // Pin de datos para el DHT22
+#define DHTTYPE DHT22    // Definiendo el tipo de sensor como DHT22
+const int SOUND_SENSOR_PIN = 34; // Pin analógico para el KY-037
+
+DHT dht(DHTPIN, DHTTYPE); // Inicializa el objeto sensor DHT
 
 // Pines para los LEDs de estado
 const int LED_VERDE_PIN = 12;
@@ -67,9 +66,33 @@ float tempThresholdNaranja = 28;
 unsigned long sendDataPrevMillis = 0;
 const long sendDataInterval = 15000;
 
+float readTemperature() {
+  float t = dht.readTemperature();
+  if (isnan(t)) {
+    Serial.println("Error al leer la temperatura del sensor DHT!");
+    return 0; // Devuelve 0 o un valor de error si falla
+  }
+  return t;
+}
+
+float readHumidity() {
+  float h = dht.readHumidity();
+  if (isnan(h)) {
+    Serial.println("Error al leer la humedad del sensor DHT!");
+    return 0; // Devuelve 0 o un valor de error si falla
+  }
+  return h;
+}
+
+int readSoundLevel() {
+  return analogRead(SOUND_SENSOR_PIN);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
+  
+  dht.begin(); // Inicializa el sensor DHT
 
   // Configurar pines de LEDs como salida
   pinMode(LED_VERDE_PIN, OUTPUT);
@@ -113,10 +136,10 @@ void loop() {
   if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
-    // 1. Leer datos de los sensores (implementa estas funciones según tu hardware)
-    float temperature = 25.5; //readTemperature();
-    float humidity = 60.1; //readHumidity();
-    int soundLevel = 250; //readSoundLevel();
+    // 1. Leer datos de los sensores reales
+    float temperature = readTemperature();
+    float humidity = readHumidity();
+    int soundLevel = readSoundLevel();
 
     Serial.println("------------------------------------");
     Serial.println("Intentando enviar datos a Firebase...");

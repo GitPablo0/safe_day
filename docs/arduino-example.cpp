@@ -60,10 +60,8 @@ const int HUMIDITY_SENSOR_PIN = 5; // Suponiendo un sensor DHT
 
 // ===============================================================
 // 4. LÓGICA DE LA APLICACIÓN
-// ===============================================================
-unsigned long sendDataPrevMillis = 0;
-// Envía datos a Firebase cada 5 segundos (aumentado para dar tiempo a la conexión)
-const long sendDataInterval = 5000;
+// =================================Cambiado a 15 segundos para evitar bloqueos por demasiados intentos
+const long sendDataInterval = 15000;
 
 // Función de devolución de llamada para saber el estado de la autenticación de Firebase
 void tokenStatusCallback(TokenInfo info)
@@ -98,8 +96,6 @@ void setup() {
 
   // Configurar Firebase
   config.api_key = API_KEY;
-  auth.user.email = "device@neurosense.com"; // Usando autenticación anónima/personalizada
-  auth.user.password = "device_password"; // No es crítico para anónimos, pero requerido
   config.database_url = DATABASE_URL;
 
   // Asignar la función de devolución de llamada para la gestión del token
@@ -112,7 +108,7 @@ void setup() {
   // Ejemplo: "America/Mexico_City" es GMT-6
   config.time_zone = -6; // Reemplaza con tu zona horaria (offset de UTC)
 
-  Serial.println("Inicializando Firebase...");
+  Serial.println("Inicializando Firebase (Autenticación Anónima)...");
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 }

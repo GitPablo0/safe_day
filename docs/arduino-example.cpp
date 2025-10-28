@@ -33,7 +33,6 @@
 // Reemplaza con la clave de API web de tu proyecto de Firebase.
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // URL de Realtime Database, necesaria para la autenticación
 
 // Objetos de Firebase
 FirebaseData fbdo;
@@ -99,7 +98,7 @@ void setup() {
   pinMode(LED_NARANJA_PIN, OUTPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
   digitalWrite(LED_VERDE_PIN, LOW);
-  digitalWrite(LED_NARANJA_PIN, LOW);
+  digitalWrite(LED_NARANja_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
 
   // Conectar a Wi-Fi
@@ -116,23 +115,17 @@ void setup() {
 
   Serial.println("Inicializando Firebase...");
 
-  // Asignar la API Key y la URL de la base de datos a la configuración.
+  // Asignar la API Key para la configuración
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-
-  // Registrarse como usuario anónimo.
-  auth.user.email = "";
-  auth.user.password = "";
-
-  // Iniciar Firebase con la configuración y la autenticación.
+  
+  // Como no estamos usando autenticación de usuario, el objeto auth puede estar vacío
+  // pero aún se debe pasar a la función begin.
   Firebase.begin(&config, &auth);
   
   Firebase.reconnectWiFi(true);
 }
 
 void loop() {
-  // Se elimina la comprobación de Firebase.ready() para forzar el envío de datos.
-  // Si la conexión es exitosa, los datos se enviarán.
   if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
@@ -178,6 +171,7 @@ void loop() {
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
     // Usamos patch para actualizar el documento. Esto es más eficiente y creará el documento si no existe.
+    // El tercer argumento (UID) se deja vacío porque no estamos usando autenticación de usuario.
     if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {

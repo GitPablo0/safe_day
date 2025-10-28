@@ -6,15 +6,11 @@
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
  * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
  * 2. ArduinoJson by Benoit Blanchon
- * 
+ *
  * --- SOLUCIÓN DE PROBLEMAS ---
  * Si encuentras errores de "SSL/TLS Handshake Failed" o "SSL internal timeout",
  * la causa más común es que el microcontrolador no tiene la hora correcta.
  * La conexión segura (SSL) requiere una hora precisa para validar los certificados.
- * 
- * Esta versión del código incluye una configuración de zona horaria para ayudar
- * a la biblioteca de Firebase a sincronizar la hora correctamente a través de NTP.
- * Asegúrate de tener la última versión de la biblioteca "Firebase ESP Client".
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -26,29 +22,18 @@
 // 1. CONFIGURACIÓN DE WIFI
 // ===============================================================
 // Reemplaza con tus credenciales de Wi-Fi
-#define WIFI_SSID "TU_WIFI_SSID"
-#define WIFI_PASSWORD "TU_WIFI_CONTRASENA"
+#define WIFI_SSID "Telecentro-416b"
+#define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
 // ===============================================================
-// Ve a tu consola de Firebase -> Configuración del proyecto -> Cuentas de servicio
-// -> Crear nueva clave privada para obtener el JSON del SDK de administrador.
-// O, para un enfoque más simple (menos seguro), puedes usar una clave de API web.
-//
-// Reemplaza con la clave de API web de tu proyecto de Firebase y la URL de la base de datos.
-// Se encuentran en Consola de Firebase -> Configuración del proyecto -> General
-#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I" // Esta es la clave de API web
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // Tu URL de Realtime Database (usada para la autenticación)
+// Reemplaza con la clave de API web de tu proyecto de Firebase.
+#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
 
 // Objeto de Firebase
 FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
-
-// Variable para rastrear el estado de la preparación de Firebase
-bool firebaseReady = false;
 
 // ===============================================================
 // 3. PINES Y SENSORES (EJEMPLO)
@@ -56,29 +41,13 @@ bool firebaseReady = false;
 // Reemplaza con los pines reales que estés usando.
 const int TEMP_SENSOR_PIN = 4;
 const int SOUND_SENSOR_PIN = 34;
-const int HUMIDITY_SENSOR_PIN = 5; // Suponiendo un sensor DHT
+const int HUMIDITY_SENSOR_PIN = 4;
 
 // ===============================================================
 // 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
-// Cambiado a 15 segundos para evitar bloqueos por demasiados intentos
 const long sendDataInterval = 15000;
-
-// Función de devolución de llamada para saber el estado de la autenticación de Firebase
-void tokenStatusCallback(TokenInfo info)
-{
-  if (info.status == token_status_ready)
-  {
-    Serial.println("Firebase token listo.");
-    firebaseReady = true;
-  }
-  else
-  {
-    Serial.printf("Error con el token de Firebase: %s\n", info.error.message.c_str());
-    firebaseReady = false;
-  }
-}
 
 void setup() {
   Serial.begin(115200);
@@ -96,28 +65,16 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.println();
 
-  // Configurar Firebase
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
+  Serial.println("Inicializando Firebase...");
 
-  // Asignar la función de devolución de llamada para la gestión del token
-  config.token_status_callback = tokenStatusCallback;
-
-  // *** IMPORTANTE PARA ERRORES SSL ***
-  // La sincronización de la hora es crucial para las conexiones SSL.
-  // Especifica tu zona horaria para ayudar a la biblioteca a obtener la hora correcta.
-  // Lista de zonas horarias: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-  // Ejemplo: "America/Mexico_City" es GMT-6
-  config.time_zone = -6; // Reemplaza con tu zona horaria (offset de UTC)
-
-  Serial.println("Inicializando Firebase (Autenticación Anónima)...");
-  Firebase.begin(&config, &auth);
+  // Inicializa Firebase solo con la API Key.
+  // La biblioteca gestionará la autenticación de forma interna.
+  Firebase.begin(API_KEY);
   Firebase.reconnectWiFi(true);
 }
 
 void loop() {
-  // Solo intentar enviar si Firebase ha confirmado que está listo
-  if (firebaseReady && (millis() - sendDataPrevMillis > sendDataInterval)) {
+  if (Firebase.ready() && (millis() - sendDataPrevMillis > sendDataInterval)) {
     sendDataPrevMillis = millis();
 
     // 1. Leer datos de los sensores (implementa estas funciones según tu hardware)
@@ -132,7 +89,6 @@ void loop() {
     Serial.println("------------------------------------");
 
     // 2. Crear el objeto JSON de contenido de Firestore
-    // El formato debe coincidir con la estructura que espera la aplicación web.
     String jsonData = "";
     jsonData += "{'fields': {";
     jsonData += "'temperature': {'doubleValue': " + String(temperature) + "},";
@@ -141,23 +97,15 @@ void loop() {
     jsonData += "}}";
 
     // 3. Enviar datos a Firestore
-    // La ruta es 'sensorData/latest'
-    // Usamos patch para actualizar el documento, que es más eficiente que sobreescribirlo.
     String documentPath = "sensorData/latest";
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
-    // Si la actualización falla, intenta crear el documento por si no existe
+    // Usamos patch para actualizar el documento.
+    // Como no hay autenticación de usuario, el tercer argumento (UID) se deja vacío.
     if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "temperature,humidity,soundLevel")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {
         Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
-        Serial.println("Intentando crear el documento...");
-        // Si 'patchDocument' falla porque el documento no existe, 'createDocument' lo creará.
-        if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", "sensorData", jsonData.c_str())) {
-            Serial.printf("Documento creado exitosamente: %s\n", fbdo.payload().c_str());
-        } else {
-            Serial.printf("Error al crear el documento: %s\n", fbdo.errorReason().c_str());
-        }
     }
   }
 }

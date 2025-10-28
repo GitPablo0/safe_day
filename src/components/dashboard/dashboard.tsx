@@ -7,7 +7,7 @@ import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useAuth, useMemoFirebase } from '@/firebase';
 import { initiateAnonymousSignIn, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { doc, collection }from 'firebase/firestore';
 
 type SoundThresholds = { low: number; medium: number };
 type TempThresholds = { green: number; orange: number };
@@ -86,21 +86,20 @@ export default function Dashboard() {
         setDocumentNonBlocking(configRef, updatedData, { merge: true });
       } else {
         // Create new configuration
-        const newConfig = {
-          userId: user.uid,
-          soundThresholdLow: newSoundThresholds.low,
-          soundThresholdMedium: newSoundThresholds.medium,
-          temperatureThresholdVerde: newTempThresholds.green,
-          temperatureThresholdNaranja: newTempThresholds.orange,
-          // Set default values for other fields if needed
-          redSoundEventCount: 5,
-          orangeSoundEventCount: 3,
-          redBlockDuration: 5000,
-          orangeBlockDuration: 3000,
-          timeBetweenEvents: 1000,
-        };
-        if(thresholdConfigCollectionRef) {
-             addDocumentNonBlocking(thresholdConfigCollectionRef, newConfig);
+        if (thresholdConfigCollectionRef) {
+            const newConfig = {
+                userId: user.uid,
+                soundThresholdLow: newSoundThresholds.low,
+                soundThresholdMedium: newSoundThresholds.medium,
+                temperatureThresholdVerde: newTempThresholds.green,
+                temperatureThresholdNaranja: newTempThresholds.orange,
+                redSoundEventCount: 5,
+                orangeSoundEventCount: 3,
+                redBlockDuration: 5000,
+                orangeBlockDuration: 3000,
+                timeBetweenEvents: 1000,
+            };
+            addDocumentNonBlocking(thresholdConfigCollectionRef, newConfig);
         }
       }
     }

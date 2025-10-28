@@ -53,7 +53,7 @@ export default function ThresholdControlCard({
               <Slider
                 id="sound-low"
                 min={0}
-                max={1000}
+                max={4095}
                 step={10}
                 value={[soundThresholds.low]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, low: value[0] })}
@@ -73,7 +73,7 @@ export default function ThresholdControlCard({
               <Slider
                 id="sound-medium"
                 min={0}
-                max={1000}
+                max={4095}
                 step={10}
                 value={[soundThresholds.medium]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, medium: value[0] })}

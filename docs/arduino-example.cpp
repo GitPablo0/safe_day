@@ -109,16 +109,12 @@ void setup() {
   // La sincronización de la hora es crucial para las conexiones SSL.
   // Especifica tu zona horaria para ayudar a la biblioteca a obtener la hora correcta.
   // Lista de zonas horarias: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-  // Ejemplo: "America/Mexico_City" es GMT-6, por lo que el valor sería -6
+  // Ejemplo: "America/Mexico_City" es GMT-6
   config.time_zone = -6; // Reemplaza con tu zona horaria (offset de UTC)
 
   Serial.println("Inicializando Firebase...");
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
-
-  // Es importante configurar el timeout para las operaciones de Firestore.
-  // Si no se establece, puede que las operaciones fallen sin esperar lo suficiente.
-  Firebase.Firestore.setReadTimeout(&fbdo, 1000 * 60); // Timeout de 1 minuto
 }
 
 void loop() {

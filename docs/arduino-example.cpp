@@ -6,11 +6,15 @@
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
  * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
  * 2. ArduinoJson by Benoit Blanchon
- *
+ * 
  * --- SOLUCIÓN DE PROBLEMAS ---
  * Si encuentras errores de "SSL/TLS Handshake Failed" o "SSL internal timeout",
  * la causa más común es que el microcontrolador no tiene la hora correcta.
  * La conexión segura (SSL) requiere una hora precisa para validar los certificados.
+ * 
+ * Esta versión del código incluye una configuración de zona horaria para ayudar
+ * a la biblioteca de Firebase a sincronizar la hora correctamente a través de NTP.
+ * Asegúrate de tener la última versión de la biblioteca "Firebase ESP Client".
  * ==================================================================================
  */
 #include <Arduino.h>

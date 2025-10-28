@@ -94,7 +94,9 @@ void setup() {
 }
 
 void loop() {
-  if (Firebase.ready() && (millis() - sendDataPrevMillis > sendDataInterval)) {
+  // Se elimina la comprobación de Firebase.ready() para forzar el envío de datos.
+  // Si la conexión es exitosa, los datos se enviarán.
+  if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
     // 1. Leer datos de los sensores (implementa estas funciones según tu hardware)
@@ -103,6 +105,7 @@ void loop() {
     int soundLevel = 250; //readSoundLevel();
 
     Serial.println("------------------------------------");
+    Serial.println("Intentando enviar datos a Firebase...");
     Serial.print("Temperatura: "); Serial.println(temperature);
     Serial.print("Humedad: "); Serial.println(humidity);
     Serial.print("Nivel de sonido: "); Serial.println(soundLevel);

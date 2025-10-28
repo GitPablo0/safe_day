@@ -35,9 +35,12 @@
 // Reemplaza con la clave de API web de tu proyecto de Firebase.
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // URL de Realtime Database, necesaria para la autenticación
 
-// Objeto de Firebase
+// Objetos de Firebase
 FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
 
 // ===============================================================
 // 3. PINES Y SENSORES (EJEMPLO)
@@ -71,9 +74,16 @@ void setup() {
 
   Serial.println("Inicializando Firebase...");
 
-  // Inicializa Firebase solo con la API Key.
-  // La biblioteca gestionará la autenticación de forma interna.
-  Firebase.begin(API_KEY);
+  // Asignar la API Key y la URL de la base de datos a la configuración.
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+
+  // Registrarse como usuario anónimo.
+  auth.user.email = "";
+  auth.user.password = "";
+
+  // Iniciar Firebase con la configuración y la autenticación.
+  Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 }
 
@@ -105,7 +115,6 @@ void loop() {
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
     // Usamos patch para actualizar el documento.
-    // Como no hay autenticación de usuario, el tercer argumento (UID) se deja vacío.
     if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "temperature,humidity,soundLevel")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {

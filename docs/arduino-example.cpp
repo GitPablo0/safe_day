@@ -63,7 +63,7 @@ float tempThresholdNaranja = 28;
 // 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 15000;
+const long sendDataInterval = 15000; // 15 segundos
 
 float readTemperature() {
   float t = dht.readTemperature();
@@ -98,7 +98,7 @@ void setup() {
   pinMode(LED_NARANJA_PIN, OUTPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
   digitalWrite(LED_VERDE_PIN, LOW);
-  digitalWrite(LED_NARANja_PIN, LOW);
+  digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
 
   // Conectar a Wi-Fi
@@ -113,6 +113,9 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.println();
 
+  // Pausa para estabilizar la conexión
+  delay(1000); 
+
   Serial.println("Inicializando Firebase...");
 
   // Asignar la API Key para la configuración
@@ -126,6 +129,7 @@ void setup() {
 }
 
 void loop() {
+  // Se comprueba si millis() ha sobrepasado el intervalo, no si Firebase está "listo"
   if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
@@ -159,6 +163,7 @@ void loop() {
     Serial.printf("Estado de LEDs determinado: %d\n", ledStatus);
 
     // 2. Crear el objeto JSON de contenido de Firestore
+    // El formato Firestore REST API es requerido por la biblioteca.
     String jsonData = "";
     jsonData += "{'fields': {";
     jsonData += "'temperature': {'doubleValue': " + String(temperature) + "},";
@@ -171,7 +176,7 @@ void loop() {
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
     // Usamos patch para actualizar el documento. Esto es más eficiente y creará el documento si no existe.
-    // El tercer argumento (UID) se deja vacío porque no estamos usando autenticación de usuario.
+    // El UID del usuario no es necesario aquí.
     if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {

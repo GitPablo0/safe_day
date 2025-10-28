@@ -6,6 +6,15 @@
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
  * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
  * 2. ArduinoJson by Benoit Blanchon
+ * 
+ * --- SOLUCIÓN DE PROBLEMAS ---
+ * Si encuentras errores de "SSL/TLS Handshake Failed" o "SSL internal timeout",
+ * la causa más común es que el microcontrolador no tiene la hora correcta.
+ * La conexión segura (SSL) requiere una hora precisa para validar los certificados.
+ * 
+ * Esta versión del código incluye una configuración de zona horaria para ayudar
+ * a la biblioteca de Firebase a sincronizar la hora correctamente a través de NTP.
+ * Asegúrate de tener la última versión de la biblioteca "Firebase ESP Client".
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -38,6 +47,9 @@ FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
+// Variable para rastrear el estado de la preparación de Firebase
+bool firebaseReady = false;
+
 // ===============================================================
 // 3. PINES Y SENSORES (EJEMPLO)
 // ===============================================================
@@ -50,8 +62,23 @@ const int HUMIDITY_SENSOR_PIN = 5; // Suponiendo un sensor DHT
 // 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
-// Envía datos a Firebase cada 2 segundos
-const long sendDataInterval = 2000;
+// Envía datos a Firebase cada 5 segundos (aumentado para dar tiempo a la conexión)
+const long sendDataInterval = 5000;
+
+// Función de devolución de llamada para saber el estado de la autenticación de Firebase
+void tokenStatusCallback(TokenInfo info)
+{
+  if (info.status == token_status_ready)
+  {
+    Serial.println("Firebase token listo.");
+    firebaseReady = true;
+  }
+  else
+  {
+    Serial.printf("Error con el token de Firebase: %s\n", info.error.message.c_str());
+    firebaseReady = false;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -75,13 +102,28 @@ void setup() {
   auth.user.password = "device_password"; // No es crítico para anónimos, pero requerido
   config.database_url = DATABASE_URL;
 
-  // Asignar las funciones de devolución de llamada para la gestión del token
+  // Asignar la función de devolución de llamada para la gestión del token
+  config.token_status_callback = tokenStatusCallback;
+
+  // *** IMPORTANTE PARA ERRORES SSL ***
+  // La sincronización de la hora es crucial para las conexiones SSL.
+  // Especifica tu zona horaria para ayudar a la biblioteca a obtener la hora correcta.
+  // Lista de zonas horarias: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+  // Ejemplo: "America/Mexico_City" es GMT-6, por lo que el valor sería -6
+  config.time_zone = -6; // Reemplaza con tu zona horaria (offset de UTC)
+
+  Serial.println("Inicializando Firebase...");
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
+
+  // Es importante configurar el timeout para las operaciones de Firestore.
+  // Si no se establece, puede que las operaciones fallen sin esperar lo suficiente.
+  Firebase.Firestore.setReadTimeout(&fbdo, 1000 * 60); // Timeout de 1 minuto
 }
 
 void loop() {
-  if (Firebase.ready() && (millis() - sendDataPrevMillis > sendDataInterval)) {
+  // Solo intentar enviar si Firebase ha confirmado que está listo
+  if (firebaseReady && (millis() - sendDataPrevMillis > sendDataInterval)) {
     sendDataPrevMillis = millis();
 
     // 1. Leer datos de los sensores (implementa estas funciones según tu hardware)
@@ -97,7 +139,6 @@ void loop() {
 
     // 2. Crear el objeto JSON de contenido de Firestore
     // El formato debe coincidir con la estructura que espera la aplicación web.
-    // documents: [{ fields: { key: { valueType: value } } }]
     String jsonData = "";
     jsonData += "{'fields': {";
     jsonData += "'temperature': {'doubleValue': " + String(temperature) + "},";

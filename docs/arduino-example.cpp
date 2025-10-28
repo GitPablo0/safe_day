@@ -60,7 +60,9 @@ const int HUMIDITY_SENSOR_PIN = 5; // Suponiendo un sensor DHT
 
 // ===============================================================
 // 4. LÓGICA DE LA APLICACIÓN
-// =================================Cambiado a 15 segundos para evitar bloqueos por demasiados intentos
+// ===============================================================
+unsigned long sendDataPrevMillis = 0;
+// Cambiado a 15 segundos para evitar bloqueos por demasiados intentos
 const long sendDataInterval = 15000;
 
 // Función de devolución de llamada para saber el estado de la autenticación de Firebase

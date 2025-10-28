@@ -75,15 +75,21 @@ void setup() {
   Serial.println("Inicializando Firebase...");
 
   // Asignar la API Key y la URL de la base de datos a la configuración.
+  Serial.println("Paso 1: Asignando API Key y Database URL.");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
 
-  // Registrarse como usuario anónimo.
+  // Registrarse como usuario anónimo. Esto es más robusto para dispositivos.
+  Serial.println("Paso 2: Configurando autenticación anónima.");
   auth.user.email = "";
   auth.user.password = "";
 
   // Iniciar Firebase con la configuración y la autenticación.
+  Serial.println("Paso 3: Llamando a Firebase.begin(). Este paso puede tardar...");
   Firebase.begin(&config, &auth);
+  
+  Serial.println("Paso 4: Firebase.begin() completado.");
+
   Firebase.reconnectWiFi(true);
 }
 

@@ -92,6 +92,7 @@ void setup() {
   Serial.println("Inicializando...");
   
   dht.begin(); // Inicializa el sensor DHT
+  delay(2000); // Pequeño retardo para que el sensor DHT se estabilice
 
   // Configurar pines de LEDs como salida
   pinMode(LED_VERDE_PIN, OUTPUT);

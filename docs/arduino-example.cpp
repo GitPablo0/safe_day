@@ -37,7 +37,7 @@
 // Objetos de Firebase
 FirebaseData fbdo;
 FirebaseConfig config;
-FirebaseAuth auth; // Aunque no se use, la biblioteca la necesita en la firma.
+FirebaseAuth auth;
 
 // ===============================================================
 // 3. PINES Y SENSORES (DHT22 y KY-037)
@@ -117,24 +117,23 @@ void setup() {
   // Pausa para estabilizar la conexión
   delay(1000); 
 
-  Serial.println("Inicializando Firebase...");
-
-  // Asignar la API Key para la configuración
+  // Configuración de Firebase
+  Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  
-  // Como no estamos usando autenticación de usuario, el objeto auth puede estar vacío
-  // pero aún se debe pasar a la función begin.
+  config.database_url = "https://" + String(FIREBASE_PROJECT_ID) + ".firebaseio.com";
+
+  // Asignar credenciales de usuario anónimo (requerido por la biblioteca)
+  auth.user.email = "";
+  auth.user.password = "";
+
   Firebase.begin(&config, &auth);
-  
   Firebase.reconnectWiFi(true);
 }
 
 void loop() {
-  // Se comprueba si millis() ha sobrepasado el intervalo
   if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
-    // 1. Leer datos de los sensores reales
     float temperature = readTemperature();
     float humidity = readHumidity();
     int soundLevel = readSoundLevel();
@@ -145,8 +144,7 @@ void loop() {
     Serial.print("Humedad: "); Serial.println(humidity);
     Serial.print("Nivel de sonido: "); Serial.println(soundLevel);
 
-    // Lógica para controlar los LEDs
-    int estadoSonido = 1; // 1: Verde, 2: Naranja, 3: Rojo
+    int estadoSonido = 1;
     if (soundLevel >= soundThresholdLow) estadoSonido = 2;
     if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
 
@@ -159,27 +157,20 @@ void loop() {
     digitalWrite(LED_VERDE_PIN, ledStatus == 1);
     digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
     digitalWrite(LED_ROJO_PIN, ledStatus == 3);
-
     Serial.printf("Estado de LEDs determinado: %d\n", ledStatus);
 
-    // 2. Crear el objeto JSON de contenido de Firestore
-    // El formato Firestore REST API es requerido por la biblioteca.
-    String jsonData = "";
-    jsonData += "{'fields': {";
-    jsonData += "'temperature': {'doubleValue': " + String(temperature) + "},";
-    jsonData += "'humidity': {'doubleValue': " + String(humidity) + "},";
-    jsonData += "'soundLevel': {'integerValue': " + String(soundLevel) + "}";
-    jsonData += "}}";
-
-    // 3. Enviar datos a Firestore
     String documentPath = "sensorData/latest";
+    String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
+
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
-    
-    // Usamos patch para actualizar el documento. El UID del usuario no es necesario aquí.
-    if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "")) {
-        Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
+    if (Firebase.ready()) {
+        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
+            Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
+        } else {
+            Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
+        }
     } else {
-        Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
+        Serial.println("Firebase no está listo. Comprueba la conexión y las credenciales.");
     }
   }
 }

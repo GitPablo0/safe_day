@@ -128,11 +128,10 @@ void setup() {
   // Configuración de Firebase
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.project_id = FIREBASE_PROJECT_ID;  // CORRECTO: Usar project_id para Firestore
   
-  // Autenticación anónima
-  auth.type = firebase_auth_type_anon;
-
+  // Iniciar sesión de forma anónima
+  Firebase.signUp(&config, &auth, "", "");
+  
   // Iniciar conexión con Firebase
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);

@@ -8,6 +8,7 @@ import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useAuth, useMemoFirebase } from '@/firebase';
 import { initiateAnonymousSignIn, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { doc, collection }from 'firebase/firestore';
+import SensorSimulator from './sensor-simulator';
 
 type SoundThresholds = { low: number; medium: number };
 type TempThresholds = { green: number; orange: number };
@@ -105,41 +106,52 @@ export default function Dashboard() {
     }
   };
 
+  const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number }) => {
+    if (sensorDataRef) {
+      setDocumentNonBlocking(sensorDataRef, data, { merge: true });
+    }
+  };
+
   if (isUserLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
   return (
-    <div className="grid gap-6 md:gap-8 grid-cols-1 lg:grid-cols-3 xl:grid-cols-4">
-      <div className="lg:col-span-3 xl:col-span-4">
+    <div className="grid gap-6 md:gap-8 grid-cols-1 lg:grid-cols-4">
+      <div className="lg:col-span-4">
         <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
           Monitor sensor data and adjust stress level thresholds in real-time.
         </p>
       </div>
-
-      <SensorCard
-        icon={<Thermometer className="h-6 w-6 text-destructive" />}
-        title="Temperature"
-        value={temperature}
-        unit="°C"
-      />
-      <SensorCard
-        icon={<Droplets className="h-6 w-6 text-blue-500" />}
-        title="Humidity"
-        value={humidity}
-        unit="%"
-      />
-      <SensorCard
-        icon={<Volume2 className="h-6 w-6 text-amber-500" />}
-        title="Sound Level"
-        value={soundLevel}
-        unit="raw"
-      />
+      <div className="lg:col-span-4 xl:col-span-3">
+        <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-3">
+          <SensorCard
+            icon={<Thermometer className="h-6 w-6 text-destructive" />}
+            title="Temperature"
+            value={temperature}
+            unit="°C"
+          />
+          <SensorCard
+            icon={<Droplets className="h-6 w-6 text-blue-500" />}
+            title="Humidity"
+            value={humidity}
+            unit="%"
+          />
+          <SensorCard
+            icon={<Volume2 className="h-6 w-6 text-amber-500" />}
+            title="Sound Level"
+            value={soundLevel}
+            unit="raw"
+          />
+        </div>
+      </div>
+      <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
+         <LedStatus level={ledStatus} />
+         <SensorSimulator onSendSampleData={handleSendSampleData} />
+      </div>
       
-      <LedStatus level={ledStatus} />
-      
-      <div className="lg:col-span-3 xl:col-span-4">
+      <div className="lg:col-span-4">
         <ThresholdControlCard
           soundThresholds={soundThresholds}
           setSoundThresholds={setSoundThresholds}

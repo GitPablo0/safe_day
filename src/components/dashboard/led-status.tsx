@@ -11,16 +11,19 @@ const statusConfig = {
   1: {
     label: "Calm",
     color: "bg-green-500",
+    textColor: "text-green-500",
     description: "Environment is stable."
   },
   2: {
     label: "Elevated",
     color: "bg-orange-400",
+    textColor: "text-orange-400",
     description: "Moderate environmental stimuli detected."
   },
   3: {
     label: "High Stress",
     color: "bg-red-500",
+    textColor: "text-red-500",
     description: "High environmental stimuli detected."
   },
 };
@@ -29,7 +32,7 @@ export default function LedStatus({ level }: LedStatusProps) {
   const currentStatus = statusConfig[level];
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full">
       <CardHeader>
         <CardTitle>System Status</CardTitle>
         <p className="text-sm text-muted-foreground">{currentStatus.description}</p>
@@ -55,7 +58,7 @@ export default function LedStatus({ level }: LedStatusProps) {
             )}
           />
         </div>
-        <p className="text-2xl font-bold mt-4" style={{color: `var(--${currentStatus.color.replace('bg-', '').replace('-500', '').replace('-400', '')})`}}>
+        <p className={cn("text-2xl font-bold mt-4", currentStatus.textColor)}>
           {currentStatus.label}
         </p>
       </CardContent>

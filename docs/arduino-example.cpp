@@ -38,8 +38,8 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
-FirebaseConfig config;
 FirebaseAuth auth;
+FirebaseConfig config;
 
 // ===============================================================
 // 3. PINES Y SENSORES
@@ -108,8 +108,8 @@ void setup() {
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   
-  // Iniciar sesión de forma anónima
-  Firebase.signUp(&config, &auth, "", "");
+  auth.user.email = "";
+  auth.user.password = "";
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -169,11 +169,12 @@ void fetchThresholdsFromFirebase() {
         return;
     }
 
-    String documentPath = "users/" + String(USER_UID) + "/thresholdConfigurations";
-    Serial.println("Obteniendo umbrales desde: " + documentPath);
+    String parentDocumentPath = "users/" + String(USER_UID);
+    String collectionId = "thresholdConfigurations";
+    Serial.println("Obteniendo umbrales desde: " + parentDocumentPath + "/" + collectionId);
 
-    // Usamos listDocuments para obtener los documentos en la subcolección
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
+    // Usamos listDocuments con la ruta del documento padre y el ID de la subcolección
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", parentDocumentPath.c_str(), collectionId.c_str())) {
         if (fbdo.httpCode() == 200) {
             String payload = fbdo.payload().c_str();
             StaticJsonDocument<1024> doc;
@@ -184,9 +185,8 @@ void fetchThresholdsFromFirebase() {
                 Serial.println(error.c_str());
                 return;
             }
-
-            // Asumiendo que solo hay un documento de configuración
-            if (doc["documents"] && doc["documents"].size() > 0) {
+            
+            if (doc["documents"] && doc["documents"][0]) {
                 JsonObject fields = doc["documents"][0]["fields"];
                 
                 if (fields.containsKey("soundThresholdLow")) {
@@ -257,7 +257,7 @@ void loop() {
         String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
 
         if (Firebase.ready()) {
-            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
+            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
                 // Silencio en éxito para no llenar la consola
             } else {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());

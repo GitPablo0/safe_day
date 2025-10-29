@@ -36,8 +36,8 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
-FirebaseAuth auth;
 FirebaseConfig config;
+FirebaseAuth auth; // Aunque no se use, la biblioteca la necesita en la firma.
 
 // ===============================================================
 // 3. PINES Y SENSORES (DHT22 y KY-037)
@@ -68,8 +68,8 @@ const long sendDataInterval = 15000; // 15 segundos
 float readTemperature() {
   float t = dht.readTemperature();
   if (isnan(t)) {
-    Serial.println("Error al leer la temperatura del sensor DHT!");
-    return 0; // Devuelve 0 o un valor de error si falla
+    // No imprimimos error si sabemos que el sensor está desconectado.
+    return 0; 
   }
   return t;
 }
@@ -77,8 +77,8 @@ float readTemperature() {
 float readHumidity() {
   float h = dht.readHumidity();
   if (isnan(h)) {
-    Serial.println("Error al leer la humedad del sensor DHT!");
-    return 0; // Devuelve 0 o un valor de error si falla
+    // No imprimimos error si sabemos que el sensor está desconectado.
+    return 0;
   }
   return h;
 }
@@ -130,7 +130,7 @@ void setup() {
 }
 
 void loop() {
-  // Se comprueba si millis() ha sobrepasado el intervalo, no si Firebase está "listo"
+  // Se comprueba si millis() ha sobrepasado el intervalo
   if (millis() - sendDataPrevMillis > sendDataInterval) {
     sendDataPrevMillis = millis();
 
@@ -144,7 +144,6 @@ void loop() {
     Serial.print("Temperatura: "); Serial.println(temperature);
     Serial.print("Humedad: "); Serial.println(humidity);
     Serial.print("Nivel de sonido: "); Serial.println(soundLevel);
-    Serial.println("------------------------------------");
 
     // Lógica para controlar los LEDs
     int estadoSonido = 1; // 1: Verde, 2: Naranja, 3: Rojo
@@ -176,8 +175,7 @@ void loop() {
     String documentPath = "sensorData/latest";
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     
-    // Usamos patch para actualizar el documento. Esto es más eficiente y creará el documento si no existe.
-    // El UID del usuario no es necesario aquí.
+    // Usamos patch para actualizar el documento. El UID del usuario no es necesario aquí.
     if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), jsonData.c_str(), "")) {
         Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
     } else {

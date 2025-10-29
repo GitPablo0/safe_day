@@ -84,8 +84,29 @@ float readHumidity() {
 }
 
 int readSoundLevel() {
-  return analogRead(SOUND_SENSOR_PIN);
+  const int sampleWindow = 50; // Duración de la ventana de muestreo en mS
+  unsigned int sample;
+  unsigned long startMillis = millis(); 
+  unsigned int peakToPeak = 0;
+
+  unsigned int signalMax = 0;
+  unsigned int signalMin = 4095;
+
+  // Recolectar datos durante 50 mS
+  while (millis() - startMillis < sampleWindow) {
+    sample = analogRead(SOUND_SENSOR_PIN);
+    if (sample < 4095) { // Descartar lecturas anómalas
+      if (sample > signalMax) {
+        signalMax = sample; // Guardar el nivel máximo
+      } else if (sample < signalMin) {
+        signalMin = sample; // Guardar el nivel mínimo
+      }
+    }
+  }
+  peakToPeak = signalMax - signalMin; // Amplitud del sonido (pico a pico)
+  return peakToPeak;
 }
+
 
 void setup() {
   Serial.begin(115200);
@@ -190,3 +211,4 @@ void loop() {
     }
   }
 }
+

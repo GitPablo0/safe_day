@@ -125,18 +125,25 @@ void setup() {
   }
   Serial.println("\nHora sincronizada correctamente.");
 
-
   // Configuración de Firebase
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = "https://" + String(FIREBASE_PROJECT_ID) + ".firebaseio.com";
+  config.project_id = FIREBASE_PROJECT_ID;  // CORRECTO: Usar project_id para Firestore
+  
+  // Autenticación anónima
+  auth.type = firebase_auth_type_anon;
 
-  // Asignar credenciales de usuario anónimo (requerido por la biblioteca)
-  auth.user.email = "";
-  auth.user.password = "";
-
+  // Iniciar conexión con Firebase
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
+  
+  // Esperar a que la autenticación genere un token y estemos listos
+  Serial.println("Esperando token de autenticación...");
+  while (!Firebase.ready()) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("\nFirebase listo!");
 }
 
 void loop() {
@@ -173,6 +180,7 @@ void loop() {
 
     Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
     if (Firebase.ready()) {
+        // Usamos patchDocument para crear o actualizar el documento
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
             Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
         } else {

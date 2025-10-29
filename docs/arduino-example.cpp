@@ -169,47 +169,64 @@ void fetchThresholdsFromFirebase() {
         return;
     }
 
-    String parentDocumentPath = "users/" + String(USER_UID);
-    String collectionId = "thresholdConfigurations";
-    Serial.println("Obteniendo umbrales desde: " + parentDocumentPath + "/" + collectionId);
+    String documentPath = "users/" + String(USER_UID) + "/thresholdConfigurations";
+    Serial.println("Obteniendo umbrales desde: " + documentPath);
 
-    // Usamos listDocuments con la ruta del documento padre y el ID de la subcolección
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", parentDocumentPath.c_str(), collectionId.c_str())) {
+    // Listamos los documentos de la subcolección para obtener el ID del documento de configuración
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")){
         if (fbdo.httpCode() == 200) {
-            String payload = fbdo.payload().c_str();
-            StaticJsonDocument<1024> doc;
-            DeserializationError error = deserializeJson(doc, payload);
+            StaticJsonDocument<1024> listDoc;
+            deserializeJson(listDoc, fbdo.payload());
+            if (listDoc["documents"] && listDoc["documents"][0]) {
+                String fullDocName = listDoc["documents"][0]["name"];
+                // El nombre completo es "projects/PROJECT_ID/databases/(default)/documents/users/UID/thresholdConfigurations/DOC_ID"
+                // Necesitamos extraer solo el path relativo para getDocument.
+                int docPathIndex = fullDocName.indexOf("/documents/");
+                String docPath = fullDocName.substring(docPathIndex + 10);
+                
+                Serial.println("Obteniendo documento: " + docPath);
+                
+                // Ahora obtenemos el documento específico
+                if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+                    if (fbdo.httpCode() == 200) {
+                        String payload = fbdo.payload().c_str();
+                        StaticJsonDocument<1024> doc;
+                        DeserializationError error = deserializeJson(doc, payload);
 
-            if (error) {
-                Serial.print("deserializeJson() falló: ");
-                Serial.println(error.c_str());
-                return;
-            }
-            
-            if (doc["documents"] && doc["documents"][0]) {
-                JsonObject fields = doc["documents"][0]["fields"];
-                
-                if (fields.containsKey("soundThresholdLow")) {
-                    soundThresholdLow = fields["soundThresholdLow"]["integerValue"].as<float>();
+                        if (error) {
+                            Serial.print("deserializeJson() falló: ");
+                            Serial.println(error.c_str());
+                            return;
+                        }
+
+                        JsonObject fields = doc["fields"];
+                        if (fields.containsKey("soundThresholdLow")) {
+                            soundThresholdLow = fields["soundThresholdLow"]["integerValue"].as<float>();
+                        }
+                        if (fields.containsKey("soundThresholdMedium")) {
+                            soundThresholdMedium = fields["soundThresholdMedium"]["integerValue"].as<float>();
+                        }
+                        if (fields.containsKey("temperatureThresholdVerde")) {
+                            tempThresholdVerde = fields["temperatureThresholdVerde"]["doubleValue"].as<float>();
+                        }
+                        if (fields.containsKey("temperatureThresholdNaranja")) {
+                            tempThresholdNaranja = fields["temperatureThresholdNaranja"]["doubleValue"].as<float>();
+                        }
+                        
+                        Serial.println("Umbrales actualizados desde Firebase:");
+                        Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
+                        Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
+                    } else {
+                        Serial.printf("Error al obtener documento: %s\n", fbdo.errorReason().c_str());
+                    }
+                } else {
+                    Serial.printf("Error en Firebase.Firestore.getDocument: %s\n", fbdo.errorReason().c_str());
                 }
-                if (fields.containsKey("soundThresholdMedium")) {
-                    soundThresholdMedium = fields["soundThresholdMedium"]["integerValue"].as<float>();
-                }
-                if (fields.containsKey("temperatureThresholdVerde")) {
-                    tempThresholdVerde = fields["temperatureThresholdVerde"]["doubleValue"].as<float>();
-                }
-                if (fields.containsKey("temperatureThresholdNaranja")) {
-                    tempThresholdNaranja = fields["temperatureThresholdNaranja"]["doubleValue"].as<float>();
-                }
-                
-                Serial.println("Umbrales actualizados desde Firebase:");
-                Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
-                Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
             } else {
-                Serial.println("No se encontraron documentos de configuración.");
+                Serial.println("No se encontraron documentos de configuración en la subcolección.");
             }
         } else {
-            Serial.printf("Error al obtener documentos: %s\n", fbdo.errorReason().c_str());
+             Serial.printf("Error al listar documentos: %s\n", fbdo.errorReason().c_str());
         }
     } else {
         Serial.printf("Error en Firebase.Firestore.listDocuments: %s\n", fbdo.errorReason().c_str());
@@ -257,7 +274,8 @@ void loop() {
         String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
 
         if (Firebase.ready()) {
-            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
+            // El último argumento es el "updateMask", lo dejamos vacío para actualizar todo.
+            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 // Silencio en éxito para no llenar la consola
             } else {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());

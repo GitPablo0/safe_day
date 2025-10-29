@@ -113,9 +113,18 @@ void setup() {
   Serial.print("Conectado con IP: ");
   Serial.println(WiFi.localIP());
   Serial.println();
+  
+  // Sincronización de hora (NTP) - CRÍTICO para SSL/TLS
+  Serial.println("Sincronizando hora...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  
+  struct tm timeinfo;
+  while (!getLocalTime(&timeinfo)) {
+    Serial.print(".");
+    delay(1000);
+  }
+  Serial.println("\nHora sincronizada correctamente.");
 
-  // Pausa para estabilizar la conexión
-  delay(1000); 
 
   // Configuración de Firebase
   Serial.println("Configurando Firebase...");

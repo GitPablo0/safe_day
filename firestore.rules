@@ -1,94 +1,94 @@
 /**
- * @fileoverview Firestore Security Rules for NeuroSense Dashboard.
+ * @fileOverview Firestore Security Rules for NeuroSense Dashboard.
  *
  * Core Philosophy:
  * This ruleset enforces a strict user-ownership model for threshold configurations,
- * ensuring only the authenticated user can manage their own settings.
- * Real-time sensor data is handled separately with write-only access granted to the hardware device.
+ * ensuring that only authenticated users can manage their own settings. The sensor
+ * data is write-only for the hardware device.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profile information, with 'userId' matching the Firebase Auth UID.
- * - /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}: Stores user-specific threshold configurations.
- * - /sensorData/latest: Stores the most recent sensor data (temperature, humidity, sound level).
+ * - /users/{userId}: Stores user profile information, with 'userId' matching the Firebase Authentication UID.
+ * - /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}: Stores threshold configurations owned by the user.
+ * - /sensorData/latest: Stores the most recent sensor data; write-only for the hardware device.
  *
  * Key Security Decisions:
- * - User listing is implicitly denied.
- * - Sensor data updates are write-only, intended for the hardware device.  Authentication mechanism for the hardware is TBD and should be implemented with extreme care.
- * - The 'userId' field is duplicated in the ThresholdConfiguration documents to maintain authorization independence.
- * - No data validation is enforced beyond ownership checks to allow for rapid schema iteration during prototyping.
+ * - Users can only manage their own threshold configurations.
+ * - Listing threshold configurations is restricted to the owning user.
+ * - The sensorData collection is write-only.
  *
  * Denormalization for Authorization:
- * - The `ThresholdConfiguration` entity contains a `userId` field, which duplicates the `userId` from the document path.
- *   This allows the rules to quickly verify ownership without needing to perform a `get()` request on the `/users/{userId}` document.
+ * - The 'userId' field is present within each ThresholdConfiguration document to
+ *   enable simple authorization checks based on request.auth.uid, avoiding the
+ *   need for costly 'get()' operations.
+ *
+ * Structural Segregation:
+ * - User-specific data (threshold configurations) is stored in user-specific
+ *   subcollections, providing a clear separation of data and simplified security rules.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secure access to user profile documents.
+     * @description Secure user profiles.  Users can only read and write their own profile.
      * @path /users/{userId}
-     * @allow (create) User 'm303JtbjMINOG3JSgzU2tAbgfC13' can create their own profile with matching user ID.
-     * @deny (create) User 'm303JtbjMINOG3JSgzU2tAbgfC13' cannot create a profile with a different user ID.
-     * @allow (get, list) User 'm303JtbjMINOG3JSgzU2tAbgfC13' can read their profile data.
-     * @deny (update, delete) Only the owner can update or delete a user profile.
-     * @principle Enforces document ownership and prevents unauthorized profile modification.
+     * @allow (create) - Authenticated user can create their own profile if the userId matches their auth.uid.
+     * @allow (get, update, delete) - Authenticated user can read, update, and delete their own profile if the userId matches their auth.uid.
+     * @deny (create, update, delete) - Any other user attempts to modify this user's profile.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
-      //Utility function
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       allow get: if isSignedIn() && isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == request.auth.uid;
-      allow update: if isSignedIn() && isOwner(userId);
-      allow delete: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isExistingOwner(userId);
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Secure access to user-specific threshold configurations.
+     * @description Secure threshold configurations for each user. Only the owning user can manage their configurations.
      * @path /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}
-     * @allow (create) User 'm303JtbjMINOG3JSgzU2tAbgfC13' can create a configuration if userId matches.
-     * @deny (create) User 'm303JtbjMINOG3JSgzU2tAbgfC13' cannot create a configuration for another user.
-     * @allow (get, list) User 'm303JtbjMINOG3JSgzU2tAbgfC13' can read their configurations.
-     * @deny (update, delete) Only the owner can update or delete their configurations.
-     * @principle Enforces strict user ownership for threshold configurations.
+     * @allow (create) - Authenticated user can create a new configuration for themselves.
+     * @allow (get, list, update, delete) - Authenticated user can manage their own configurations.
+     * @deny (create, update, delete) - Any other user attempts to modify this user's configurations.
+     * @principle Enforces document ownership for writes and reads.
      */
     match /users/{userId}/thresholdConfigurations/{thresholdConfigurationId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       allow get: if isSignedIn() && isOwner(userId);
-      allow list: if false;
+      allow list: if isSignedIn() && isOwner(userId);
       allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isSignedIn() && isOwner(userId);
-      allow delete: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Restrict write access to sensor data to the hardware device.
+     * @description Restrict sensor data to write-only for the hardware device.
      * @path /sensorData/latest
-     * @allow (create, update) The hardware device can write sensor data. (Authentication details TBD)
-     * @deny (get, list, delete) No client should be able to get, list or delete sensor data.
-     * @principle Limits data modification to the intended source (hardware) only.
+     * @allow (create, update) - requests must come from a trusted hardware device (implementation specific - replace `true` with actual validation).
+     * @deny (get, list, delete) - No one should be able to read or delete the latest sensor data.
+     * @principle Restricts read access and enforces write-only access.
      */
     match /sensorData/latest {
-        //Hardware device writes only. Authentication mechanism is TBD
-        //TODO: Add hardware authentication.  This rule is currently insecure
-        allow get: if false;
-        allow list: if false;
-        allow create: if true;
-        allow update: if true;
-        allow delete: if false;
+      // In a real application, you would replace `true` with logic to verify
+      // the request is coming from a trusted hardware device. This might involve
+      // checking a secret key or verifying the source IP address.
+      allow get: if false;
+      allow list: if false;
+      allow create: if false; // TODO: Implement authorization for the data source.
+      allow update: if false; // TODO: Implement authorization for the data source.
+      allow delete: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
     }
   }
 }

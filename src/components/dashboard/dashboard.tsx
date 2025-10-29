@@ -7,7 +7,7 @@ import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useAuth, useMemoFirebase } from '@/firebase';
 import { initiateAnonymousSignIn, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection }from 'firebase/firestore';
+import { doc, collection, query, limit } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 
 type SoundThresholds = { low: number; medium: number };
@@ -21,13 +21,28 @@ type ThresholdConfiguration = {
   temperatureThresholdNaranja: number;
 };
 
+// Default configuration to be created for new users
+const createDefaultConfig = (userId: string) => ({
+    userId: userId,
+    soundThresholdLow: 300,
+    soundThresholdMedium: 380,
+    temperatureThresholdVerde: 24,
+    temperatureThresholdNaranja: 28,
+    redSoundEventCount: 5,
+    orangeSoundEventCount: 3,
+    redBlockDuration: 5000,
+    orangeBlockDuration: 3000,
+    timeBetweenEvents: 1000,
+});
+
+
 export default function Dashboard() {
   const firestore = useFirestore();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (!isUserLoading && !user && auth) {
       initiateAnonymousSignIn(auth);
     }
   }, [user, isUserLoading, auth]);
@@ -35,12 +50,30 @@ export default function Dashboard() {
   const sensorDataRef = useMemoFirebase(() => firestore ? doc(firestore, 'sensorData', 'latest') : null, [firestore]);
   const { data: sensorData } = useDoc<{temperature: number, humidity: number, soundLevel: number}>(sensorDataRef);
 
+  // Reference to the user's threshold configurations collection
   const thresholdConfigCollectionRef = useMemoFirebase(() => 
     (firestore && user) ? collection(firestore, `users/${user.uid}/thresholdConfigurations`) : null, 
     [firestore, user]
   );
   
-  const { data: thresholdConfigurations } = useCollection<ThresholdConfiguration>(thresholdConfigCollectionRef);
+  // Query to get the first (and likely only) configuration document
+  const thresholdConfigQuery = useMemoFirebase(() => 
+    thresholdConfigCollectionRef ? query(thresholdConfigCollectionRef, limit(1)) : null,
+    [thresholdConfigCollectionRef]
+  );
+
+  const { data: thresholdConfigurations, isLoading: isConfigLoading } = useCollection<ThresholdConfiguration>(thresholdConfigQuery);
+  
+  // Effect to create a default configuration if none exists for the user
+  useEffect(() => {
+    // Check if loading is finished, a user exists, and there are no configurations
+    if (!isConfigLoading && user && thresholdConfigCollectionRef && thresholdConfigurations?.length === 0) {
+      console.log(`No config found for user ${user.uid}. Creating default.`);
+      const defaultConfig = createDefaultConfig(user.uid);
+      addDocumentNonBlocking(thresholdConfigCollectionRef, defaultConfig);
+    }
+  }, [isConfigLoading, user, thresholdConfigurations, thresholdConfigCollectionRef]);
+
 
   const activeThresholdConfig = useMemo(() => thresholdConfigurations?.[0], [thresholdConfigurations]);
 
@@ -74,8 +107,7 @@ export default function Dashboard() {
   }, [soundLevel, temperature, soundThresholds, tempThresholds]);
 
   const handleSaveConfiguration = (newSoundThresholds: SoundThresholds, newTempThresholds: TempThresholds) => {
-    if (user && firestore) {
-      if (activeThresholdConfig) {
+    if (user && firestore && activeThresholdConfig) {
         // Update existing configuration
         const configRef = doc(firestore, `users/${user.uid}/thresholdConfigurations`, activeThresholdConfig.id);
         const updatedData = {
@@ -85,24 +117,6 @@ export default function Dashboard() {
           temperatureThresholdNaranja: newTempThresholds.orange,
         };
         setDocumentNonBlocking(configRef, updatedData, { merge: true });
-      } else {
-        // Create new configuration
-        if (thresholdConfigCollectionRef) {
-            const newConfig = {
-                userId: user.uid,
-                soundThresholdLow: newSoundThresholds.low,
-                soundThresholdMedium: newSoundThresholds.medium,
-                temperatureThresholdVerde: newTempThresholds.green,
-                temperatureThresholdNaranja: newTempThresholds.orange,
-                redSoundEventCount: 5,
-                orangeSoundEventCount: 3,
-                redBlockDuration: 5000,
-                orangeBlockDuration: 3000,
-                timeBetweenEvents: 1000,
-            };
-            addDocumentNonBlocking(thresholdConfigCollectionRef, newConfig);
-        }
-      }
     }
   };
 

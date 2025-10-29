@@ -7,11 +7,13 @@
  * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
  * 2. ArduinoJson by Benoit Blanchon
  * 3. DHT sensor library by Adafruit
- * 
- * --- SOLUCIÓN DE PROBLEMAS ---
- * Si encuentras errores de "SSL/TLS Handshake Failed" o "SSL internal timeout",
- * la causa más común es que el microcontrolador no tiene la hora correcta.
- * La conexión segura (SSL) requiere una hora precisa para validar los certificados.
+ *
+ * --- INSTRUCCIONES ---
+ * 1. Abre la aplicación web para generar un usuario anónimo.
+ * 2. Ve a tu consola de Firebase -> Authentication -> Users.
+ * 3. Copia el "User UID" del nuevo usuario anónimo.
+ * 4. Pega ese UID en la variable `USER_UID` de este archivo.
+ * 5. Carga el código en tu ESP32.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -23,16 +25,16 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI
 // ===============================================================
-// Reemplaza con tus credenciales de Wi-Fi
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
 // ===============================================================
-// Reemplaza con la clave de API web de tu proyecto de Firebase.
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+// IMPORTANTE: Reemplaza con el UID de tu usuario anónimo de Firebase
+#define USER_UID "pega-tu-uid-aqui"
 
 // Objetos de Firebase
 FirebaseData fbdo;
@@ -40,20 +42,19 @@ FirebaseConfig config;
 FirebaseAuth auth;
 
 // ===============================================================
-// 3. PINES Y SENSORES (DHT22 y KY-037)
+// 3. PINES Y SENSORES
 // ===============================================================
-#define DHTPIN 4         // Pin de datos para el DHT22
-#define DHTTYPE DHT22    // Definiendo el tipo de sensor como DHT22
-const int SOUND_SENSOR_PIN = 34; // Pin analógico para el KY-037
+#define DHTPIN 4
+#define DHTTYPE DHT22
+const int SOUND_SENSOR_PIN = 34;
 
-DHT dht(DHTPIN, DHTTYPE); // Inicializa el objeto sensor DHT
+DHT dht(DHTPIN, DHTTYPE);
 
-// Pines para los LEDs de estado
 const int LED_VERDE_PIN = 12;
 const int LED_NARANJA_PIN = 13;
 const int LED_ROJO_PIN = 14;
 
-// Umbrales por defecto (se intentarán leer desde Firebase)
+// Umbrales (se actualizarán desde Firebase)
 float soundThresholdLow = 300;
 float soundThresholdMedium = 380;
 float tempThresholdVerde = 24;
@@ -63,59 +64,19 @@ float tempThresholdNaranja = 28;
 // 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 15000; // 15 segundos
+unsigned long fetchConfigPrevMillis = 0;
+const long sendDataInterval = 5000;    // 5 segundos
+const long fetchConfigInterval = 60000; // 60 segundos
 
-float readTemperature() {
-  float t = dht.readTemperature();
-  if (isnan(t)) {
-    // No imprimimos error si sabemos que el sensor está desconectado.
-    return 0; 
-  }
-  return t;
-}
-
-float readHumidity() {
-  float h = dht.readHumidity();
-  if (isnan(h)) {
-    // No imprimimos error si sabemos que el sensor está desconectado.
-    return 0;
-  }
-  return h;
-}
-
-int readSoundLevel() {
-  const int sampleWindow = 50; // Duración de la ventana de muestreo en mS
-  unsigned int sample;
-  unsigned long startMillis = millis(); 
-  unsigned int peakToPeak = 0;
-
-  unsigned int signalMax = 0;
-  unsigned int signalMin = 4095;
-
-  // Recolectar datos durante 50 mS
-  while (millis() - startMillis < sampleWindow) {
-    sample = analogRead(SOUND_SENSOR_PIN);
-    if (sample < 4095) { // Descartar lecturas anómalas
-      if (sample > signalMax) {
-        signalMax = sample; // Guardar el nivel máximo
-      } else if (sample < signalMin) {
-        signalMin = sample; // Guardar el nivel mínimo
-      }
-    }
-  }
-  peakToPeak = signalMax - signalMin; // Amplitud del sonido (pico a pico)
-  return peakToPeak;
-}
-
+void fetchThresholdsFromFirebase(); // Declaración anticipada
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
   
-  dht.begin(); // Inicializa el sensor DHT
-  delay(2000); // Pequeño retardo para que el sensor DHT se estabilice
+  dht.begin();
+  delay(2000);
 
-  // Configurar pines de LEDs como salida
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
@@ -123,7 +84,6 @@ void setup() {
   digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
 
-  // Conectar a Wi-Fi
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Conectando a Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -135,7 +95,6 @@ void setup() {
   Serial.println(WiFi.localIP());
   Serial.println();
   
-  // Sincronización de hora (NTP) - CRÍTICO para SSL/TLS
   Serial.println("Sincronizando hora...");
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   
@@ -146,69 +105,165 @@ void setup() {
   }
   Serial.println("\nHora sincronizada correctamente.");
 
-  // Configuración de Firebase
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   
   // Iniciar sesión de forma anónima
   Firebase.signUp(&config, &auth, "", "");
   
-  // Iniciar conexión con Firebase
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   
-  // Esperar a que la autenticación genere un token y estemos listos
   Serial.println("Esperando token de autenticación...");
   while (!Firebase.ready()) {
     Serial.print(".");
     delay(500);
   }
   Serial.println("\nFirebase listo!");
+
+  // Obtener la configuración inicial al arrancar
+  fetchThresholdsFromFirebase();
 }
 
-void loop() {
-  if (millis() - sendDataPrevMillis > sendDataInterval) {
-    sendDataPrevMillis = millis();
+float readTemperature() {
+  float t = dht.readTemperature();
+  if (isnan(t)) {
+    return 0; 
+  }
+  return t;
+}
 
-    float temperature = readTemperature();
-    float humidity = readHumidity();
-    int soundLevel = readSoundLevel();
+float readHumidity() {
+  float h = dht.readHumidity();
+  if (isnan(h)) {
+    return 0;
+  }
+  return h;
+}
 
-    Serial.println("------------------------------------");
-    Serial.println("Intentando enviar datos a Firebase...");
-    Serial.print("Temperatura: "); Serial.println(temperature);
-    Serial.print("Humedad: "); Serial.println(humidity);
-    Serial.print("Nivel de sonido: "); Serial.println(soundLevel);
+int readSoundLevel() {
+  const int sampleWindow = 50;
+  unsigned int sample;
+  unsigned long startMillis = millis(); 
+  unsigned int peakToPeak = 0;
+  unsigned int signalMax = 0;
+  unsigned int signalMin = 4095;
 
-    int estadoSonido = 1;
-    if (soundLevel >= soundThresholdLow) estadoSonido = 2;
-    if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
-
-    int estadoTemp = 1;
-    if (temperature >= tempThresholdVerde) estadoTemp = 2;
-    if (temperature >= tempThresholdNaranja) estadoTemp = 3;
-    
-    int ledStatus = max(estadoSonido, estadoTemp);
-
-    digitalWrite(LED_VERDE_PIN, ledStatus == 1);
-    digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
-    digitalWrite(LED_ROJO_PIN, ledStatus == 3);
-    Serial.printf("Estado de LEDs determinado: %d\n", ledStatus);
-
-    String documentPath = "sensorData/latest";
-    String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
-
-    Serial.println("Enviando datos a Firestore en la ruta: " + documentPath);
-    if (Firebase.ready()) {
-        // Usamos patchDocument para crear o actualizar el documento
-        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
-            Serial.printf("Envío de datos exitoso: %s\n", fbdo.payload().c_str());
-        } else {
-            Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
-        }
-    } else {
-        Serial.println("Firebase no está listo. Comprueba la conexión y las credenciales.");
+  while (millis() - startMillis < sampleWindow) {
+    sample = analogRead(SOUND_SENSOR_PIN);
+    if (sample < 4095) {
+      if (sample > signalMax) {
+        signalMax = sample;
+      } else if (sample < signalMin) {
+        signalMin = sample;
+      }
     }
   }
+  peakToPeak = signalMax - signalMin;
+  return peakToPeak;
 }
 
+void fetchThresholdsFromFirebase() {
+    if (!Firebase.ready()) {
+        Serial.println("Firebase no está listo, no se pueden obtener los umbrales.");
+        return;
+    }
+
+    String documentPath = "users/" + String(USER_UID) + "/thresholdConfigurations";
+    Serial.println("Obteniendo umbrales desde: " + documentPath);
+
+    // Usamos listDocuments para obtener los documentos en la subcolección
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
+        if (fbdo.httpCode() == 200) {
+            String payload = fbdo.payload().c_str();
+            StaticJsonDocument<1024> doc;
+            DeserializationError error = deserializeJson(doc, payload);
+
+            if (error) {
+                Serial.print("deserializeJson() falló: ");
+                Serial.println(error.c_str());
+                return;
+            }
+
+            // Asumiendo que solo hay un documento de configuración
+            if (doc["documents"] && doc["documents"].size() > 0) {
+                JsonObject fields = doc["documents"][0]["fields"];
+                
+                if (fields.containsKey("soundThresholdLow")) {
+                    soundThresholdLow = fields["soundThresholdLow"]["integerValue"].as<float>();
+                }
+                if (fields.containsKey("soundThresholdMedium")) {
+                    soundThresholdMedium = fields["soundThresholdMedium"]["integerValue"].as<float>();
+                }
+                if (fields.containsKey("temperatureThresholdVerde")) {
+                    tempThresholdVerde = fields["temperatureThresholdVerde"]["doubleValue"].as<float>();
+                }
+                if (fields.containsKey("temperatureThresholdNaranja")) {
+                    tempThresholdNaranja = fields["temperatureThresholdNaranja"]["doubleValue"].as<float>();
+                }
+                
+                Serial.println("Umbrales actualizados desde Firebase:");
+                Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
+                Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
+            } else {
+                Serial.println("No se encontraron documentos de configuración.");
+            }
+        } else {
+            Serial.printf("Error al obtener documentos: %s\n", fbdo.errorReason().c_str());
+        }
+    } else {
+        Serial.printf("Error en Firebase.Firestore.listDocuments: %s\n", fbdo.errorReason().c_str());
+    }
+}
+
+
+void loop() {
+    unsigned long currentMillis = millis();
+
+    // Tarea: Obtener configuración de umbrales desde Firebase periódicamente
+    if (currentMillis - fetchConfigPrevMillis > fetchConfigInterval) {
+        fetchConfigPrevMillis = currentMillis;
+        fetchThresholdsFromFirebase();
+    }
+
+    // Tarea: Enviar datos de sensores a Firebase periódicamente
+    if (currentMillis - sendDataPrevMillis > sendDataInterval) {
+        sendDataPrevMillis = currentMillis;
+
+        float temperature = readTemperature();
+        float humidity = readHumidity();
+        int soundLevel = readSoundLevel();
+
+        Serial.println("------------------------------------");
+        Serial.println("Intentando enviar datos a Firebase...");
+        Serial.printf("Temp: %.1f, Hum: %.1f, Sonido: %d\n", temperature, humidity, soundLevel);
+
+        int estadoSonido = 1;
+        if (soundLevel >= soundThresholdLow) estadoSonido = 2;
+        if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
+
+        int estadoTemp = 1;
+        if (temperature >= tempThresholdVerde) estadoTemp = 2;
+        if (temperature >= tempThresholdNaranja) estadoTemp = 3;
+        
+        int ledStatus = max(estadoSonido, estadoTemp);
+
+        digitalWrite(LED_VERDE_PIN, ledStatus == 1);
+        digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
+        digitalWrite(LED_ROJO_PIN, ledStatus == 3);
+        Serial.printf("Estado de LEDs determinado: %d (Sonido: %d, Temp: %d)\n", ledStatus, estadoSonido, estadoTemp);
+
+        String documentPath = "sensorData/latest";
+        String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
+
+        if (Firebase.ready()) {
+            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
+                // Silencio en éxito para no llenar la consola
+            } else {
+                Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
+            }
+        } else {
+            Serial.println("Firebase no está listo. Comprueba la conexión y las credenciales.");
+        }
+    }
+}

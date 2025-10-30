@@ -94,20 +94,20 @@ void setup() {
   Serial.print("Conectado con IP: ");
   Serial.println(WiFi.localIP());
   Serial.println();
-  
-  Serial.println("Sincronizando hora...");
+
+  // Configurar la hora para la conexión segura con Firebase
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  
-  struct tm timeinfo;
-  while (!getLocalTime(&timeinfo)) {
-    Serial.print(".");
-    delay(1000);
+  Serial.print("Sincronizando hora");
+  while (time(nullptr) < 1510644967) {
+      Serial.print(".");
+      delay(1000);
   }
-  Serial.println("\nHora sincronizada correctamente.");
+  Serial.println("\nHora sincronizada.");
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   
+  // Usar autenticación anónima
   auth.user.email = "";
   auth.user.password = "";
   
@@ -173,6 +173,7 @@ void fetchThresholdsFromFirebase() {
     Serial.println("Obteniendo umbrales desde: " + documentPath);
 
     // Listamos los documentos de la subcolección para obtener el ID del documento de configuración
+    // Se agregan los parámetros faltantes requeridos por la biblioteca
     if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")){
         if (fbdo.httpCode() == 200) {
             StaticJsonDocument<1024> listDoc;

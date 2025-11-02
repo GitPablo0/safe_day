@@ -169,7 +169,6 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.project_id = FIREBASE_PROJECT_ID; // <--- ESTA ES LA LÍNEA CLAVE
   config.token_status_callback = tokenStatusCallback;
   
   // Usaremos autenticación anónima para que el dispositivo pueda interactuar con Firebase
@@ -191,8 +190,8 @@ void setup() {
   }
 
   if (isPaired) {
-    // Si ya está vinculado, obtenemos la configuración y entramos en modo normal
-    fetchThresholdsFromFirebase();
+    // Si ya está vinculado, esperamos a que Firebase esté listo para obtener la configuración
+    Serial.println("Dispositivo vinculado. Esperando conexión con Firebase para obtener configuración...");
   } else {
     // Si no está vinculado, iniciamos el proceso de vinculación
     Serial.println("Dispositivo no vinculado. Esperando conexión con Firebase para iniciar modo de vinculación...");

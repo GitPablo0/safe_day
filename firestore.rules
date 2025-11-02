@@ -38,8 +38,7 @@ service cloud.firestore {
        * Any signed-in user can read the sensor data, but only the owner can write to it.
        */
       match /sensorData/{sensorDataId} {
-        allow read: if isSignedIn();
-        allow write: if isOwner(userId);
+        allow read, write: if isSignedIn();
       }
     }
 

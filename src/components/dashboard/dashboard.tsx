@@ -90,30 +90,33 @@ export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
-  // Hardcoded device user ID for displaying data
-  const deviceUserId = "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s";
+  // Use the logged-in user's UID to fetch their specific data
+  const deviceUserId = user?.uid;
 
-  const sensorDataRef = useMemoFirebase(() => doc(firestore, `users/${deviceUserId}/sensorData`, 'latest'), [firestore]);
+  const sensorDataRef = useMemoFirebase(() => 
+    (firestore && deviceUserId) ? doc(firestore, `users/${deviceUserId}/sensorData`, 'latest') : null, 
+    [firestore, deviceUserId]
+  );
   const { data: sensorData } = useDoc<SensorData>(sensorDataRef);
 
   // Path to the predictable configuration document ID for the device user
   const configDocId = "default_config";
   const thresholdConfigRef = useMemoFirebase(() => 
-    (firestore) ? doc(firestore, `users/${deviceUserId}/thresholdConfigurations`, configDocId) : null,
-    [firestore]
+    (firestore && deviceUserId) ? doc(firestore, `users/${deviceUserId}/thresholdConfigurations`, configDocId) : null,
+    [firestore, deviceUserId]
   );
   
   // Use useDoc to fetch the single, known configuration document for the device user
   const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(thresholdConfigRef);
   
-  // Effect to create a default configuration if none exists for the device user
+  // Effect to create a default configuration if none exists for the logged-in user
   useEffect(() => {
-    if (!isConfigLoading && thresholdConfigRef && !activeThresholdConfig) {
-      console.log(`No config found for device user ${deviceUserId}. Creating default config.`);
+    if (!isConfigLoading && thresholdConfigRef && !activeThresholdConfig && deviceUserId) {
+      console.log(`No config found for user ${deviceUserId}. Creating default config.`);
       const defaultConfig = createDefaultConfig(deviceUserId);
       setDocumentNonBlocking(thresholdConfigRef, defaultConfig, { merge: true });
     }
-  }, [isConfigLoading, activeThresholdConfig, thresholdConfigRef]);
+  }, [isConfigLoading, activeThresholdConfig, thresholdConfigRef, deviceUserId]);
 
 
   // Sensor data state with mock values as fallback

@@ -4,21 +4,14 @@
  * Este es un archivo de ejemplo para conectar un microcontrolador (como un ESP32)
  * a Firebase Firestore para el proyecto NeuroSense.
  *
+ * --- ¡IMPORTANTE! INSTRUCCIONES DE UID MANUAL ---
+ * 1. Abre la aplicación web del dashboard.
+ * 2. Copia el "User UID" que aparece en la tarjeta "Device Sync".
+ * 3. Pega ese UID en la línea de abajo, reemplazando "PASTE_YOUR_USER_UID_HERE".
+ *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
  * Este código está diseñado para la versión 4.4.17 de la biblioteca
  * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
- *
- * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
- * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt (v4.4.17)
- * 2. ArduinoJson by Benoit Blanchon (v7.x)
- * 3. DHT sensor library by Adafruit
- *
- * --- INSTRUCCIONES ---
- * 1. Carga este código en tu ESP32.
- * 2. Abre el Monitor Serie (115200 baudios).
- * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
- * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
- * 5. Una vez vinculado, el dispositivo funcionará normalmente.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -26,11 +19,14 @@
 #include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
 #include "DHT.h"
-#include <EEPROM.h>
 
 // ===============================================================
-// 1. CONFIGURACIÓN DE WIFI
+// 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
+// ▼▼▼ PEGA TU UID DE FIREBASE AQUÍ ▼▼▼
+String USER_UID = "PASTE_YOUR_USER_UID_HERE"; 
+// ▲▲▲ PEGA TU UID DE FIREBASE AQUÍ ▲▲▲
+
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
@@ -41,28 +37,13 @@
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
 #define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
 
-String USER_UID = "";
-
 // Objetos de Firebase
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
 // ===============================================================
-// 3. CONFIGURACIÓN DE EEPROM Y VINCULACIÓN
-// ===============================================================
-#define EEPROM_SIZE 128
-#define UID_ADDR 0
-#define UID_LEN 64
-#define FLAG_ADDR 100
-
-String deviceId = "";
-String pairingDocPath = "";
-unsigned long lastPairingCheckMillis = 0;
-bool pairingDocCreated = false;
-
-// ===============================================================
-// 4. PINES Y SENSORES
+// 3. PINES Y SENSORES
 // ===============================================================
 #define DHTPIN 4
 #define DHTTYPE DHT22
@@ -81,18 +62,15 @@ float tempThresholdVerde = 24;
 float tempThresholdNaranja = 28;
 
 // ===============================================================
-// 5. LÓGICA DE LA APLICACIÓN
+// 4. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
 const long sendDataInterval = 5000;
 const long fetchConfigInterval = 60000;
-bool isPaired = false;
 
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
-void checkPairingStatus();
-void createPairingDocument();
 
 // Función de callback para el estado del token
 void tokenStatusCallback(TokenInfo info) {
@@ -104,35 +82,9 @@ void tokenStatusCallback(TokenInfo info) {
   }
 }
 
-// Función para leer de EEPROM
-String readStringFromEEPROM(int addr, int len) {
-  String str = "";
-  for (int i = 0; i < len; ++i) {
-    byte c = EEPROM.read(addr + i);
-    if (c == 0) break;
-    str += (char)c;
-  }
-  return str;
-}
-
-// Función para escribir en EEPROM
-void writeStringToEEPROM(int addr, const String& str, int maxLen) {
-  for (int i = 0; i < maxLen; ++i) {
-    if (i < str.length()) {
-      EEPROM.write(addr + i, str[i]);
-    } else {
-      EEPROM.write(addr + i, 0); // Null terminator
-    }
-  }
-  EEPROM.commit();
-}
-
-
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
-
-  EEPROM.begin(EEPROM_SIZE);
 
   dht.begin();
   delay(2000);
@@ -153,11 +105,10 @@ void setup() {
   Serial.println();
   Serial.print("Conectado con IP: ");
   Serial.println(WiFi.localIP());
-  deviceId = WiFi.macAddress();
+  String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
   Serial.print("Device ID: ");
   Serial.println(deviceId);
-  pairingDocPath = "devicePairing/" + deviceId;
 
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   Serial.print("Sincronizando hora");
@@ -172,79 +123,15 @@ void setup() {
   config.database_url = DATABASE_URL;
   config.token_status_callback = tokenStatusCallback;
   
-  // Para la autenticación anónima, no se necesitan email ni contraseña.
+  // Para la autenticación anónima, se dejan en blanco.
   auth.user.email = "";
   auth.user.password = "";
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
-  // Comprobar si el dispositivo ya está vinculado
-  if (EEPROM.read(FLAG_ADDR) == 1) {
-    USER_UID = readStringFromEEPROM(UID_ADDR, UID_LEN);
-    if (USER_UID.length() > 0) {
-      isPaired = true;
-      Serial.println("Dispositivo ya vinculado con UID guardado. Operando normalmente.");
-      fetchThresholdsFromFirebase();
-    }
-  }
-
-  if (!isPaired) {
-    Serial.println("Dispositivo no vinculado. Esperando conexión con Firebase para iniciar modo de vinculación...");
-  }
-}
-
-void createPairingDocument() {
-    String pairingToken = String(random(100000, 999999));
-    Serial.println("==========================================");
-    Serial.println("            MODO DE VINCULACIÓN           ");
-    Serial.println(" Ingrese el siguiente token en la aplicación web:");
-    Serial.print(" Token de Vinculación: ");
-    Serial.println(pairingToken);
-    Serial.println("==========================================");
-
-    String content = "{\"pairingToken\": {\"stringValue\": \"" + pairingToken + "\"}, \"userId\": {\"nullValue\": null}}";
-    
-    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
-        Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
-        pairingDocCreated = true;
-    } else {
-        Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
-    }
-}
-
-void checkPairingStatus() {
-  Serial.println("Comprobando estado de vinculación...");
-  if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str())) {
-      if (fbdo.httpCode() == 200) {
-          FirebaseJson json(fbdo.payload());
-          FirebaseJsonData result;
-          json.get(result, "fields/userId/stringValue");
-
-          if (result.success && result.stringValue.length() > 0) {
-              String receivedUid = result.stringValue;
-              Serial.println("¡Dispositivo vinculado exitosamente!");
-              Serial.print("User UID recibido: ");
-              Serial.println(receivedUid);
-
-              writeStringToEEPROM(UID_ADDR, receivedUid, UID_LEN);
-              EEPROM.write(FLAG_ADDR, 1);
-              EEPROM.commit();
-
-              Firebase.Firestore.deleteDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str());
-
-              Serial.println("Configuración guardada. Reiniciando en 3 segundos...");
-              delay(3000);
-              ESP.restart();
-          } else {
-            Serial.println("El documento existe pero aún no ha sido reclamado.");
-          }
-      } else {
-        Serial.printf("Error al obtener documento de vinculación: %s\n", fbdo.errorReason().c_str());
-      }
-  } else {
-     Serial.printf("Error en la llamada a getDocument: %s\n", fbdo.errorReason().c_str());
-  }
+  // Intento inicial de obtener la configuración.
+  fetchThresholdsFromFirebase();
 }
 
 float readTemperature() {
@@ -276,7 +163,7 @@ int readSoundLevel() {
 }
 
 void fetchThresholdsFromFirebase() {
-    if (!Firebase.ready() || USER_UID.length() == 0) {
+    if (!Firebase.ready() || USER_UID.length() <= 1) {
         Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }
@@ -307,23 +194,6 @@ void fetchThresholdsFromFirebase() {
 
 
 void loop() {
-    if (!isPaired) {
-        if (millis() - lastPairingCheckMillis > 10000) {
-          lastPairingCheckMillis = millis();
-          if(Firebase.ready()) {
-            if (!pairingDocCreated) {
-              createPairingDocument();
-            } else {
-              checkPairingStatus();
-            }
-          } else {
-            Serial.println("Firebase no está listo para iniciar vinculación.");
-          }
-        }
-        delay(100);
-        return;
-    }
-
     unsigned long currentMillis = millis();
 
     if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
@@ -367,5 +237,3 @@ void loop() {
         }
     }
 }
-
-    

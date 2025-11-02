@@ -23,10 +23,8 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// UID del usuario de servicio creado para este dispositivo. No es necesario cambiarlo.
-#define USER_UID "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s"
-#define SERVICE_ACCOUNT_EMAIL "neurosense-device@studio.google.com"
-#define SERVICE_ACCOUNT_PASSWORD "NEUROSENSE-DEVICE-PASSWORD-XYZ"
+// ¡¡¡ PEGA TU UID AQUÍ !!!
+#define USER_UID "PASTE_YOUR_USER_UID_HERE"
 
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
@@ -45,7 +43,7 @@ FirebaseConfig config;
 
 // ===============================================================
 // 3. PINES Y SENSORES
-// =================================="""
+// ===============================================================
 #define DHTPIN 4
 #define DHTTYPE DHT22
 const int SOUND_SENSOR_PIN = 34;
@@ -124,9 +122,8 @@ void setup() {
   config.database_url = DATABASE_URL; // Requerido por la biblioteca
   config.token_status_callback = tokenStatusCallback;
   
-  // Asignar credenciales de la cuenta de servicio
-  auth.user.email = SERVICE_ACCOUNT_EMAIL;
-  auth.user.password = SERVICE_ACCOUNT_PASSWORD;
+  // Para la autenticación anónima, el objeto auth puede estar vacío,
+  // pero debe pasarse a Firebase.begin()
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -164,7 +161,8 @@ int readSoundLevel() {
 }
 
 void fetchThresholdsFromFirebase() {
-    if (!Firebase.ready() || strlen(USER_UID) <= 1) {
+    // Usamos strnlen para verificar de forma segura que el UID no esté vacío o sea el placeholder
+    if (!Firebase.ready() || strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
         Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }

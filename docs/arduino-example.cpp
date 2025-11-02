@@ -121,10 +121,9 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL; // Requerido por la biblioteca
   config.token_status_callback = tokenStatusCallback;
-  
+
   // Para la autenticación anónima, el objeto auth puede estar vacío,
   // pero debe pasarse a Firebase.begin()
-  
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
@@ -166,7 +165,7 @@ void fetchThresholdsFromFirebase() {
         Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }
-    
+
     String docPath = "users/" + String(USER_UID) + "/thresholdConfigurations/default_config";
     Serial.println("Obteniendo documento de configuración desde: " + docPath);
 
@@ -174,12 +173,12 @@ void fetchThresholdsFromFirebase() {
         if (fbdo.httpCode() == 200) {
             FirebaseJson json(fbdo.payload());
             FirebaseJsonData result;
-            
+
             if (json.get(result, "fields/soundThresholdLow/doubleValue") || json.get(result, "fields/soundThresholdLow/integerValue")) soundThresholdLow = result.doubleValue;
             if (json.get(result, "fields/soundThresholdMedium/doubleValue") || json.get(result, "fields/soundThresholdMedium/integerValue")) soundThresholdMedium = result.doubleValue;
             if (json.get(result, "fields/temperatureThresholdVerde/doubleValue") || json.get(result, "fields/temperatureThresholdVerde/integerValue")) tempThresholdVerde = result.doubleValue;
             if (json.get(result, "fields/temperatureThresholdNaranja/doubleValue") || json.get(result, "fields/temperatureThresholdNaranja/integerValue")) tempThresholdNaranja = result.doubleValue;
-            
+
             Serial.println("Umbrales actualizados desde Firebase:");
             Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
             Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
@@ -217,19 +216,19 @@ void loop() {
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;
         if (temperature >= tempThresholdNaranja) estadoTemp = 3;
-        
+
         int ledStatus = max(estadoSonido, estadoTemp);
 
         digitalWrite(LED_VERDE_PIN, ledStatus == 1);
         digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
         digitalWrite(LED_ROJO_PIN, ledStatus == 3);
-        
+
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
         String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
         if (Firebase.ready()) {
             // El sexto argumento (máscara) es requerido por esta versión de la biblioteca.
-            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" /* <- Argumento de máscara requerido */)) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {
@@ -237,6 +236,3 @@ void loop() {
         }
     }
 }
-
-
-    

@@ -142,7 +142,7 @@ void setup() {
 
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT);
+  pinMode(LED_ROJO_PIN, 25);
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
@@ -369,3 +369,5 @@ void loop() {
         }
     }
 }
+
+    

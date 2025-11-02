@@ -63,9 +63,9 @@ const int SOUND_SENSOR_PIN = 34;
 
 DHT dht(DHTPIN, DHTTYPE);
 
-const int LED_VERDE_PIN = 12;
-const int LED_NARANJA_PIN = 13;
-const int LED_ROJO_PIN = 14;
+const int LED_VERDE_PIN = 32;
+const int LED_NARANJA_PIN = 33;
+const int LED_ROJO_PIN = 25;
 
 // Umbrales (se actualizarán desde Firebase)
 float soundThresholdLow = 300;
@@ -207,7 +207,7 @@ void setup() {
         Serial.printf("Error al crear/actualizar documento de vinculación: %s\n", fbdo.errorReason().c_str());
         Serial.println("Es posible que el documento ya exista. Intentando actualizar...");
         // Si falla la creación, intentamos actualizar (patch) por si el documento ya existía de un intento anterior.
-        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
+        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str(), "")) {
            Serial.println("Documento de vinculación actualizado. Esperando reclamo...");
         } else {
            Serial.printf("Error al actualizar: %s\n", fbdo.errorReason().c_str());
@@ -294,7 +294,7 @@ void fetchThresholdsFromFirebase() {
     String documentPath = "users/" + USER_UID + "/thresholdConfigurations";
     Serial.println("Obteniendo umbrales desde la subcolección: " + documentPath);
 
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")) {
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
         if (fbdo.httpCode() == 200) {
             StaticJsonDocument<1024> listDoc;
             deserializeJson(listDoc, fbdo.payload());
@@ -397,7 +397,7 @@ void loop() {
         String content = "{\"fields\": {\"temperature\": {\"doubleValue\": " + String(temperature) + "}, \"humidity\": {\"doubleValue\": " + String(humidity) + "}, \"soundLevel\": {\"integerValue\": " + String(soundLevel) + "}}}";
 
         if (Firebase.ready()) {
-            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {

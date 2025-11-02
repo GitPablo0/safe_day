@@ -196,7 +196,7 @@ export default function Dashboard() {
       console.log(`No config found for user ${user.uid}. Creating default config at known ID.`);
       const defaultConfig = createDefaultConfig(user.uid);
       // Use setDocumentNonBlocking to create a document with a specific ID
-      setDocumentNonBlocking(thresholdConfigRef, defaultConfig);
+      setDocumentNonBlocking(thresholdConfigRef, defaultConfig, { merge: true });
     }
   }, [isConfigLoading, user, activeThresholdConfig, thresholdConfigRef]);
 

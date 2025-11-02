@@ -173,7 +173,6 @@ void fetchThresholdsFromFirebase() {
     Serial.println("Obteniendo umbrales desde: " + documentPath);
 
     // Listamos los documentos de la subcolección para obtener el ID del documento de configuración
-    // Se agregan los parámetros faltantes requeridos por la biblioteca
     if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")){
         if (fbdo.httpCode() == 200) {
             StaticJsonDocument<1024> listDoc;
@@ -257,8 +256,8 @@ void loop() {
         Serial.printf("Temp: %.1f, Hum: %.1f, Sonido: %d\n", temperature, humidity, soundLevel);
 
         int estadoSonido = 1;
-        if (soundLevel >= soundThresholdLow) estadoSonido = 2;
-        if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
+        if (soundLevel >= soundThresholds.low) estadoSonido = 2;
+        if (soundLevel >= soundThresholds.medium) estadoSonido = 3;
 
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;

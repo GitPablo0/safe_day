@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2, User, Copy } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, User, Copy, Link as LinkIcon, Loader2 } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, limit } from 'firebase/firestore';
+import { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { doc, collection, query, limit, where, getDocs } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,36 +41,90 @@ const createDefaultConfig = (userId: string) => ({
 });
 
 
-function UserInfoCard({ uid }: { uid: string }) {
+function DevicePairingCard() {
+  const firestore = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
-  
-  const handleCopy = () => {
-    navigator.clipboard.writeText(uid);
-    toast({
-      title: "UID Copied!",
-      description: "The User UID has been copied to your clipboard.",
-    });
+  const [pairingToken, setPairingToken] = useState('');
+  const [isPairing, setIsPairing] = useState(false);
+
+  const handlePairDevice = async () => {
+    if (!pairingToken || !firestore || !user) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter a valid pairing token.",
+      });
+      return;
+    }
+
+    setIsPairing(true);
+
+    try {
+      // 1. Find the device document with the matching pairing token
+      const pairingQuery = query(collection(firestore, "devicePairing"), where("pairingToken", "==", pairingToken));
+      const querySnapshot = await getDocs(pairingQuery);
+
+      if (querySnapshot.empty) {
+        toast({
+          variant: "destructive",
+          title: "Pairing Failed",
+          description: "No device found with that token. Please check the token and try again.",
+        });
+        setIsPairing(false);
+        return;
+      }
+
+      // 2. Claim the device by updating the document with the user's UID
+      const deviceDoc = querySnapshot.docs[0];
+      const deviceDocRef = doc(firestore, "devicePairing", deviceDoc.id);
+      
+      updateDocumentNonBlocking(deviceDocRef, { userId: user.uid });
+      
+      toast({
+        title: "Pairing Successful!",
+        description: "Your device has been linked to your account.",
+      });
+      setPairingToken('');
+
+    } catch (error) {
+      console.error("Pairing error: ", error);
+      toast({
+        variant: "destructive",
+        title: "Uh oh! Something went wrong.",
+        description: "Could not pair the device. Please try again later.",
+      });
+    } finally {
+      setIsPairing(false);
+    }
   };
 
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Device Sync</CardTitle>
+        <CardTitle>Pair New Device</CardTitle>
         <CardDescription>
-          Use this User UID to sync your hardware device with the dashboard.
+          Enter the 6-digit token from your device's serial monitor to link it to your account.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="user-uid" className="text-sm font-medium">User UID</Label>
-          </div>
-          <div className="flex gap-2">
-            <Input id="user-uid" readOnly value={uid} className="flex-1" />
-            <Button variant="outline" size="icon" onClick={handleCopy}>
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <LinkIcon className="h-4 w-4 text-muted-foreground" />
+          <Label htmlFor="pairing-token" className="text-sm font-medium">Pairing Token</Label>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            id="pairing-token"
+            value={pairingToken}
+            onChange={(e) => setPairingToken(e.target.value)}
+            placeholder="123456"
+            className="flex-1"
+            disabled={isPairing}
+          />
+          <Button variant="outline" onClick={handlePairDevice} disabled={isPairing}>
+            {isPairing ? <Loader2 className="animate-spin" /> : "Pair"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -100,7 +154,6 @@ export default function Dashboard() {
   
   // Effect to create a default configuration if none exists for the user
   useEffect(() => {
-    // Check if loading is finished, a user exists, and there are no configurations
     if (!isConfigLoading && user && thresholdConfigCollectionRef && thresholdConfigurations?.length === 0) {
       console.log(`No config found for user ${user.uid}. Creating default.`);
       const defaultConfig = createDefaultConfig(user.uid);
@@ -196,7 +249,7 @@ export default function Dashboard() {
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
-         {user && <UserInfoCard uid={user.uid} />}
+         <DevicePairingCard />
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>
       

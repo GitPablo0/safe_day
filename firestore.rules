@@ -3,90 +3,73 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
+     * Helper function to check if the user is signed in.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Helper function to check if the requested userId matches the authenticated user's UID.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
      * @description Controls access to user profile documents.
-     * @path /users/{userId}
-     * @allow (create) User with UID 'user123' can create their profile.
-     * @allow (get) User with UID 'user123' can read their profile.
-     * @allow (update) User with UID 'user123' can update their profile.
-     * @allow (delete) User with UID 'user123' can delete their profile.
-     * @deny (create) User with UID 'user456' cannot create a profile for 'user123'.
-     * @deny (get) User with UID 'user456' cannot read the profile of 'user123'.
-     * @deny (update) User with UID 'user456' cannot update the profile of 'user123'.
-     * @deny (delete) User with UID 'user456' cannot delete the profile of 'user123'.
-     * @principle Enforces document ownership; users can only manage their own profiles.
      */
     match /users/{userId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested userId matches the authenticated user's UID.
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if false; // No listing of all users
-
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow get, update, delete: if isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
+      allow list: if false; // Do not allow listing of all users
     }
 
     /**
      * @description Controls access to threshold configuration documents nested under a user.
-     * @path /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}
-     * @allow (create) User with UID 'user123' can create a threshold configuration.
-     * @allow (get) User with UID 'user123' can read their threshold configuration.
-     * @allow (update) User with UID 'user123' can update their threshold configuration.
-     * @allow (delete) User with UID 'user123' can delete their threshold configuration.
-     * @allow (list) User with UID 'user123' can list their threshold configurations.
-     * @deny (create) User with UID 'user456' cannot create a threshold configuration for 'user123'.
-     * @deny (get) User with UID 'user456' cannot read the threshold configuration of 'user123'.
-     * @deny (update) User with UID 'user456' cannot update the threshold configuration of 'user123'.
-     * @deny (delete) User with UID 'user456' cannot delete the threshold configuration of 'user123'.
-     * @principle Enforces document ownership; users can only manage their own threshold configurations.
      */
     match /users/{userId}/thresholdConfigurations/{thresholdConfigurationId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested userId matches the authenticated user's UID.
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow read, write: if isOwner(userId);
     }
 
     /**
      * @description Controls access to the latest sensor data document.
-     * @path /sensorData/latest
-     * @allow (get) Any user can read the sensor data.
-     * @allow (create) Signed in user can create the sensor data.
-     * @allow (update) Signed in user can update the sensor data.
-     * @allow (delete) Signed in user can delete the sensor data.
-     * @deny (create) Anonymous user cannot create the sensor data.
-     * @principle Allows public read access but restricts writes to authenticated users.
+     * Authenticated devices write to this document. Any authenticated user can read it.
      */
     match /sensorData/{sensorDataId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if true;
+      allow get: if isSignedIn();
+      // Allow write only for authenticated entities (the device).
+      // This is a simplification. In a production system, you might use IoT-specific auth.
+      allow write: if isSignedIn();
       allow list: if false;
+    }
 
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
+    /**
+     * @description Controls the device pairing process.
+     */
+    match /devicePairing/{deviceId} {
+      /**
+       * Allow a device (acting as an authenticated user, even if anonymous) to create
+       * a document with a pairing token.
+       */
+      allow create: if isSignedIn() && request.resource.data.userId == null;
+
+      /**
+       * Allow the device to read its own pairing document to check if it has been claimed.
+       */
+      allow get: if isSignedIn();
+
+      /**
+       * Allow an authenticated user to claim a device by updating the userId field
+       * from null to their own UID. Prevents overwriting an already-claimed device.
+       */
+      allow update: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid
+                    && resource.data.userId == null;
+      
+      /**
+       * Allow a device to delete its own pairing document after successful pairing.
+       */
       allow delete: if isSignedIn();
     }
   }

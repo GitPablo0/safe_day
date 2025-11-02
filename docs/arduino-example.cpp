@@ -9,11 +9,11 @@
  * 3. DHT sensor library by Adafruit
  *
  * --- INSTRUCCIONES ---
- * 1. Abre la aplicación web para generar un usuario anónimo.
- * 2. Ve a tu consola de Firebase -> Authentication -> Users.
- * 3. Copia el "User UID" del nuevo usuario anónimo.
- * 4. Pega ese UID en la variable `USER_UID` de este archivo.
- * 5. Carga el código en tu ESP32.
+ * 1. Carga este código en tu ESP32.
+ * 2. Abre el Monitor Serie (115200 baudios).
+ * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
+ * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
+ * 5. Una vez vinculado, el dispositivo funcionará normalmente.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -21,6 +21,7 @@
 #include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
 #include "DHT.h"
+#include <EEPROM.h>
 
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI
@@ -33,16 +34,29 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-// IMPORTANTE: Reemplaza con el UID de tu usuario anónimo de Firebase
-#define USER_UID "pega-tu-uid-aqui"
+
+// El UID se guardará en EEPROM. Ya no se define aquí.
+String USER_UID = "";
 
 // Objetos de Firebase
 FirebaseData fbdo;
+FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
 
 // ===============================================================
-// 3. PINES Y SENSORES
+// 3. CONFIGURACIÓN DE EEPROM Y VINCULACIÓN
+// ===============================================================
+#define EEPROM_SIZE 128 // Tamaño para guardar el UID y un flag
+#define UID_ADDR 0      // Dirección donde empieza el UID
+#define UID_LEN 64      // Longitud máxima para el UID
+#define FLAG_ADDR 100   // Dirección para el flag de "vinculado"
+
+String deviceId = ""; // ID único del dispositivo (MAC Address)
+String pairingDocPath = "";
+
+// ===============================================================
+// 4. PINES Y SENSORES
 // ===============================================================
 #define DHTPIN 4
 #define DHTTYPE DHT22
@@ -61,28 +75,56 @@ float tempThresholdVerde = 24;
 float tempThresholdNaranja = 28;
 
 // ===============================================================
-// 4. LÓGICA DE LA APLICACIÓN
+// 5. LÓGICA DE LA APLICACIÓN
 // ===============================================================
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
 const long sendDataInterval = 5000;    // 5 segundos
 const long fetchConfigInterval = 60000; // 60 segundos
+bool isPaired = false;
 
 void fetchThresholdsFromFirebase(); // Declaración anticipada
+void streamCallback(FirebaseStream data);
+void streamTimeoutCallback(bool timeout);
+
+// Función para leer de EEPROM
+String readStringFromEEPROM(int addr, int len) {
+  String str = "";
+  for (int i = 0; i < len; ++i) {
+    byte c = EEPROM.read(addr + i);
+    if (c == 0) break;
+    str += (char)c;
+  }
+  return str;
+}
+
+// Función para escribir en EEPROM
+void writeStringToEEPROM(int addr, const String& str, int maxLen) {
+  for (int i = 0; i < maxLen; ++i) {
+    if (i < str.length()) {
+      EEPROM.write(addr + i, str[i]);
+    } else {
+      EEPROM.write(addr + i, 0); // Null terminator
+    }
+  }
+  EEPROM.commit();
+}
+
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
+
+  EEPROM.begin(EEPROM_SIZE);
   
   dht.begin();
   delay(2000);
 
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT);
+  pinMode(LED_ROJO_PIN, LOW); // LED rojo apagado al inicio
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
-  digitalWrite(LED_ROJO_PIN, LOW);
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Conectando a Wi-Fi");
@@ -93,7 +135,10 @@ void setup() {
   Serial.println();
   Serial.print("Conectado con IP: ");
   Serial.println(WiFi.localIP());
-  Serial.println();
+  deviceId = WiFi.macAddress();
+  deviceId.replace(":", "");
+  Serial.print("Device ID: ");
+  Serial.println(deviceId);
 
   // Configurar la hora para la conexión segura con Firebase
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -106,57 +151,117 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
+  config.token_status_callback = tokenStatusCallback;
   
-  // Usar autenticación anónima
-  auth.user.email = "";
+  auth.user.email = ""; // Usar auth anónima para el proceso de vinculación
   auth.user.password = "";
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
-  
-  Serial.println("Esperando token de autenticación...");
-  while (!Firebase.ready()) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println("\nFirebase listo!");
 
-  // Obtener la configuración inicial al arrancar
-  fetchThresholdsFromFirebase();
+  // Comprobar si el dispositivo ya está vinculado
+  if (EEPROM.read(FLAG_ADDR) == 1) {
+    USER_UID = readStringFromEEPROM(UID_ADDR, UID_LEN);
+    if (USER_UID.length() > 0) {
+      isPaired = true;
+      Serial.println("Dispositivo ya vinculado.");
+      Serial.print("User UID: ");
+      Serial.println(USER_UID);
+    }
+  }
+
+  if (isPaired) {
+    // Si ya está vinculado, obtenemos la configuración y entramos en modo normal
+    fetchThresholdsFromFirebase();
+  } else {
+    // Si no está vinculado, iniciamos el proceso de vinculación
+    Serial.println("Dispositivo no vinculado. Iniciando modo de vinculación...");
+    pairingDocPath = "devicePairing/" + deviceId;
+    
+    // Generar un token de vinculación de 6 dígitos
+    String pairingToken = String(random(100000, 999999));
+    Serial.println("==========================================");
+    Serial.println("            MODO DE VINCULACIÓN           ");
+    Serial.println(" Ingrese el siguiente token en la aplicación web:");
+    Serial.print(" Token de Vinculación: ");
+    Serial.println(pairingToken);
+    Serial.println("==========================================");
+
+    // Crear el documento de vinculación en Firestore
+    String content = "{\"fields\":{\"pairingToken\":{\"stringValue\":\"" + pairingToken + "\"},\"userId\":{\"nullValue\":null},\"createdAt\":{\"timestampValue\":\"" + Firebase.ServerValue.TIMESTAMP + "\"}}}";
+
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", "devicePairing", deviceId.c_str(), content.c_str())) {
+        Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
+        // Escuchar cambios en el documento de vinculación
+        if (!Firebase.Firestore.listenDocument(&stream, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), streamCallback, streamTimeoutCallback)) {
+          Serial.println("Error al escuchar el documento de vinculación.");
+        }
+    } else {
+        Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
+        Serial.println("Reintentando en 10 segundos...");
+        delay(10000);
+        ESP.restart();
+    }
+  }
+}
+
+void streamCallback(FirebaseStream data) {
+    Serial.println("Se recibió una actualización del documento de vinculación...");
+    if (data.dataTypeEnum() == fb_esp_firestore_data_type_document) {
+        StaticJsonDocument<512> doc;
+        deserializeJson(doc, data.payload());
+        if (doc["fields"]["userId"] && doc["fields"]["userId"]["stringValue"]) {
+            String receivedUid = doc["fields"]["userId"]["stringValue"];
+            if (receivedUid.length() > 0) {
+                Serial.println("¡Dispositivo vinculado exitosamente!");
+                Serial.print("User UID recibido: ");
+                Serial.println(receivedUid);
+
+                // Guardar el UID y el flag en EEPROM
+                writeStringToEEPROM(UID_ADDR, receivedUid, UID_LEN);
+                EEPROM.write(FLAG_ADDR, 1);
+                EEPROM.commit();
+
+                // Detener el listener y reiniciar
+                Firebase.Firestore.removeListen(stream);
+                Serial.println("Configuración guardada. El dispositivo se reiniciará en 3 segundos...");
+                delay(3000);
+                ESP.restart();
+            }
+        }
+    }
+}
+
+void streamTimeoutCallback(bool timeout) {
+  if (timeout) {
+    Serial.println("Stream de vinculación agotado, reiniciando...");
+    // Podríamos intentar reiniciar el listener, pero reiniciar es más simple
+    ESP.restart();
+  }
 }
 
 float readTemperature() {
   float t = dht.readTemperature();
-  if (isnan(t)) {
-    return 0; 
-  }
-  return t;
+  return isnan(t) ? 0 : t;
 }
 
 float readHumidity() {
   float h = dht.readHumidity();
-  if (isnan(h)) {
-    return 0;
-  }
-  return h;
+  return isnan(h) ? 0 : h;
 }
 
 int readSoundLevel() {
   const int sampleWindow = 50;
-  unsigned int sample;
-  unsigned long startMillis = millis(); 
   unsigned int peakToPeak = 0;
   unsigned int signalMax = 0;
   unsigned int signalMin = 4095;
+  unsigned long startMillis = millis();
 
   while (millis() - startMillis < sampleWindow) {
-    sample = analogRead(SOUND_SENSOR_PIN);
+    unsigned int sample = analogRead(SOUND_SENSOR_PIN);
     if (sample < 4095) {
-      if (sample > signalMax) {
-        signalMax = sample;
-      } else if (sample < signalMin) {
-        signalMin = sample;
-      }
+      if (sample > signalMax) signalMax = sample;
+      else if (sample < signalMin) signalMin = sample;
     }
   }
   peakToPeak = signalMax - signalMin;
@@ -164,52 +269,42 @@ int readSoundLevel() {
 }
 
 void fetchThresholdsFromFirebase() {
-    if (!Firebase.ready()) {
-        Serial.println("Firebase no está listo, no se pueden obtener los umbrales.");
+    if (!Firebase.ready() || USER_UID.length() == 0) {
+        Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }
 
-    String documentPath = "users/" + String(USER_UID) + "/thresholdConfigurations";
-    Serial.println("Obteniendo umbrales desde: " + documentPath);
+    String documentPath = "users/" + USER_UID + "/thresholdConfigurations";
+    Serial.println("Obteniendo umbrales desde la subcolección: " + documentPath);
 
-    // Listamos los documentos de la subcolección para obtener el ID del documento de configuración
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")){
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "")) {
         if (fbdo.httpCode() == 200) {
             StaticJsonDocument<1024> listDoc;
             deserializeJson(listDoc, fbdo.payload());
             if (listDoc["documents"] && listDoc["documents"][0]) {
                 String fullDocName = listDoc["documents"][0]["name"];
-                // El nombre completo es "projects/PROJECT_ID/databases/(default)/documents/users/UID/thresholdConfigurations/DOC_ID"
-                // Necesitamos extraer solo el path relativo para getDocument.
                 int docPathIndex = fullDocName.indexOf("/documents/");
                 String docPath = fullDocName.substring(docPathIndex + 10);
                 
-                Serial.println("Obteniendo documento: " + docPath);
+                Serial.println("Obteniendo documento de configuración: " + docPath);
                 
-                // Ahora obtenemos el documento específico
-                if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+                if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), "")) {
                     if (fbdo.httpCode() == 200) {
                         String payload = fbdo.payload().c_str();
                         StaticJsonDocument<1024> doc;
-                        DeserializationError error = deserializeJson(doc, payload);
-
-                        if (error) {
-                            Serial.print("deserializeJson() falló: ");
-                            Serial.println(error.c_str());
-                            return;
-                        }
+                        deserializeJson(doc, payload);
 
                         JsonObject fields = doc["fields"];
-                        if (fields.containsKey("soundThresholdLow")) {
+                        if (fields["soundThresholdLow"]["integerValue"]) {
                             soundThresholdLow = fields["soundThresholdLow"]["integerValue"].as<float>();
                         }
-                        if (fields.containsKey("soundThresholdMedium")) {
+                        if (fields["soundThresholdMedium"]["integerValue"]) {
                             soundThresholdMedium = fields["soundThresholdMedium"]["integerValue"].as<float>();
                         }
-                        if (fields.containsKey("temperatureThresholdVerde")) {
+                        if (fields["temperatureThresholdVerde"]["doubleValue"]) {
                             tempThresholdVerde = fields["temperatureThresholdVerde"]["doubleValue"].as<float>();
                         }
-                        if (fields.containsKey("temperatureThresholdNaranja")) {
+                        if (fields["temperatureThresholdNaranja"]["doubleValue"]) {
                             tempThresholdNaranja = fields["temperatureThresholdNaranja"]["doubleValue"].as<float>();
                         }
                         
@@ -219,32 +314,36 @@ void fetchThresholdsFromFirebase() {
                     } else {
                         Serial.printf("Error al obtener documento: %s\n", fbdo.errorReason().c_str());
                     }
-                } else {
-                    Serial.printf("Error en Firebase.Firestore.getDocument: %s\n", fbdo.errorReason().c_str());
                 }
             } else {
-                Serial.println("No se encontraron documentos de configuración en la subcolección.");
+                Serial.println("No se encontraron documentos de configuración. Usando valores por defecto.");
             }
         } else {
              Serial.printf("Error al listar documentos: %s\n", fbdo.errorReason().c_str());
         }
     } else {
-        Serial.printf("Error en Firebase.Firestore.listDocuments: %s\n", fbdo.errorReason().c_str());
+        Serial.printf("Error en llamada a listDocuments: %s\n", fbdo.errorReason().c_str());
     }
 }
 
-
 void loop() {
+    if (!isPaired) {
+        // En modo vinculación, el loop principal no hace nada más que esperar la devolución de llamada.
+        Firebase.loop();
+        delay(100);
+        return;
+    }
+
     unsigned long currentMillis = millis();
 
     // Tarea: Obtener configuración de umbrales desde Firebase periódicamente
-    if (currentMillis - fetchConfigPrevMillis > fetchConfigInterval) {
+    if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
         fetchConfigPrevMillis = currentMillis;
         fetchThresholdsFromFirebase();
     }
 
     // Tarea: Enviar datos de sensores a Firebase periódicamente
-    if (currentMillis - sendDataPrevMillis > sendDataInterval) {
+    if (currentMillis - sendDataPrevMillis >= sendDataInterval) {
         sendDataPrevMillis = currentMillis;
 
         float temperature = readTemperature();
@@ -256,8 +355,8 @@ void loop() {
         Serial.printf("Temp: %.1f, Hum: %.1f, Sonido: %d\n", temperature, humidity, soundLevel);
 
         int estadoSonido = 1;
-        if (soundLevel >= soundThresholds.low) estadoSonido = 2;
-        if (soundLevel >= soundThresholds.medium) estadoSonido = 3;
+        if (soundLevel >= soundThresholdLow) estadoSonido = 2;
+        if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
 
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;
@@ -274,14 +373,11 @@ void loop() {
         String content = "{'fields': {'temperature': {'doubleValue': " + String(temperature) + "}, 'humidity': {'doubleValue': " + String(humidity) + "}, 'soundLevel': {'integerValue': " + String(soundLevel) + "}}}";
 
         if (Firebase.ready()) {
-            // El último argumento es el "updateMask", lo dejamos vacío para actualizar todo.
-            if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
-                // Silencio en éxito para no llenar la consola
-            } else {
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {
-            Serial.println("Firebase no está listo. Comprueba la conexión y las credenciales.");
+            Serial.println("Firebase no está listo.");
         }
     }
 }

@@ -32,9 +32,9 @@
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
 // ===============================================================
-#define API_KEY "YOUR_API_KEY"
-#define FIREBASE_PROJECT_ID "YOUR_PROJECT_ID"
-#define DATABASE_URL "YOUR_DATABASE_URL" // e.g., <PROJECT_ID>.firebaseio.com
+#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
+#define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
 
 // Objetos de Firebase
 FirebaseData fbdo;

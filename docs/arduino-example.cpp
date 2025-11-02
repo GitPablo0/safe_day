@@ -23,9 +23,10 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// ▼▼▼ PEGA TU UID DE FIREBASE AQUÍ ▼▼▼
-String USER_UID = "PASTE_YOUR_USER_UID_HERE"; 
-// ▲▲▲ PEGA TU UID DE FIREBASE AQUÍ ▲▲▲
+// UID del usuario de servicio creado para este dispositivo. No es necesario cambiarlo.
+#define USER_UID "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s"
+#define SERVICE_ACCOUNT_EMAIL "neurosense-device@studio.google.com"
+#define SERVICE_ACCOUNT_PASSWORD "NEUROSENSE-DEVICE-PASSWORD-XYZ"
 
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
@@ -110,8 +111,8 @@ void setup() {
   Serial.print("Device ID: ");
   Serial.println(deviceId);
 
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   Serial.print("Sincronizando hora");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   while (time(nullptr) < 1510644967) {
       Serial.print(".");
       delay(1000);
@@ -120,12 +121,12 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
+  config.database_url = DATABASE_URL; // Requerido por la biblioteca
   config.token_status_callback = tokenStatusCallback;
   
-  // Para la autenticación anónima, se dejan en blanco.
-  auth.user.email = "";
-  auth.user.password = "";
+  // Asignar credenciales de la cuenta de servicio
+  auth.user.email = SERVICE_ACCOUNT_EMAIL;
+  auth.user.password = SERVICE_ACCOUNT_PASSWORD;
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -163,12 +164,12 @@ int readSoundLevel() {
 }
 
 void fetchThresholdsFromFirebase() {
-    if (!Firebase.ready() || USER_UID.length() <= 1) {
+    if (!Firebase.ready() || strlen(USER_UID) <= 1) {
         Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }
     
-    String docPath = "users/" + USER_UID + "/thresholdConfigurations/default_config";
+    String docPath = "users/" + String(USER_UID) + "/thresholdConfigurations/default_config";
     Serial.println("Obteniendo documento de configuración desde: " + docPath);
 
     if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
@@ -225,10 +226,11 @@ void loop() {
         digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
         digitalWrite(LED_ROJO_PIN, ledStatus == 3);
         
-        String documentPath = "users/" + USER_UID + "/sensorData/latest";
+        String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
         String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
         if (Firebase.ready()) {
+            // El sexto argumento (máscara) es requerido por esta versión de la biblioteca.
             if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { Thermometer, Droplets, Volume2, User, Copy, Link as LinkIcon, Loader2 } from 'lucide-react';

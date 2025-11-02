@@ -190,7 +190,7 @@ void setup() {
     // Crear el documento de vinculación en Firestore
     String content = "{\"fields\":{\"pairingToken\":{\"stringValue\":\"" + pairingToken + "\"},\"userId\":{\"nullValue\":null},\"createdAt\":{\"timestampValue\":\"" + Firebase.ServerValue.TIMESTAMP + "\"}}}";
 
-    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", "devicePairing", deviceId.c_str(), content.c_str())) {
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
         Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
         // Escuchar cambios en el documento de vinculación
         if (!Firebase.Firestore.listenDocument(&stream, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), streamCallback, streamTimeoutCallback)) {

@@ -119,11 +119,11 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL; // Requerido por la biblioteca
+  config.database_url = DATABASE_URL;
   config.token_status_callback = tokenStatusCallback;
-
-  // Para la autenticación anónima, el objeto auth puede estar vacío,
-  // pero debe pasarse a Firebase.begin()
+  
+  // Para la autenticación anónima, se debe pasar el objeto auth, pero puede estar vacío.
+  // La biblioteca gestionará el inicio de sesión anónimo.
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
@@ -236,3 +236,5 @@ void loop() {
         }
     }
 }
+
+    

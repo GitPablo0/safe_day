@@ -41,6 +41,7 @@ String USER_UID = "";
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
+FirebaseData stream;
 
 // ===============================================================
 // 3. CONFIGURACIÓN DE EEPROM Y VINCULACIÓN
@@ -291,15 +292,18 @@ void fetchThresholdsFromFirebase() {
         return;
     }
 
-    String documentPath = "users/" + USER_UID + "/thresholdConfigurations";
-    Serial.println("Obteniendo umbrales desde la subcolección: " + documentPath);
+    String collectionPath = "users/" + USER_UID + "/thresholdConfigurations";
+    Serial.println("Obteniendo umbrales desde la colección: " + collectionPath);
 
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
+    // Listar los documentos en la subcolección para encontrar el ID del documento de configuración
+    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", collectionPath.c_str(), "", "", 1, "", false)) {
         if (fbdo.httpCode() == 200) {
             StaticJsonDocument<1024> listDoc;
             deserializeJson(listDoc, fbdo.payload());
             if (listDoc["documents"] && listDoc["documents"][0]) {
-                String fullDocName = listDoc["documents"][0]["name"];
+                String fullDocName = listDoc["documents"][0]["name"]; // e.g. projects/pid/databases/(default)/documents/users/uid/thresholdConfigurations/docId
+                
+                // Extraer la ruta completa del documento desde el nombre
                 int docPathIndex = fullDocName.indexOf("/documents/");
                 String docPath = fullDocName.substring(docPathIndex + 10);
                 
@@ -342,6 +346,7 @@ void fetchThresholdsFromFirebase() {
         Serial.printf("Error en llamada a listDocuments: %s\n", fbdo.errorReason().c_str());
     }
 }
+
 
 void loop() {
     if (!isPaired) {
@@ -405,5 +410,3 @@ void loop() {
         }
     }
 }
-
-    

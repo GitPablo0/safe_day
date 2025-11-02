@@ -13,7 +13,7 @@
  * 2. Abre el Monitor Serie (115200 baudios).
  * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
  * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
- * 5. Una vez vinculado, el dispositivo funcionará normally.
+ * 5. Una vez vinculado, el dispositivo funcionará normalmente.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -34,6 +34,7 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // <-- AÑADIDO IMPORTANTE
 
 String USER_UID = "";
 
@@ -91,8 +92,6 @@ void createPairingDocument();
 
 // Función de callback para el estado del token (requerida por la biblioteca)
 void tokenStatusCallback(TokenInfo info) {
-  // Esta función puede estar vacía si no necesitas monitorear el estado del token.
-  // Es útil para depuración.
   if (info.status == token_status_ready) {
     Serial.println("Token listo.");
   } else {
@@ -169,6 +168,7 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
+  config.database_url = DATABASE_URL; // <-- LÍNEA CORREGIDA Y ESENCIAL
   config.token_status_callback = tokenStatusCallback;
   
   // Usaremos autenticación anónima para que el dispositivo pueda interactuar con Firebase

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2, User, Copy, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, User, Link as LinkIcon, Loader2, Copy } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { doc, collection, query, limit, where, getDocs } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +39,40 @@ const createDefaultConfig = (userId: string) => ({
     orangeBlockDuration: 3000,
     timeBetweenEvents: 1000,
 });
+
+function UserInfoCard({ uid }: { uid: string }) {
+  const { toast } = useToast();
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(uid);
+    toast({
+      title: "User UID Copied!",
+      description: "You can now paste it in your device code if needed.",
+    });
+  };
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Device Sync</CardTitle>
+        <CardDescription>
+          Your unique User ID for device synchronization.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col justify-center gap-4">
+        <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="user-uid" className="text-sm font-medium">User UID</Label>
+        </div>
+        <div className="flex gap-2">
+            <Input id="user-uid" readOnly value={uid} className="flex-1" />
+            <Button variant="outline" size="icon" onClick={copyToClipboard}>
+                <Copy className="h-4 w-4" />
+            </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 
 function DevicePairingCard() {
@@ -104,7 +138,7 @@ function DevicePairingCard() {
       <CardHeader>
         <CardTitle>Pair New Device</CardTitle>
         <CardDescription>
-          Enter the 6-digit token from your device's serial monitor to link it to your account.
+          Enter the 6-digit token from your device to link it to your account.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
@@ -121,7 +155,7 @@ function DevicePairingCard() {
             className="flex-1"
             disabled={isPairing}
           />
-          <Button variant="outline" onClick={handlePairDevice} disabled={isPairing}>
+          <Button onClick={handlePairDevice} disabled={isPairing}>
             {isPairing ? <Loader2 className="animate-spin" /> : "Pair"}
           </Button>
         </div>
@@ -134,35 +168,31 @@ function DevicePairingCard() {
 export default function Dashboard() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  const { toast } = useToast();
 
   const sensorDataRef = useMemoFirebase(() => firestore ? doc(firestore, 'sensorData', 'latest') : null, [firestore]);
   const { data: sensorData } = useDoc<{temperature: number, humidity: number, soundLevel: number}>(sensorDataRef);
 
-  // Reference to the user's threshold configurations collection
-  const thresholdConfigCollectionRef = useMemoFirebase(() => 
-    (firestore && user) ? collection(firestore, `users/${user.uid}/thresholdConfigurations`) : null, 
+  // Path to the predictable configuration document ID
+  const configDocId = "default_config";
+  const thresholdConfigRef = useMemoFirebase(() => 
+    (firestore && user) ? doc(firestore, `users/${user.uid}/thresholdConfigurations`, configDocId) : null,
     [firestore, user]
   );
   
-  // Query to get the first (and likely only) configuration document
-  const thresholdConfigQuery = useMemoFirebase(() => 
-    thresholdConfigCollectionRef ? query(thresholdConfigCollectionRef, limit(1)) : null,
-    [thresholdConfigCollectionRef]
-  );
-
-  const { data: thresholdConfigurations, isLoading: isConfigLoading } = useCollection<ThresholdConfiguration>(thresholdConfigQuery);
+  // Use useDoc to fetch the single, known configuration document
+  const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(thresholdConfigRef);
   
   // Effect to create a default configuration if none exists for the user
   useEffect(() => {
-    if (!isConfigLoading && user && thresholdConfigCollectionRef && thresholdConfigurations?.length === 0) {
-      console.log(`No config found for user ${user.uid}. Creating default.`);
+    if (!isConfigLoading && user && thresholdConfigRef && !activeThresholdConfig) {
+      console.log(`No config found for user ${user.uid}. Creating default config at known ID.`);
       const defaultConfig = createDefaultConfig(user.uid);
-      addDocumentNonBlocking(thresholdConfigCollectionRef, defaultConfig);
+      // Use setDocumentNonBlocking to create a document with a specific ID
+      setDocumentNonBlocking(thresholdConfigRef, defaultConfig);
     }
-  }, [isConfigLoading, user, thresholdConfigurations, thresholdConfigCollectionRef]);
+  }, [isConfigLoading, user, activeThresholdConfig, thresholdConfigRef]);
 
-
-  const activeThresholdConfig = useMemo(() => thresholdConfigurations?.[0], [thresholdConfigurations]);
 
   // Sensor data state with mock values as fallback
   const temperature = sensorData?.temperature ?? 0;
@@ -194,16 +224,24 @@ export default function Dashboard() {
   }, [soundLevel, temperature, soundThresholds, tempThresholds]);
 
   const handleSaveConfiguration = (newSoundThresholds: SoundThresholds, newTempThresholds: TempThresholds) => {
-    if (user && firestore && activeThresholdConfig) {
-        // Update existing configuration
-        const configRef = doc(firestore, `users/${user.uid}/thresholdConfigurations`, activeThresholdConfig.id);
+    if (thresholdConfigRef) {
         const updatedData = {
           soundThresholdLow: newSoundThresholds.low,
           soundThresholdMedium: newSoundThresholds.medium,
           temperatureThresholdVerde: newTempThresholds.green,
           temperatureThresholdNaranja: newTempThresholds.orange,
         };
-        setDocumentNonBlocking(configRef, updatedData, { merge: true });
+        updateDocumentNonBlocking(thresholdConfigRef, updatedData);
+        toast({
+          title: "Configuration Saved",
+          description: "Your new threshold settings have been saved successfully.",
+        });
+    } else {
+       toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not save configuration. User or settings not found.",
+      });
     }
   };
 
@@ -249,6 +287,7 @@ export default function Dashboard() {
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
+         <UserInfoCard uid={user.uid} />
          <DevicePairingCard />
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>

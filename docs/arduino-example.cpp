@@ -205,7 +205,7 @@ void setup() {
     if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
         Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
     } else {
-        Serial.printf("Error al crear/actualizar documento de vinculación: %s\n", fbdo.errorReason().c_str());
+        Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
         Serial.println("Es posible que el documento ya exista. Intentando actualizar...");
         // Si falla la creación, intentamos actualizar (patch) por si el documento ya existía de un intento anterior.
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str(), "")) {
@@ -291,59 +291,40 @@ void fetchThresholdsFromFirebase() {
         Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
         return;
     }
+    
+    // Construye la ruta al documento de configuración con ID predecible.
+    String docPath = "users/" + USER_UID + "/thresholdConfigurations/default_config";
+    Serial.println("Obteniendo documento de configuración desde: " + docPath);
 
-    String collectionPath = "users/" + USER_UID + "/thresholdConfigurations";
-    Serial.println("Obteniendo umbrales desde la colección: " + collectionPath);
-
-    // Listar los documentos en la subcolección para encontrar el ID del documento de configuración
-    if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", collectionPath.c_str(), "", "", 1, "", false)) {
+    // Obtiene el documento directamente.
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
         if (fbdo.httpCode() == 200) {
-            StaticJsonDocument<1024> listDoc;
-            deserializeJson(listDoc, fbdo.payload());
-            if (listDoc["documents"] && listDoc["documents"][0]) {
-                String fullDocName = listDoc["documents"][0]["name"]; // e.g. projects/pid/databases/(default)/documents/users/uid/thresholdConfigurations/docId
-                
-                // Extraer la ruta completa del documento desde el nombre
-                int docPathIndex = fullDocName.indexOf("/documents/");
-                String docPath = fullDocName.substring(docPathIndex + 10);
-                
-                Serial.println("Obteniendo documento de configuración: " + docPath);
-                
-                if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), "")) {
-                    if (fbdo.httpCode() == 200) {
-                        String payload = fbdo.payload().c_str();
-                        StaticJsonDocument<1024> doc;
-                        deserializeJson(doc, payload);
+            String payload = fbdo.payload().c_str();
+            StaticJsonDocument<1024> doc;
+            deserializeJson(doc, payload);
 
-                        JsonObject fields = doc["fields"];
-                        if (fields["soundThresholdLow"]["integerValue"] || fields["soundThresholdLow"]["doubleValue"]) {
-                            soundThresholdLow = fields["soundThresholdLow"].as<float>();
-                        }
-                        if (fields["soundThresholdMedium"]["integerValue"] || fields["soundThresholdMedium"]["doubleValue"]) {
-                            soundThresholdMedium = fields["soundThresholdMedium"].as<float>();
-                        }
-                        if (fields["temperatureThresholdVerde"]["doubleValue"] || fields["temperatureThresholdVerde"]["integerValue"]) {
-                            tempThresholdVerde = fields["temperatureThresholdVerde"].as<float>();
-                        }
-                        if (fields["temperatureThresholdNaranja"]["doubleValue"] || fields["temperatureThresholdNaranja"]["integerValue"]) {
-                            tempThresholdNaranja = fields["temperatureThresholdNaranja"].as<float>();
-                        }
-                        
-                        Serial.println("Umbrales actualizados desde Firebase:");
-                        Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
-                        Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
-                    } else {
-                        Serial.printf("Error al obtener documento: %s\n", fbdo.errorReason().c_str());
-                    }
-                }
-            } else {
-                Serial.println("No se encontraron documentos de configuración. Usando valores por defecto.");
+            JsonObject fields = doc["fields"];
+            if (fields["soundThresholdLow"]["integerValue"] || fields["soundThresholdLow"]["doubleValue"]) {
+                soundThresholdLow = fields["soundThresholdLow"].as<float>();
             }
+            if (fields["soundThresholdMedium"]["integerValue"] || fields["soundThresholdMedium"]["doubleValue"]) {
+                soundThresholdMedium = fields["soundThresholdMedium"].as<float>();
+            }
+            if (fields["temperatureThresholdVerde"]["doubleValue"] || fields["temperatureThresholdVerde"]["integerValue"]) {
+                tempThresholdVerde = fields["temperatureThresholdVerde"].as<float>();
+            }
+            if (fields["temperatureThresholdNaranja"]["doubleValue"] || fields["temperatureThresholdNaranja"]["integerValue"]) {
+                tempThresholdNaranja = fields["temperatureThresholdNaranja"].as<float>();
+            }
+            
+            Serial.println("Umbrales actualizados desde Firebase:");
+            Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
+            Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
         } else {
-             Serial.printf("Error al listar documentos: %s\n", fbdo.errorReason().c_str());
+            Serial.printf("Error al obtener documento de configuración: %s\n", fbdo.errorReason().c_str());
         }
     } else {
-        Serial.printf("Error en llamada a listDocuments: %s\n", fbdo.errorReason().c_str());
+        Serial.printf("Fallo en la llamada a getDocument para la configuración: %s\n", fbdo.errorReason().c_str());
     }
 }
 

@@ -93,10 +93,14 @@ void createPairingDocument();
 void tokenStatusCallback(TokenInfo info) {
   // Esta función puede estar vacía si no necesitas monitorear el estado del token.
   // Es útil para depuración.
-  Serial.printf("Token Status: %s, Type: %s, Status: %s\n",
+  if (info.status == token_status_ready) {
+    Serial.println("Token listo.");
+  } else {
+    Serial.printf("Token Status: %s, Type: %s, Status: %s\n",
     info.status == token_status_ready ? "listo" : "error",
     info.type == token_type_id_token ? "ID Token" : "Otro",
     info.error.message.c_str());
+  }
 }
 
 // Función para leer de EEPROM
@@ -165,6 +169,7 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
+  config.project_id = FIREBASE_PROJECT_ID; // <--- ESTA ES LA LÍNEA CLAVE
   config.token_status_callback = tokenStatusCallback;
   
   // Usaremos autenticación anónima para que el dispositivo pueda interactuar con Firebase
@@ -213,6 +218,7 @@ void createPairingDocument() {
     } else {
         Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
         Serial.println("Es posible que el documento ya exista. Intentando actualizar...");
+        // Para patchDocument, el 6to argumento (máscara de actualización) es necesario
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str(), "")) {
            Serial.println("Documento de vinculación actualizado. Esperando reclamo...");
            pairingDocCreated = true;
@@ -393,6 +399,7 @@ void loop() {
         String content = "{\"fields\": {\"temperature\": {\"doubleValue\": " + String(temperature) + "}, \"humidity\": {\"doubleValue\": " + String(humidity) + "}, \"soundLevel\": {\"integerValue\": " + String(soundLevel) + "}}}";
 
         if (Firebase.ready()) {
+            // Se necesita un 6to argumento para la máscara
             if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }

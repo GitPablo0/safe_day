@@ -5,12 +5,11 @@
  * a Firebase Firestore para el proyecto NeuroSense.
  *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
- * Este código está diseñado para la versión 5.x.x o superior de la biblioteca
+ * Este código está diseñado para la versión 4.4.17 de la biblioteca
  * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
- * Asegúrate de tener la última versión instalada desde el Gestor de Bibliotecas.
  *
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
- * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt (v5.x.x+)
+ * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt (v4.4.17)
  * 2. ArduinoJson by Benoit Blanchon (v7.x)
  * 3. DHT sensor library by Adafruit
  *
@@ -40,6 +39,7 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" 
 
 String USER_UID = "";
 
@@ -140,7 +140,7 @@ void setup() {
 
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT); // Asegurarse que el pin 25 es de salida
+  pinMode(LED_ROJO_PIN, OUTPUT);
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
@@ -160,7 +160,6 @@ void setup() {
   Serial.println(deviceId);
   pairingDocPath = "devicePairing/" + deviceId;
 
-  // Configurar la hora para la conexión segura con Firebase
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   Serial.print("Sincronizando hora");
   while (time(nullptr) < 1510644967) {
@@ -171,19 +170,17 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
   config.token_status_callback = tokenStatusCallback;
-
-  // Autenticación anónima
-  auth.user.email = "";
-  auth.user.password = "";
-
+  
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   
+  Serial.println("Iniciando autenticación anónima...");
   if (Firebase.signUpAnonymous(&config, &auth)) {
-    Serial.println("Autenticación anónima exitosa.");
+    Serial.println("Comando de autenticación anónima enviado. Esperando token...");
   } else {
-    Serial.printf("Fallo en la autenticación anónima: %s\n", config.signer.tokens.error.message.c_str());
+    Serial.printf("Fallo al iniciar autenticación anónima: %s\n", config.signer.tokens.error.message.c_str());
   }
 
   // Comprobar si el dispositivo ya está vinculado
@@ -197,7 +194,7 @@ void setup() {
   }
 
   if (!isPaired) {
-    Serial.println("Dispositivo no vinculado. Iniciando modo de vinculación...");
+    Serial.println("Dispositivo no vinculado. Esperando conexión con Firebase para iniciar modo de vinculación...");
   }
 }
 
@@ -366,7 +363,8 @@ void loop() {
         String content = "{\"temperature\": {\"doubleValue\": " + String(temperature, 1) + "}, \"humidity\": {\"doubleValue\": " + String(humidity, 1) + "}, \"soundLevel\": {\"integerValue\": " + String(soundLevel) + "}, \"timestamp\": {\"timestampValue\": \"" + fbdo.host() + "\"}}";
 
         if (Firebase.ready()) {
-            if (!Firebase.Firestore.patchDocument(fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
+            // Usamos patchDocument en lugar de createDocument para el documento 'latest'
+            if (!Firebase.Firestore.patchDocument(fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str() , "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {

@@ -39,7 +39,7 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" 
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
 
 String USER_UID = "";
 
@@ -134,7 +134,7 @@ void setup() {
   Serial.println("Inicializando...");
 
   EEPROM.begin(EEPROM_SIZE);
-  
+
   dht.begin();
   delay(2000);
 
@@ -356,7 +356,7 @@ void loop() {
         String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
         if (Firebase.ready()) {
-            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "")) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {
@@ -364,5 +364,3 @@ void loop() {
         }
     }
 }
-
-    

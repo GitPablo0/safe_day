@@ -24,7 +24,7 @@
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
 // ¡¡¡ PEGA TU UID AQUÍ !!!
-#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+#define USER_UID "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s"
 
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
@@ -34,7 +34,7 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
+#define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
 // Objetos de Firebase
 FirebaseData fbdo;
@@ -89,7 +89,7 @@ void setup() {
   delay(2000);
 
   pinMode(LED_VERDE_PIN, OUTPUT);
-  pinMode(LED_NARANja_PIN, OUTPUT);
+  pinMode(LED_NARANJA_PIN, OUTPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
@@ -211,8 +211,8 @@ void loop() {
         Serial.printf("Temp: %.1f, Hum: %.1f, Sonido: %d\n", temperature, humidity, soundLevel);
 
         int estadoSonido = 1;
-        if (soundLevel >= soundThresholdLow) estadoSonido = 2;
-        if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
+        if (soundLevel >= soundThresholds.low) estadoSonido = 2;
+        if (soundLevel >= soundThresholds.medium) estadoSonido = 3;
 
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;

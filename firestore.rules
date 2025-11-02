@@ -27,18 +27,20 @@ service cloud.firestore {
 
       /**
        * @description Controls access to threshold configuration documents nested under a user.
-       * A user can read and write to their own configurations.
+       * Any signed-in user can read the configuration, but only the owner can write to it.
        */
       match /thresholdConfigurations/{thresholdConfigurationId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow write: if isOwner(userId);
       }
 
       /**
        * @description Controls access to a user's sensor data.
-       * A user can read and write to their own sensor data documents.
+       * Any signed-in user can read the sensor data, but only the owner can write to it.
        */
       match /sensorData/{sensorDataId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isSignedIn();
+        allow write: if isOwner(userId);
       }
     }
 

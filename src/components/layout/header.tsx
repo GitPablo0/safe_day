@@ -1,7 +1,24 @@
-import { BrainCircuit } from 'lucide-react';
+'use client';
+
+import { BrainCircuit, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth, useUser } from '@/firebase';
+import { getAuth, signOut } from 'firebase/auth';
+import { Button } from '../ui/button';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
+  const { user } = useUser();
+  const auth = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    if (auth) {
+      await signOut(auth);
+      router.push('/login');
+    }
+  };
+
   return (
     <header className="border-b">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -12,7 +29,12 @@ export default function Header() {
               NeuroSense
             </span>
           </Link>
-          {/* Future navigation items can be added here */}
+          {user && (
+            <Button variant="ghost" size="icon" onClick={handleSignOut}>
+              <LogOut className="h-5 w-5" />
+              <span className="sr-only">Sign Out</span>
+            </Button>
+          )}
         </div>
       </div>
     </header>

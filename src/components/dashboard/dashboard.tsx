@@ -5,8 +5,8 @@ import { Thermometer, Droplets, Volume2, User, Copy } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
-import { useDoc, useCollection, useUser, useFirestore, useAuth, useMemoFirebase } from '@/firebase';
-import { initiateAnonymousSignIn, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { useDoc, useCollection, useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, limit } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,14 +79,7 @@ function UserInfoCard({ uid }: { uid: string }) {
 
 export default function Dashboard() {
   const firestore = useFirestore();
-  const auth = useAuth();
   const { user, isUserLoading } = useUser();
-
-  useEffect(() => {
-    if (!isUserLoading && !user && auth) {
-      initiateAnonymousSignIn(auth);
-    }
-  }, [user, isUserLoading, auth]);
 
   const sensorDataRef = useMemoFirebase(() => firestore ? doc(firestore, 'sensorData', 'latest') : null, [firestore]);
   const { data: sensorData } = useDoc<{temperature: number, humidity: number, soundLevel: number}>(sensorDataRef);

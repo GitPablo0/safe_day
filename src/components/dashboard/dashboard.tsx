@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2 } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, User, Copy } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
@@ -9,6 +9,10 @@ import { useDoc, useCollection, useUser, useFirestore, useAuth, useMemoFirebase 
 import { initiateAnonymousSignIn, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, limit } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 type SoundThresholds = { low: number; medium: number };
 type TempThresholds = { green: number; orange: number };
@@ -34,6 +38,42 @@ const createDefaultConfig = (userId: string) => ({
     orangeBlockDuration: 3000,
     timeBetweenEvents: 1000,
 });
+
+
+function UserInfoCard({ uid }: { uid: string }) {
+  const { toast } = useToast();
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(uid);
+    toast({
+      title: "UID Copied!",
+      description: "The User UID has been copied to your clipboard.",
+    });
+  };
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Device Sync</CardTitle>
+        <CardDescription>
+          Use this User UID to sync your hardware device with the dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col justify-center gap-4">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="user-uid" className="text-sm font-medium">User UID</Label>
+          </div>
+          <div className="flex gap-2">
+            <Input id="user-uid" readOnly value={uid} className="flex-1" />
+            <Button variant="outline" size="icon" onClick={handleCopy}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 
 export default function Dashboard() {
@@ -126,7 +166,7 @@ export default function Dashboard() {
     }
   };
 
-  if (isUserLoading) {
+  if (isUserLoading || !user) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
@@ -162,6 +202,7 @@ export default function Dashboard() {
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
+         {user && <UserInfoCard uid={user.uid} />}
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>
       

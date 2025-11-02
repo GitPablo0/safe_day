@@ -65,7 +65,7 @@ function UserInfoCard({ uid }: { uid: string }) {
       <CardHeader>
         <CardTitle>Device Sync</CardTitle>
         <CardDescription>
-          Your unique User ID for device synchronization.
+          Your unique User ID for device synchronization. Copy this ID and paste it into your Arduino device code.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
@@ -78,104 +78,6 @@ function UserInfoCard({ uid }: { uid: string }) {
             <Button variant="outline" size="icon" onClick={copyToClipboard}>
                 <Copy className="h-4 w-4" />
             </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-
-function DevicePairingCard() {
-  const firestore = useFirestore();
-  const { user } = useUser();
-  const { toast } = useToast();
-  const [pairingToken, setPairingToken] = useState('');
-  const [isPairing, setIsPairing] = useState(false);
-
-  const handlePairDevice = async () => {
-    if (!pairingToken || !firestore || !user) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Please enter a valid pairing token.',
-      });
-      return;
-    }
-
-    setIsPairing(true);
-
-    const pairingQuery = query(
-      collection(firestore, 'devicePairing'),
-      where('pairingToken', '==', pairingToken)
-    );
-
-    try {
-      const querySnapshot = await getDocs(pairingQuery);
-
-      if (querySnapshot.empty) {
-        toast({
-          variant: 'destructive',
-          title: 'Pairing Failed',
-          description:
-            'No device found with that token. Please check the token and try again.',
-        });
-        setIsPairing(false);
-        return;
-      }
-
-      const deviceDoc = querySnapshot.docs[0];
-      const deviceDocRef = doc(firestore, 'devicePairing', deviceDoc.id);
-      const updatedData = { userId: user.uid };
-
-      // Use the non-blocking update function which has the proper error handling built-in
-      updateDocumentNonBlocking(deviceDocRef, updatedData);
-
-      toast({
-        title: 'Pairing Successful!',
-        description: 'Your device has been linked to your account.',
-      });
-      setPairingToken('');
-      
-
-    } catch (e) {
-      // This will catch errors from getDocs if any, but permission errors
-      // from updateDoc will be handled by the global listener.
-      console.error("Error during getDocs for pairing: ", e);
-      toast({
-        variant: "destructive",
-        title: "Uh oh! Something went wrong.",
-        description: "Could not query for the device. Please try again later.",
-      });
-    } finally {
-        setIsPairing(false);
-    }
-  };
-
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle>Pair New Device</CardTitle>
-        <CardDescription>
-          Enter the 6-digit token from your device to link it to your account.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col justify-center gap-4">
-        <div className="flex items-center gap-2">
-          <LinkIcon className="h-4 w-4 text-muted-foreground" />
-          <Label htmlFor="pairing-token" className="text-sm font-medium">Pairing Token</Label>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            id="pairing-token"
-            value={pairingToken}
-            onChange={(e) => setPairingToken(e.target.value)}
-            placeholder="123456"
-            className="flex-1"
-            disabled={isPairing}
-          />
-          <Button onClick={handlePairDevice} disabled={isPairing}>
-            {isPairing ? <Loader2 className="animate-spin" /> : "Pair"}
-          </Button>
         </div>
       </CardContent>
     </Card>
@@ -310,7 +212,6 @@ export default function Dashboard() {
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
          <UserInfoCard uid={user.uid} />
-         <DevicePairingCard />
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>
       

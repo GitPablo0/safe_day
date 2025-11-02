@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2, User, Link as LinkIcon, Loader2, Copy } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, User, Link as LinkIcon, Loader2, Copy, History } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
 import { useDoc, useCollection, useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc, collection, query, limit, where, getDocs } from 'firebase/firestore';
+import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { doc, collection, query, where, getDocs } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,16 @@ type ThresholdConfiguration = {
   temperatureThresholdVerde: number;
   temperatureThresholdNaranja: number;
 };
+type SensorData = {
+    temperature: number;
+    humidity: number;
+    soundLevel: number;
+    timestamp: {
+        seconds: number;
+        nanoseconds: number;
+    }
+}
+
 
 // Default configuration to be created for new users
 const createDefaultConfig = (userId: string) => ({
@@ -125,7 +135,7 @@ function DevicePairingCard() {
         description: 'Your device has been linked to your account.',
       });
       setPairingToken('');
-      setIsPairing(false);
+      
 
     } catch (e) {
       // This will catch errors from getDocs if any, but permission errors
@@ -136,7 +146,8 @@ function DevicePairingCard() {
         title: "Uh oh! Something went wrong.",
         description: "Could not query for the device. Please try again later.",
       });
-      setIsPairing(false);
+    } finally {
+        setIsPairing(false);
     }
   };
 
@@ -177,8 +188,8 @@ export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
-  const sensorDataRef = useMemoFirebase(() => firestore ? doc(firestore, 'sensorData', 'latest') : null, [firestore]);
-  const { data: sensorData } = useDoc<{temperature: number, humidity: number, soundLevel: number}>(sensorDataRef);
+  const sensorDataRef = useMemoFirebase(() => user ? doc(firestore, `users/${user.uid}/sensorData`, 'latest') : null, [firestore, user]);
+  const { data: sensorData } = useDoc<SensorData>(sensorDataRef);
 
   // Path to the predictable configuration document ID
   const configDocId = "default_config";
@@ -254,7 +265,11 @@ export default function Dashboard() {
 
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number }) => {
     if (sensorDataRef) {
-      setDocumentNonBlocking(sensorDataRef, data, { merge: true });
+        const dataWithTimestamp = {
+            ...data,
+            timestamp: new Date()
+        }
+      setDocumentNonBlocking(sensorDataRef, dataWithTimestamp, { merge: true });
     }
   };
 

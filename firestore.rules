@@ -17,28 +17,29 @@ service cloud.firestore {
     }
 
     /**
-     * @description Controls access to user profile documents.
+     * @description Controls access to user profile documents and their subcollections.
      */
     match /users/{userId} {
+      // Users can create, get, update, or delete their own user document.
       allow get, update, delete: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn(); // A user can create their own profile.
       allow list: if false; // Do not allow listing of all users
-    }
 
-    /**
-     * @description Controls access to threshold configuration documents nested under a user.
-     */
-    match /users/{userId}/thresholdConfigurations/{thresholdConfigurationId} {
-      allow read, write: if isOwner(userId);
-    }
+      /**
+       * @description Controls access to threshold configuration documents nested under a user.
+       * A user can read and write to their own configurations.
+       */
+      match /thresholdConfigurations/{thresholdConfigurationId} {
+        allow read, write: if isOwner(userId);
+      }
 
-    /**
-     * @description Controls access to a user's sensor data.
-     * A user can read their own sensor data.
-     * The device (authenticated as the user) can write to this path.
-     */
-    match /users/{userId}/sensorData/{sensorDataId} {
-      allow read, write: if isOwner(userId);
+      /**
+       * @description Controls access to a user's sensor data.
+       * A user can read and write to their own sensor data documents.
+       */
+      match /sensorData/{sensorDataId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     /**
@@ -63,7 +64,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
                     && request.resource.data.userId == request.auth.uid
                     && resource.data.userId == null;
-      
+
       /**
        * Allow a device to delete its own pairing document after successful pairing.
        */

@@ -147,54 +147,48 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profile information. The 'userId' parameter corresponds to the Firebase Authentication UID.",
+          "description": "Stores user profile information. The 'userId' parameter corresponds to the Firebase Authentication UID. It also contains subcollections for user-specific data.",
           "params": [
             {
               "name": "userId",
               "description": "The unique identifier for the user, matching the Firebase Auth UID."
             }
           ]
-        }
-      },
-      {
-        "path": "/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}",
-        "definition": {
-          "entityName": "ThresholdConfiguration",
-          "schema": {
-            "$ref": "#/backend/entities/ThresholdConfiguration"
-          },
-          "description": "Stores threshold configurations for each user. Includes 'userId' for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user, matching the Firebase Auth UID. Represents the owner of the threshold configuration."
-            },
-            {
-              "name": "thresholdConfigurationId",
-              "description": "The unique identifier for the threshold configuration."
+        },
+        "subcollections": [
+           {
+            "path": "thresholdConfigurations/{thresholdConfigurationId}",
+            "definition": {
+              "entityName": "ThresholdConfiguration",
+              "schema": {
+                "$ref": "#/backend/entities/ThresholdConfiguration"
+              },
+              "description": "Stores threshold configurations for the user.",
+              "params": [
+                {
+                  "name": "thresholdConfigurationId",
+                  "description": "The unique identifier for the threshold configuration."
+                }
+              ]
             }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/sensorData/{sensorDataId}",
-        "definition": {
-          "entityName": "SensorData",
-          "schema": {
-            "$ref": "#/backend/entities/SensorData"
           },
-          "description": "Stores the most recent sensor data from a user's device. This document is intended to be updated frequently by the hardware.",
-          "params": [
-             {
-              "name": "userId",
-              "description": "The unique identifier for the user, matching the Firebase Auth UID."
-            },
-            {
-              "name": "sensorDataId",
-              "description": "The unique identifier for the sensor data document, e.g., 'latest'."
+          {
+            "path": "sensorData/{sensorDataId}",
+            "definition": {
+              "entityName": "SensorData",
+              "schema": {
+                "$ref": "#/backend/entities/SensorData"
+              },
+              "description": "Stores sensor data for the user's device.",
+              "params": [
+                {
+                  "name": "sensorDataId",
+                  "description": "The unique identifier for the sensor data document, e.g., 'latest'."
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       },
       {
         "path": "/devicePairing/{deviceId}",
@@ -213,6 +207,6 @@
         }
       }
     ],
-    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds for an Arduino-based environmental stress detection system and see real-time data, the following Firestore structure is recommended. This design prioritizes authorization independence and simplifies security rules. The core structure revolves around storing `ThresholdConfiguration` documents owned by individual users and a single document for the latest `SensorData`. A new `devicePairing` collection is added to allow devices to be claimed by users without hardcoding UIDs. The device creates a document with a temporary token, the user enters the token in the app, and the app adds the user's UID to the document, claiming the device."
+    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds and seeing real-time data, the Firestore structure is centered around a 'users' collection. Each user document contains subcollections for 'thresholdConfigurations' and 'sensorData', ensuring data is properly isolated and secured by user. A separate top-level 'devicePairing' collection facilitates linking hardware to user accounts securely."
   }
 }

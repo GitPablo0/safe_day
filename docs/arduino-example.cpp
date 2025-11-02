@@ -39,7 +39,10 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // <-- IMPORTANTE
+#define SERVICE_ACCOUNT_EMAIL "esp32-device@studio-4253330981-dcdc9.iam.gserviceaccount.com"
+#define SERVICE_ACCOUNT_PASSWORD "5399a09804b732551571212c1b34421b8b20933d"
+
 
 String USER_UID = "";
 
@@ -99,9 +102,8 @@ void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
     Serial.println("Token listo. El dispositivo está autenticado y listo para operar.");
   } else {
-    Serial.printf("Estado del Token: %s, Error: %s\n",
-                  info.status == token_status_error ? "error" : "desconocido",
-                  info.error.message.c_str());
+    Serial.print("Estado del Token: error, ");
+    Serial.printf("Error: %s\n", info.error.message.c_str());
   }
 }
 
@@ -172,6 +174,9 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   config.token_status_callback = tokenStatusCallback;
+  
+  auth.user.email = SERVICE_ACCOUNT_EMAIL;
+  auth.user.password = SERVICE_ACCOUNT_PASSWORD;
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);

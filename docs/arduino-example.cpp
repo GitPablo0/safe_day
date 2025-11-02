@@ -4,8 +4,8 @@
  * a Firebase Firestore para el proyecto NeuroSense.
  *
  * Dependencias de la biblioteca de Arduino (Gestor de Bibliotecas):
- * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt
- * 2. ArduinoJson by Benoit Blanchon
+ * 1. Firebase Arduino Client Library for ESP32 and ESP8266 by Mobizt (v4.4.17)
+ * 2. ArduinoJson by Benoit Blanchon (v7.x)
  * 3. DHT sensor library by Adafruit
  *
  * --- INSTRUCCIONES ---
@@ -13,7 +13,7 @@
  * 2. Abre el Monitor Serie (115200 baudios).
  * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
  * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
- * 5. Una vez vinculado, el dispositivo funcionará normalmente.
+ * 5. Una vez vinculado, el dispositivo funcionará normally.
  * ==================================================================================
  */
 #include <Arduino.h>

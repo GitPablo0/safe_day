@@ -1,3 +1,4 @@
+
 /**
  * ==================================================================================
  * Este es un archivo de ejemplo para conectar un microcontrolador (como un ESP32)
@@ -13,7 +14,7 @@
  * 2. Abre el Monitor Serie (115200 baudios).
  * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
  * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
- * 5. Una vez vinculado, el dispositivo funcionará normalmente.
+ * 5. Una vez vinculado, el dispositivo funcionará normally.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -407,3 +408,5 @@ void loop() {
         }
     }
 }
+
+    

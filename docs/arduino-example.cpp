@@ -26,8 +26,8 @@
 // ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "PASTE_YOUR_USER_UID_HERE"
 
-#define WIFI_SSID "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID "Telecentro-416b"
+#define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE

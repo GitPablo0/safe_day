@@ -14,7 +14,7 @@
  * 2. Abre el Monitor Serie (115200 baudios).
  * 3. Si el dispositivo no está vinculado, verás un "Token de Vinculación".
  * 4. Ingresa ese token en la aplicación web para vincular el dispositivo a tu cuenta.
- * 5. Una vez vinculado, el dispositivo funcionará normally.
+ * 5. Una vez vinculado, el dispositivo funcionará normalmente.
  * ==================================================================================
  */
 #include <Arduino.h>
@@ -42,7 +42,7 @@ String USER_UID = "";
 // Objetos de Firebase
 FirebaseData fbdo;
 FirebaseConfig config;
-FirebaseData stream;
+//FirebaseAuth auth; // No es necesario para la autenticación anónima gestionada por la biblioteca
 
 // ===============================================================
 // 3. CONFIGURACIÓN DE EEPROM Y VINCULACIÓN
@@ -78,7 +78,7 @@ float tempThresholdNaranja = 28;
 
 // ===============================================================
 // 5. LÓGICA DE LA APLICACIÓN
-// =================================ה
+// ===============================================================
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
 const long sendDataInterval = 5000;
@@ -144,7 +144,7 @@ void setup() {
 
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT);
+  pinMode(LED_ROJO_PIN, 25);
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
@@ -175,7 +175,7 @@ void setup() {
 
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
+  config.database_url = DATABASE_URL; // Requerido para la inicialización y autenticación
   config.token_status_callback = tokenStatusCallback;
   
   // *** CORRECCIÓN CLAVE: Usar autenticación anónima gestionada por la biblioteca ***
@@ -218,12 +218,16 @@ void createPairingDocument() {
     } else {
         Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
         Serial.println("Es posible que el documento ya exista. Intentando actualizar...");
+        // Para v4.4.17, patchDocument a menudo necesita una máscara. Si "" no funciona, intente especificar los campos.
+        // String updateMask = "pairingToken";
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str(), "")) {
            Serial.println("Documento de vinculación actualizado. Esperando reclamo...");
            pairingDocCreated = true;
         } else {
            Serial.printf("Error al actualizar: %s\n", fbdo.errorReason().c_str());
-           Serial.println("No se pudo crear ni actualizar. Reintentando en 10 segundos...");
+           Serial.println("No se pudo crear ni actualizar. Reiniciando en 10 segundos...");
+           delay(10000);
+           ESP.restart();
         }
     }
 }
@@ -406,3 +410,5 @@ void loop() {
         }
     }
 }
+
+    

@@ -85,50 +85,57 @@ function DevicePairingCard() {
   const handlePairDevice = async () => {
     if (!pairingToken || !firestore || !user) {
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please enter a valid pairing token.",
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please enter a valid pairing token.',
       });
       return;
     }
 
     setIsPairing(true);
 
+    const pairingQuery = query(
+      collection(firestore, 'devicePairing'),
+      where('pairingToken', '==', pairingToken)
+    );
+
     try {
-      // 1. Find the device document with the matching pairing token
-      const pairingQuery = query(collection(firestore, "devicePairing"), where("pairingToken", "==", pairingToken));
       const querySnapshot = await getDocs(pairingQuery);
 
       if (querySnapshot.empty) {
         toast({
-          variant: "destructive",
-          title: "Pairing Failed",
-          description: "No device found with that token. Please check the token and try again.",
+          variant: 'destructive',
+          title: 'Pairing Failed',
+          description:
+            'No device found with that token. Please check the token and try again.',
         });
         setIsPairing(false);
         return;
       }
 
-      // 2. Claim the device by updating the document with the user's UID
       const deviceDoc = querySnapshot.docs[0];
-      const deviceDocRef = doc(firestore, "devicePairing", deviceDoc.id);
-      
-      updateDocumentNonBlocking(deviceDocRef, { userId: user.uid });
-      
+      const deviceDocRef = doc(firestore, 'devicePairing', deviceDoc.id);
+      const updatedData = { userId: user.uid };
+
+      // Use the non-blocking update function which has the proper error handling built-in
+      updateDocumentNonBlocking(deviceDocRef, updatedData);
+
       toast({
-        title: "Pairing Successful!",
-        description: "Your device has been linked to your account.",
+        title: 'Pairing Successful!',
+        description: 'Your device has been linked to your account.',
       });
       setPairingToken('');
+      setIsPairing(false);
 
-    } catch (error) {
-      console.error("Pairing error: ", error);
+    } catch (e) {
+      // This will catch errors from getDocs if any, but permission errors
+      // from updateDoc will be handled by the global listener.
+      console.error("Error during getDocs for pairing: ", e);
       toast({
         variant: "destructive",
         title: "Uh oh! Something went wrong.",
-        description: "Could not pair the device. Please try again later.",
+        description: "Could not query for the device. Please try again later.",
       });
-    } finally {
       setIsPairing(false);
     }
   };

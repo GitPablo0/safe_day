@@ -211,8 +211,8 @@ void loop() {
         Serial.printf("Temp: %.1f, Hum: %.1f, Sonido: %d\n", temperature, humidity, soundLevel);
 
         int estadoSonido = 1;
-        if (soundLevel >= soundThresholds.low) estadoSonido = 2;
-        if (soundLevel >= soundThresholds.medium) estadoSonido = 3;
+        if (soundLevel >= soundThresholdLow) estadoSonido = 2;
+        if (soundLevel >= soundThresholdMedium) estadoSonido = 3;
 
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;

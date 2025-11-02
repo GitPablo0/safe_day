@@ -177,14 +177,23 @@
         }
       },
       {
-        "path": "/sensorData/latest",
+        "path": "/users/{userId}/sensorData/{sensorDataId}",
         "definition": {
           "entityName": "SensorData",
           "schema": {
             "$ref": "#/backend/entities/SensorData"
           },
-          "description": "Stores the most recent sensor data from the device. This document is intended to be updated frequently by the hardware.",
-          "params": []
+          "description": "Stores the most recent sensor data from a user's device. This document is intended to be updated frequently by the hardware.",
+          "params": [
+             {
+              "name": "userId",
+              "description": "The unique identifier for the user, matching the Firebase Auth UID."
+            },
+            {
+              "name": "sensorDataId",
+              "description": "The unique identifier for the sensor data document, e.g., 'latest'."
+            }
+          ]
         }
       },
       {

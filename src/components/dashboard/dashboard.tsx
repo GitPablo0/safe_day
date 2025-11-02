@@ -35,6 +35,8 @@ type SensorData = {
     }
 }
 
+// UID del dispositivo físico. La app web SIEMPRE leerá de este usuario.
+const DEVICE_USER_ID = "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s";
 
 // Default configuration to be created for new users
 const createDefaultConfig = (userId: string) => ({
@@ -55,7 +57,7 @@ function UserInfoCard({ uid }: { uid: string }) {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(uid);
     toast({
-      title: "User UID Copied!",
+      title: "Device UID Copied!",
       description: "You can now paste it in your device code if needed.",
     });
   };
@@ -65,13 +67,13 @@ function UserInfoCard({ uid }: { uid: string }) {
       <CardHeader>
         <CardTitle>Device Sync</CardTitle>
         <CardDescription>
-          Your unique User ID for device synchronization. Copy this ID and paste it into your Arduino device code.
+          Your unique Device ID for data visualization. This is the ID your hardware is using.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
         <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="user-uid" className="text-sm font-medium">User UID</Label>
+            <Label htmlFor="user-uid" className="text-sm font-medium">Device UID</Label>
         </div>
         <div className="flex gap-2">
             <Input id="user-uid" readOnly value={uid} className="flex-1" />
@@ -90,8 +92,8 @@ export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
-  // Use the logged-in user's UID to fetch their specific data
-  const deviceUserId = user?.uid;
+  // Usamos el UID del dispositivo físico directamente
+  const deviceUserId = DEVICE_USER_ID;
 
   const sensorDataRef = useMemoFirebase(() => 
     (firestore && deviceUserId) ? doc(firestore, `users/${deviceUserId}/sensorData`, 'latest') : null, 
@@ -180,7 +182,7 @@ export default function Dashboard() {
     }
   };
 
-  if (isUserLoading || !user) {
+  if (isUserLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
@@ -216,7 +218,7 @@ export default function Dashboard() {
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
-         <UserInfoCard uid={user.uid} />
+         <UserInfoCard uid={deviceUserId} />
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>
       

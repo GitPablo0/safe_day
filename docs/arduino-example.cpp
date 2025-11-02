@@ -175,13 +175,6 @@ void setup() {
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
-  
-  Serial.println("Iniciando autenticación anónima...");
-  if (Firebase.signUpAnonymous(&config, &auth)) {
-    Serial.println("Comando de autenticación anónima enviado. Esperando token...");
-  } else {
-    Serial.printf("Fallo al iniciar autenticación anónima: %s\n", config.signer.tokens.error.message.c_str());
-  }
 
   // Comprobar si el dispositivo ya está vinculado
   if (EEPROM.read(FLAG_ADDR) == 1) {
@@ -209,7 +202,7 @@ void createPairingDocument() {
 
     String content = "{\"pairingToken\": {\"stringValue\": \"" + pairingToken + "\"}, \"userId\": {\"nullValue\": null}}";
     
-    if (Firebase.Firestore.createDocument(fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
+    if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
         Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
         pairingDocCreated = true;
     } else {
@@ -219,7 +212,7 @@ void createPairingDocument() {
 
 void checkPairingStatus() {
   Serial.println("Comprobando estado de vinculación...");
-  if (Firebase.Firestore.getDocument(fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str())) {
+  if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str())) {
       if (fbdo.httpCode() == 200) {
           FirebaseJson json(fbdo.payload());
           FirebaseJsonData result;
@@ -235,7 +228,7 @@ void checkPairingStatus() {
               EEPROM.write(FLAG_ADDR, 1);
               EEPROM.commit();
 
-              Firebase.Firestore.deleteDocument(fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str());
+              Firebase.Firestore.deleteDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str());
 
               Serial.println("Configuración guardada. Reiniciando en 3 segundos...");
               delay(3000);
@@ -288,7 +281,7 @@ void fetchThresholdsFromFirebase() {
     String docPath = "users/" + USER_UID + "/thresholdConfigurations/default_config";
     Serial.println("Obteniendo documento de configuración desde: " + docPath);
 
-    if (Firebase.Firestore.getDocument(fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
         if (fbdo.httpCode() == 200) {
             FirebaseJson json(fbdo.payload());
             FirebaseJsonData result;
@@ -360,11 +353,10 @@ void loop() {
         digitalWrite(LED_ROJO_PIN, ledStatus == 3);
         
         String documentPath = "users/" + USER_UID + "/sensorData/latest";
-        String content = "{\"temperature\": {\"doubleValue\": " + String(temperature, 1) + "}, \"humidity\": {\"doubleValue\": " + String(humidity, 1) + "}, \"soundLevel\": {\"integerValue\": " + String(soundLevel) + "}, \"timestamp\": {\"timestampValue\": \"" + fbdo.host() + "\"}}";
+        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
         if (Firebase.ready()) {
-            // Usamos patchDocument en lugar de createDocument para el documento 'latest'
-            if (!Firebase.Firestore.patchDocument(fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str() , "")) {
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str())) {
                 Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
             }
         } else {

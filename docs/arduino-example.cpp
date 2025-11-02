@@ -39,10 +39,7 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com" // <-- IMPORTANTE
-#define SERVICE_ACCOUNT_EMAIL "esp32-device@studio-4253330981-dcdc9.iam.gserviceaccount.com"
-#define SERVICE_ACCOUNT_PASSWORD "5399a09804b732551571212c1b34421b8b20933d"
-
+#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
 
 String USER_UID = "";
 
@@ -175,8 +172,9 @@ void setup() {
   config.database_url = DATABASE_URL;
   config.token_status_callback = tokenStatusCallback;
   
-  auth.user.email = SERVICE_ACCOUNT_EMAIL;
-  auth.user.password = SERVICE_ACCOUNT_PASSWORD;
+  // Para la autenticación anónima, no se necesitan email ni contraseña.
+  auth.user.email = "";
+  auth.user.password = "";
   
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);

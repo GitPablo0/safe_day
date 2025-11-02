@@ -54,6 +54,7 @@ FirebaseData stream;
 String deviceId = "";
 String pairingDocPath = "";
 unsigned long lastPairingCheckMillis = 0;
+bool pairingDocCreated = false; // Flag to check if document has been created
 
 // ===============================================================
 // 4. PINES Y SENSORES
@@ -86,6 +87,7 @@ bool isPaired = false;
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
 void checkPairingStatus();
+void createPairingDocument();
 
 // Función de callback para el estado del token (requerida por la biblioteca)
 void tokenStatusCallback(TokenInfo info) {
@@ -188,8 +190,11 @@ void setup() {
     fetchThresholdsFromFirebase();
   } else {
     // Si no está vinculado, iniciamos el proceso de vinculación
-    Serial.println("Dispositivo no vinculado. Iniciando modo de vinculación...");
-    
+    Serial.println("Dispositivo no vinculado. Esperando conexión con Firebase para iniciar modo de vinculación...");
+  }
+}
+
+void createPairingDocument() {
     // Generar un token de vinculación de 6 dígitos
     String pairingToken = String(random(100000, 999999));
     Serial.println("==========================================");
@@ -204,21 +209,20 @@ void setup() {
 
     if (Firebase.Firestore.createDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str())) {
         Serial.println("Documento de vinculación creado. Esperando que el usuario lo reclame...");
+        pairingDocCreated = true;
     } else {
         Serial.printf("Error al crear documento de vinculación: %s\n", fbdo.errorReason().c_str());
         Serial.println("Es posible que el documento ya exista. Intentando actualizar...");
-        // Si falla la creación, intentamos actualizar (patch) por si el documento ya existía de un intento anterior.
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", pairingDocPath.c_str(), content.c_str(), "")) {
            Serial.println("Documento de vinculación actualizado. Esperando reclamo...");
+           pairingDocCreated = true;
         } else {
            Serial.printf("Error al actualizar: %s\n", fbdo.errorReason().c_str());
-           Serial.println("No se pudo crear ni actualizar. Reiniciando en 10 segundos...");
-           delay(10000);
-           ESP.restart();
+           Serial.println("No se pudo crear ni actualizar. Reintentando en 10 segundos...");
         }
     }
-  }
 }
+
 
 void checkPairingStatus() {
   Serial.println("Comprobando estado de vinculación...");
@@ -331,13 +335,19 @@ void fetchThresholdsFromFirebase() {
 
 void loop() {
     if (!isPaired) {
-        // En modo vinculación, el loop principal comprueba el estado cada 10 segundos
+        // En modo vinculación
         if (millis() - lastPairingCheckMillis > 10000) {
           lastPairingCheckMillis = millis();
           if(Firebase.ready()) {
-            checkPairingStatus();
+            if (!pairingDocCreated) {
+              // Si el documento de vinculación no se ha creado, inténtalo ahora.
+              createPairingDocument();
+            } else {
+              // Si ya se creó, comprueba si el usuario ya lo reclamó.
+              checkPairingStatus();
+            }
           } else {
-            Serial.println("Firebase no está listo para comprobar la vinculación.");
+            Serial.println("Firebase no está listo para iniciar vinculación.");
           }
         }
         delay(100);

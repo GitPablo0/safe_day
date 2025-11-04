@@ -105,15 +105,14 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // Para la versión 4.4.17, necesitamos indicar que se debe obtener un token anónimo
-  // Esto se logra dejando el UID del service account vacío y no usando credenciales de servicio.
-  // La biblioteca intentará obtener un token de acceso anónimo usando la API Key.
+  // Para la versión 4.4.17, dejamos el auth vacío para acceso no autenticado (solo con API Key).
+  // La biblioteca usará la API Key para las operaciones de Firestore.
   auth.user.email = "";
   auth.user.password = "";
 
   Firebase.reconnectWiFi(true);
   
-  // La función begin correcta que usa los objetos de configuración
+  // La función begin correcta que usa los objetos de configuración y autenticación (vacío)
   Firebase.begin(&config, &auth);
 
   // Intento inicial de obtener la configuración.
@@ -240,5 +239,3 @@ void loop() {
         }
     }
 }
-
-    

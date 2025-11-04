@@ -23,7 +23,7 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// ¡¡¡ PEGA TU UID AQUÍ !!! (Debe ser "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s" para que la app lo vea)
+// ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "PASTE_YOUR_USER_UID_HERE"
 
 #define WIFI_SSID "Telecentro-416b"
@@ -71,6 +71,19 @@ const long fetchConfigInterval = 60000;
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
 
+// Función de callback para el estado del token
+void tokenStatusCallback(TokenInfo info)
+{
+    if (info.status == token_status_ready)
+    {
+        Serial.println("Estado del Token: listo");
+    }
+    else
+    {
+        Serial.printf("Estado del Token: error, %s\n", info.error.message.c_str());
+    }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
@@ -80,7 +93,7 @@ void setup() {
 
   pinMode(LED_VERDE_PIN, OUTPUT);
   pinMode(LED_NARANJA_PIN, OUTPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT);
+  pinMode(LED_ROJO_PIN, LOW);
   digitalWrite(LED_VERDE_PIN, LOW);
   digitalWrite(LED_NARANJA_PIN, LOW);
   digitalWrite(LED_ROJO_PIN, LOW);
@@ -99,20 +112,37 @@ void setup() {
   Serial.print("Device ID: ");
   Serial.println(deviceId);
 
+  // Sincronización de la hora
+  Serial.println("Sincronizando hora...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  while (now < 8 * 3600 * 2) {
+    delay(500);
+    now = time(nullptr);
+  }
+  Serial.println("Hora sincronizada.");
+
   Serial.println("Configurando Firebase...");
   
   // Asignamos las credenciales a la configuración
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // Para la versión 4.4.17, dejamos el auth vacío para acceso no autenticado (solo con API Key).
-  // La biblioteca usará la API Key para las operaciones de Firestore.
+  // ¡¡¡ ESTA ES LA LÍNEA CLAVE !!!
+  // Habilita el modo de prueba que permite la autenticación anónima/sin firmar
+  // para obtener un token de acceso solo con la API Key.
+  config.signer.test_mode = true;
+
+  // Asignamos la función de callback para ver el estado del token
+  config.token_status_callback = tokenStatusCallback;
+  
+  // El objeto auth se deja vacío para la autenticación anónima
   auth.user.email = "";
   auth.user.password = "";
 
   Firebase.reconnectWiFi(true);
   
-  // La función begin correcta que usa los objetos de configuración y autenticación (vacío)
+  // Inicializamos Firebase con los objetos de configuración y autenticación
   Firebase.begin(&config, &auth);
 
   // Intento inicial de obtener la configuración.
@@ -148,13 +178,11 @@ int readSoundLevel() {
 }
 
 void fetchThresholdsFromFirebase() {
-    // Usamos strnlen para verificar de forma segura que el UID no esté vacío o sea el placeholder
     if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
         Serial.println("No hay UID configurado para obtener umbrales.");
         return;
     }
 
-    // Comprobamos si Firebase está listo
     if (!Firebase.ready()) {
         Serial.println("Firebase no está listo para obtener umbrales.");
         return;
@@ -233,9 +261,13 @@ void loop() {
         // La función patchDocument requiere 6 argumentos en esta versión de la librería.
         // El último argumento es el "update mask", que podemos dejar vacío.
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" /* <- Argumento de máscara requerido */)) {
-            Serial.println("Datos enviados a Firestore exitosamente.");
+            if (fbdo.httpCode() == 200) {
+              Serial.println("Datos enviados a Firestore exitosamente.");
+            } else {
+              Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
+            }
         } else {
-            Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
+            Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.errorReason().c_str());
         }
     }
 }

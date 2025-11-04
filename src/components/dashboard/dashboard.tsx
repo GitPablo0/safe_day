@@ -35,9 +35,6 @@ type SensorData = {
     }
 }
 
-// UID del dispositivo físico. La app web SIEMPRE leerá de este usuario.
-const DEVICE_USER_ID = "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s";
-
 // Default configuration to be created for new users
 const createDefaultConfig = (userId: string) => ({
     userId: userId,
@@ -58,7 +55,7 @@ function UserInfoCard({ uid }: { uid: string }) {
     navigator.clipboard.writeText(uid);
     toast({
       title: "Device UID Copied!",
-      description: "You can now paste it in your device code if needed.",
+      description: "You can now paste it in your device code.",
     });
   };
 
@@ -67,13 +64,13 @@ function UserInfoCard({ uid }: { uid: string }) {
       <CardHeader>
         <CardTitle>Device Sync</CardTitle>
         <CardDescription>
-          Your unique Device ID for data visualization. This is the ID your hardware is using.
+          Your unique User ID to sync with your hardware device.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
         <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="user-uid" className="text-sm font-medium">Device UID</Label>
+            <Label htmlFor="user-uid" className="text-sm font-medium">Your User UID</Label>
         </div>
         <div className="flex gap-2">
             <Input id="user-uid" readOnly value={uid} className="flex-1" />
@@ -92,33 +89,32 @@ export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
-  // Usamos el UID del dispositivo físico directamente
-  const deviceUserId = DEVICE_USER_ID;
+  const userId = user?.uid;
 
   const sensorDataRef = useMemoFirebase(() => 
-    (firestore && deviceUserId) ? doc(firestore, `users/${deviceUserId}/sensorData`, 'latest') : null, 
-    [firestore, deviceUserId]
+    (firestore && userId) ? doc(firestore, `users/${userId}/sensorData`, 'latest') : null, 
+    [firestore, userId]
   );
   const { data: sensorData } = useDoc<SensorData>(sensorDataRef);
 
-  // Path to the predictable configuration document ID for the device user
+  // Path to the predictable configuration document ID for the logged-in user
   const configDocId = "default_config";
   const thresholdConfigRef = useMemoFirebase(() => 
-    (firestore && deviceUserId) ? doc(firestore, `users/${deviceUserId}/thresholdConfigurations`, configDocId) : null,
-    [firestore, deviceUserId]
+    (firestore && userId) ? doc(firestore, `users/${userId}/thresholdConfigurations`, configDocId) : null,
+    [firestore, userId]
   );
   
-  // Use useDoc to fetch the single, known configuration document for the device user
+  // Use useDoc to fetch the single, known configuration document for the user
   const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(thresholdConfigRef);
   
   // Effect to create a default configuration if none exists for the logged-in user
   useEffect(() => {
-    if (!isConfigLoading && thresholdConfigRef && !activeThresholdConfig && deviceUserId) {
-      console.log(`No config found for user ${deviceUserId}. Creating default config.`);
-      const defaultConfig = createDefaultConfig(deviceUserId);
+    if (!isUserLoading && userId && !isConfigLoading && thresholdConfigRef && !activeThresholdConfig) {
+      console.log(`No config found for user ${userId}. Creating default config.`);
+      const defaultConfig = createDefaultConfig(userId);
       setDocumentNonBlocking(thresholdConfigRef, defaultConfig, { merge: true });
     }
-  }, [isConfigLoading, activeThresholdConfig, thresholdConfigRef, deviceUserId]);
+  }, [isUserLoading, userId, isConfigLoading, activeThresholdConfig, thresholdConfigRef]);
 
 
   // Sensor data state with mock values as fallback
@@ -182,8 +178,8 @@ export default function Dashboard() {
     }
   };
 
-  if (isUserLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+  if (isUserLoading || !userId) {
+    return <div className="flex items-center justify-center min-h-screen">Loading User Data...</div>
   }
 
   return (
@@ -218,7 +214,7 @@ export default function Dashboard() {
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
          <LedStatus level={ledStatus} />
-         <UserInfoCard uid={deviceUserId} />
+         <UserInfoCard uid={userId} />
          <SensorSimulator onSendSampleData={handleSendSampleData} />
       </div>
       

@@ -2,73 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * Helper function to check if the user is signed in.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * Helper function to check if the requested userId matches the authenticated user's UID.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Controls access to user profile documents and their subcollections.
-     */
-    match /users/{userId} {
-      // Users can create, get, update, or delete their own user document.
-      allow get, update, delete: if isOwner(userId);
-      allow create: if isSignedIn(); // A user can create their own profile.
-      allow list: if false; // Do not allow listing of all users
-
-      /**
-       * @description Controls access to threshold configuration documents nested under a user.
-       * Any signed-in user can read and write the configuration.
-       */
-      match /thresholdConfigurations/{thresholdConfigurationId} {
-        allow read, write: if isSignedIn();
-      }
-
-      /**
-       * @description Controls access to a user's sensor data.
-       * Any signed-in user can read the sensor data, but only the owner can write to it.
-       */
-      match /sensorData/{sensorDataId} {
-        allow read, write: if isSignedIn();
-      }
-    }
-
-    /**
-     * @description Controls the device pairing process.
-     */
-    match /devicePairing/{deviceId} {
-      /**
-       * Allow a device (acting as an authenticated user, even if anonymous) to create
-       * a document with a pairing token.
-       */
-      allow create: if isSignedIn() && request.resource.data.userId == null;
-
-      /**
-       * Allow the device to read its own pairing document to check if it has been claimed.
-       */
-      allow get: if isSignedIn();
-
-      /**
-       * Allow an authenticated user to claim a device by updating the userId field
-       * from null to their own UID. Prevents overwriting an already-claimed device.
-       */
-      allow update: if isSignedIn()
-                    && request.resource.data.userId == request.auth.uid
-                    && resource.data.userId == null;
-
-      /**
-       * Allow a device to delete its own pairing document after successful pairing.
-       */
-      allow delete: if isSignedIn();
+    // Reglas simplificadas para depuración.
+    // PERMITE A CUALQUIERA LEER Y ESCRIBIR EN TODA LA BASE DE DATOS.
+    // Esto es inseguro para producción, pero útil para verificar la conexión del dispositivo.
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

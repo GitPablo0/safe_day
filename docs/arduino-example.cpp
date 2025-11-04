@@ -6,7 +6,7 @@
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE UID MANUAL ---
  * 1. Abre la aplicación web del dashboard.
- * 2. Copia el "User UID" que aparece en la tarjeta "Device Sync".
+ * 2. Copia el "Device UID" que aparece en la tarjeta "Device Sync".
  * 3. Pega ese UID en la línea de abajo, reemplazando "PASTE_YOUR_USER_UID_HERE".
  *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
@@ -23,7 +23,7 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// ¡¡¡ PEGA TU UID AQUÍ !!!
+// ¡¡¡ PEGA TU UID AQUÍ !!! (Debe ser "ZqJgY6f4n3X2bE8c5hT9kLpWvA1s" para que la app lo vea)
 #define USER_UID "PASTE_YOUR_USER_UID_HERE"
 
 #define WIFI_SSID "Telecentro-416b"
@@ -38,8 +38,9 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
-FirebaseAuth auth;
-FirebaseConfig config;
+// NO se necesita FirebaseAuth ni FirebaseConfig para este método simplificado
+// FirebaseAuth auth;
+// FirebaseConfig config;
 
 // ===============================================================
 // 3. PINES Y SENSORES
@@ -71,16 +72,6 @@ const long fetchConfigInterval = 60000;
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
 
-// Función de callback para el estado del token
-void tokenStatusCallback(TokenInfo info) {
-  if (info.status == token_status_ready) {
-    Serial.println("Token listo. El dispositivo está autenticado y listo para operar.");
-  } else {
-    Serial.print("Estado del Token: error, ");
-    Serial.printf("Error: %s\n", info.error.message.c_str());
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   Serial.println("Inicializando...");
@@ -109,24 +100,11 @@ void setup() {
   Serial.print("Device ID: ");
   Serial.println(deviceId);
 
-  Serial.print("Sincronizando hora");
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  while (time(nullptr) < 1510644967) {
-      Serial.print(".");
-      delay(1000);
-  }
-  Serial.println("\nHora sincronizada.");
-
   Serial.println("Configurando Firebase...");
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-  config.token_status_callback = tokenStatusCallback;
-  
-  // Para la autenticación anónima, se debe pasar el objeto auth, pero puede estar vacío.
-  // La biblioteca gestionará el inicio de sesión anónimo.
-  Firebase.begin(&config, &auth);
+  // Asignamos las credenciales directamente a la biblioteca.
   Firebase.reconnectWiFi(true);
-
+  Firebase.begin(DATABASE_URL, API_KEY);
+  
   // Intento inicial de obtener la configuración.
   fetchThresholdsFromFirebase();
 }
@@ -161,8 +139,8 @@ int readSoundLevel() {
 
 void fetchThresholdsFromFirebase() {
     // Usamos strnlen para verificar de forma segura que el UID no esté vacío o sea el placeholder
-    if (!Firebase.ready() || strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
-        Serial.println("Firebase no está listo o no hay UID para obtener umbrales.");
+    if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
+        Serial.println("No hay UID configurado para obtener umbrales.");
         return;
     }
 
@@ -223,18 +201,21 @@ void loop() {
         digitalWrite(LED_NARANJA_PIN, ledStatus == 2);
         digitalWrite(LED_ROJO_PIN, ledStatus == 3);
 
+        if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
+            Serial.println("No hay UID configurado para enviar datos.");
+            return;
+        }
+        
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
+        // Usamos un JSON más simple para la función patchDocument.
         String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
-        if (Firebase.ready()) {
-            // El sexto argumento (máscara) es requerido por esta versión de la biblioteca.
-            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" /* <- Argumento de máscara requerido */)) {
-                Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
-            }
+        // La función patchDocument requiere 6 argumentos en esta versión de la librería.
+        // El último argumento es el "update mask", que podemos dejar vacío.
+        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" /* <- Argumento de máscara requerido */)) {
+            Serial.println("Datos enviados a Firestore exitosamente.");
         } else {
-            Serial.println("Firebase no está listo para enviar datos.");
+            Serial.printf("Error al enviar datos: %s\n", fbdo.errorReason().c_str());
         }
     }
 }
-
-    

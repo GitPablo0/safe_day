@@ -38,9 +38,8 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
-// NO se necesita FirebaseAuth ni FirebaseConfig para este método simplificado
-// FirebaseAuth auth;
-// FirebaseConfig config;
+FirebaseAuth auth;
+FirebaseConfig config;
 
 // ===============================================================
 // 3. PINES Y SENSORES
@@ -101,10 +100,22 @@ void setup() {
   Serial.println(deviceId);
 
   Serial.println("Configurando Firebase...");
-  // Asignamos las credenciales directamente a la biblioteca.
-  Firebase.reconnectWiFi(true);
-  Firebase.begin(DATABASE_URL, API_KEY);
   
+  // Asignamos las credenciales a la configuración
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  
+  // Para la versión 4.4.17, necesitamos indicar que se debe obtener un token anónimo
+  // Esto se logra dejando el UID del service account vacío y no usando credenciales de servicio.
+  // La biblioteca intentará obtener un token de acceso anónimo usando la API Key.
+  auth.user.email = "";
+  auth.user.password = "";
+
+  Firebase.reconnectWiFi(true);
+  
+  // La función begin correcta que usa los objetos de configuración
+  Firebase.begin(&config, &auth);
+
   // Intento inicial de obtener la configuración.
   fetchThresholdsFromFirebase();
 }
@@ -141,6 +152,12 @@ void fetchThresholdsFromFirebase() {
     // Usamos strnlen para verificar de forma segura que el UID no esté vacío o sea el placeholder
     if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
         Serial.println("No hay UID configurado para obtener umbrales.");
+        return;
+    }
+
+    // Comprobamos si Firebase está listo
+    if (!Firebase.ready()) {
+        Serial.println("Firebase no está listo para obtener umbrales.");
         return;
     }
 
@@ -205,9 +222,13 @@ void loop() {
             Serial.println("No hay UID configurado para enviar datos.");
             return;
         }
+
+        if (!Firebase.ready()) {
+            Serial.println("Firebase no está listo para enviar datos.");
+            return;
+        }
         
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
-        // Usamos un JSON más simple para la función patchDocument.
         String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
 
         // La función patchDocument requiere 6 argumentos en esta versión de la librería.
@@ -219,3 +240,5 @@ void loop() {
         }
     }
 }
+
+    

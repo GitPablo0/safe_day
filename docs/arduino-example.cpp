@@ -19,6 +19,7 @@
 #include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
 #include "DHT.h"
+#include "time.h"
 
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
@@ -34,16 +35,16 @@
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9.firebaseio.com"
+#define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
 // Objetos de Firebase
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-// ===============================================================
+// ===============================================
 // 3. PINES Y SENSORES
-// ===============================================================
+// ===============================================
 #define DHTPIN 4
 #define DHTTYPE DHT22
 const int SOUND_SENSOR_PIN = 34;
@@ -60,9 +61,9 @@ float soundThresholdMedium = 380;
 float tempThresholdVerde = 24;
 float tempThresholdNaranja = 28;
 
-// ===============================================================
+// ===============================================
 // 4. LÓGICA DE LA APLICACIÓN
-// ===============================================================
+// ===============================================
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
 const long sendDataInterval = 5000;
@@ -212,6 +213,14 @@ void fetchThresholdsFromFirebase() {
     }
 }
 
+String getTimestamp() {
+    time_t now;
+    time(&now);
+    char buf[sizeof "2011-10-08T07:07:09Z"];
+    strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    return String(buf);
+}
+
 
 void loop() {
     unsigned long currentMillis = millis();
@@ -256,7 +265,7 @@ void loop() {
         }
         
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
-        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":{\".sv\":\"timestamp\"}}}}";
+        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}}}";
 
         // La función patchDocument requiere 6 argumentos en esta versión de la librería.
         // El último argumento es el "update mask", que podemos dejar vacío.

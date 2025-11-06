@@ -11,6 +11,8 @@
  */
 #include <Arduino.h>
 #include "DHT.h"
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
 
 // ===============================================
 // 1. PINES Y SENSORES
@@ -27,7 +29,18 @@ const int LED_NARANJA_PIN = 33;
 const int LED_ROJO_PIN = 25;
 
 // ===============================================
-// 2. UMBRALES Y LÓGICA DE EVENTOS (CONFIGURACIÓN MANUAL)
+// 2. CONFIGURACIÓN DFPLAYER MINI
+// ===============================================
+const int DFPLAYER_RX_PIN = 26;
+const int DFPLAYER_TX_PIN = 27;
+
+SoftwareSerial mySoftwareSerial(DFPLAYER_RX_PIN, DFPLAYER_TX_PIN); // RX, TX
+DFRobotDFPlayerMini myDFPlayer;
+bool isPlaying = false;
+
+
+// ===============================================
+// 3. UMBRALES Y LÓGICA DE EVENTOS (CONFIGURACIÓN MANUAL)
 // ===============================================
 // Sonido
 float soundThresholdLow = 300;
@@ -56,7 +69,7 @@ float tempThresholdVerde = 24;
 float tempThresholdNaranja = 28;
 
 // ===============================================
-// 3. VARIABLES DE ESTADO
+// 4. VARIABLES DE ESTADO
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
 const long sendDataInterval = 2000; // Intervalo de lectura aumentado a 2 segundos para no saturar el monitor
@@ -87,6 +100,8 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Inicializando NeuroSense en modo autónomo...");
 
+    mySoftwareSerial.begin(9600);
+
     dht.begin();
     delay(2000);
 
@@ -106,6 +121,18 @@ void setup() {
         orangeLightEventTimestamps[i] = 0;
         redLightEventTimestamps[i] = 0;
     }
+
+    Serial.println("Inicializando DFPlayer... (Puede tardar unos segundos)");
+    if (!myDFPlayer.begin(mySoftwareSerial)) {
+        Serial.println("No se pudo iniciar el DFPlayer:");
+        Serial.println("1. Revisa la conexión de pines (RX, TX)");
+        Serial.println("2. Asegúrate de que la tarjeta SD esté insertada");
+        while (true);
+    }
+    Serial.println("DFPlayer Mini iniciado.");
+
+    myDFPlayer.volume(15); // Ajusta el volumen (0-30)
+    myDFPlayer.play(3); // Reproduce un sonido de notificación al inicio
 
     Serial.println("Configuración manual cargada. El dispositivo está listo.");
     digitalWrite(LED_VERDE_PIN, HIGH); // Encender LED verde al inicio
@@ -269,6 +296,17 @@ void loop() {
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
+        
+        // --- Lógica de DFPlayer ---
+        if (currentLedStatus >= 2 && !isPlaying) {
+            myDFPlayer.loop(1); // Reproduce la primera pista en bucle
+            isPlaying = true;
+            Serial.println("-> DFPlayer: Iniciando reproducción.");
+        } else if (currentLedStatus == 1 && isPlaying) {
+            myDFPlayer.stop(); // Detiene la reproducción
+            isPlaying = false;
+            Serial.println("-> DFPlayer: Deteniendo reproducción.");
+        }
 
         // --- Salida al Monitor Serie ---
         Serial.print("Temp: ");
@@ -282,5 +320,10 @@ void loop() {
 
         printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
     }
+    
+    // El DFPlayer necesita ser "atendido" para funcionar correctamente
+    if (myDFPlayer.available()) {
+      // Imprime mensajes del DFPlayer si los hay (útil para depuración)
+      // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
+    }
 }
-

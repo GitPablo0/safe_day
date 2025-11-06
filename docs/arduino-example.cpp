@@ -20,7 +20,7 @@
 #define DHTPIN 4
 #define DHTTYPE DHT22
 const int SOUND_SENSOR_PIN = 34;
-const int LIGHT_SENSOR_PIN = 35; // Pin para el sensor de luz
+const int LIGHT_SENSOR_PIN = 36; // Pin para el sensor de luz
 
 DHT dht(DHTPIN, DHTTYPE);
 

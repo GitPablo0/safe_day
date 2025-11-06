@@ -55,7 +55,7 @@ float tempThresholdNaranja = 28;
 // 3. VARIABLES DE ESTADO
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 200; // Intervalo de lectura en milisegundos
+const long sendDataInterval = 2000; // Intervalo de lectura aumentado a 2 segundos para no saturar el monitor
 
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
@@ -233,5 +233,15 @@ void loop() {
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
+
+        // --- Salida al Monitor Serie ---
+        Serial.print("Temp: ");
+        Serial.print(temperature);
+        Serial.print(" *C, Sonido: ");
+        Serial.print(soundLevel);
+        Serial.print(", Luz: ");
+        Serial.print(lightLevel);
+        Serial.print(" -> Estado LED: ");
+        Serial.println(currentLedStatus);
     }
 }

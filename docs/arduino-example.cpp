@@ -198,12 +198,13 @@ void loop() {
         }
         
         bool redSoundStateActive = redLedBlockedUntil > currentMillis;
-        if (orangeSoundStateActive && soundLevel >= soundThresholdMedium) {
+        if (soundLevel >= soundThresholdMedium) { // Lógica de bloqueo rojo independiente
             redEventTimestamps[redEventIndex] = currentMillis;
             redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
             if (!redSoundStateActive && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-                for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; } // Reiniciar eventos naranja
+                // Opcional: Reiniciar eventos naranjas para dar prioridad al rojo
+                for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; } 
                 orangeEventIndex = 0;
             }
         }
@@ -219,12 +220,13 @@ void loop() {
         }
 
         bool redLightStateActive = redLightLedBlockedUntil > currentMillis;
-        if (orangeLightStateActive && lightLevel <= lightThresholdMedium) {
+        if (lightLevel <= lightThresholdMedium) { // Lógica de bloqueo rojo independiente para la luz
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
                 redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-                for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; } // Reiniciar eventos de luz naranja
+                // Opcional: Reiniciar eventos naranjas de luz para dar prioridad al rojo
+                for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
                 orangeLightEventIndex = 0;
             }
         }

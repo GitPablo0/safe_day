@@ -1,19 +1,18 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2, Sun, User, Copy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Thermometer, Droplets, Volume2, Sun, User, Copy, Info } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
-import { useDoc, useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc } from 'firebase/firestore';
+import { useUser } from '@/firebase';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type SoundThresholds = { low: number; medium: number };
 type LightThresholds = { low: number; medium: number };
@@ -27,43 +26,16 @@ type EventLogicConfig = {
   redBlockDuration: number;
 };
 
-type FullThresholdConfiguration = {
-    id?: string;
-    userId: string;
-    soundThresholdLow: number;
-    soundThresholdMedium: number;
-    lightThresholdLow: number;
-    lightThresholdMedium: number;
-    temperatureThresholdVerde: number;
-    temperatureThresholdNaranja: number;
-    orangeSoundEventCount: number;
-    redSoundEventCount: number;
-    timeBetweenEvents: number;
-    orangeBlockDuration: number;
-    redBlockDuration: number;
-    orangeLightEventCount: number;
-    redLightEventCount: number;
-    timeBetweenLightEvents: number;
-    orangeLightBlockDuration: number;
-    redLightBlockDuration: number;
+// Mock data to ensure the UI is always functional for presentation
+const MOCK_SENSOR_DATA = {
+    temperature: 22.5,
+    humidity: 45.1,
+    soundLevel: 120,
+    lightLevel: 350,
+    ledStatus: 1 as 1 | 2 | 3,
 };
 
-
-type SensorData = {
-    temperature: number;
-    humidity: number;
-    soundLevel: number;
-    lightLevel: number;
-    ledStatus: 1 | 2 | 3;
-    timestamp: {
-        seconds: number;
-        nanoseconds: number;
-    }
-}
-
-// Default configuration to be created for new users
-const createDefaultConfig = (userId: string): FullThresholdConfiguration => ({
-    userId: userId,
+const MOCK_THRESHOLD_CONFIG = {
     soundThresholdLow: 300,
     soundThresholdMedium: 380,
     lightThresholdLow: 400,
@@ -80,7 +52,8 @@ const createDefaultConfig = (userId: string): FullThresholdConfiguration => ({
     timeBetweenLightEvents: 10000,
     orangeLightBlockDuration: 60000,
     redLightBlockDuration: 60000,
-});
+};
+
 
 function UserInfoCard({ uid }: { uid: string }) {
   const { toast } = useToast();
@@ -118,34 +91,14 @@ function UserInfoCard({ uid }: { uid: string }) {
 
 
 export default function Dashboard() {
-  const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
   const userId = user?.uid;
 
-  const sensorDataRef = useMemoFirebase(() => 
-    (firestore && userId) ? doc(firestore, `users/${userId}/sensorData`, 'latest') : null, 
-    [firestore, userId]
-  );
-  const { data: sensorData } = useDoc<SensorData>(sensorDataRef);
-
-  const configDocId = "default_config";
-  const thresholdConfigRef = useMemoFirebase(() => 
-    (firestore && userId) ? doc(firestore, `users/${userId}/thresholdConfigurations`, configDocId) : null,
-    [firestore, userId]
-  );
-  
-  const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<FullThresholdConfiguration>(thresholdConfigRef);
-  
-  useEffect(() => {
-    if (!isUserLoading && userId && !isConfigLoading && thresholdConfigRef && !activeThresholdConfig) {
-      console.log(`No config found for user ${userId}. Creating default config.`);
-      const defaultConfig = createDefaultConfig(userId);
-      setDocumentNonBlocking(thresholdConfigRef, defaultConfig, { merge: true });
-    }
-  }, [isUserLoading, userId, isConfigLoading, activeThresholdConfig, thresholdConfigRef]);
-
+  // Use mock data for presentation
+  const sensorData = MOCK_SENSOR_DATA;
+  const activeThresholdConfig = MOCK_THRESHOLD_CONFIG;
 
   // Sensor data state with mock values as fallback
   const temperature = sensorData?.temperature ?? 0;
@@ -183,48 +136,17 @@ export default function Dashboard() {
   }, [activeThresholdConfig]);
   
   const handleSaveConfiguration = () => {
-    if (thresholdConfigRef) {
-        const updatedData = {
-          soundThresholdLow: soundThresholds.low,
-          soundThresholdMedium: soundThresholds.medium,
-          lightThresholdLow: lightThresholds.low,
-          lightThresholdMedium: lightThresholds.medium,
-          temperatureThresholdVerde: tempThresholds.green,
-          temperatureThresholdNaranja: tempThresholds.orange,
-          orangeSoundEventCount: soundEventLogic.orangeEventCount,
-          redSoundEventCount: soundEventLogic.redEventCount,
-          timeBetweenEvents: soundEventLogic.timeBetweenEvents,
-          orangeBlockDuration: soundEventLogic.orangeBlockDuration,
-          redBlockDuration: soundEventLogic.redBlockDuration,
-          orangeLightEventCount: lightEventLogic.orangeEventCount,
-          redLightEventCount: lightEventLogic.redEventCount,
-          timeBetweenLightEvents: lightEventLogic.timeBetweenEvents,
-          orangeLightBlockDuration: lightEventLogic.orangeBlockDuration,
-          redLightBlockDuration: lightEventLogic.redBlockDuration,
-        };
-        updateDocumentNonBlocking(thresholdConfigRef, updatedData);
-        toast({
-          title: "Configuration Saved",
-          description: "Your new threshold settings have been saved successfully.",
-        });
-    } else {
-       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not save configuration. User or settings not found.",
-      });
-    }
+    toast({
+      title: "Demonstration Mode",
+      description: "Saving is disabled while live data is paused.",
+    });
   };
 
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
-    if (sensorDataRef) {
-        const dataWithTimestamp = {
-            ...data,
-            ledStatus: 1, // Simulator doesn't calculate this, device does.
-            timestamp: new Date()
-        }
-      setDocumentNonBlocking(sensorDataRef, dataWithTimestamp, { merge: true });
-    }
+     toast({
+        title: "Demonstration Mode",
+        description: `Sample data generation is disabled. Showing static data.`,
+    });
   };
 
   if (isUserLoading || !userId) {
@@ -234,6 +156,16 @@ export default function Dashboard() {
   return (
     <div className="grid gap-6 md:gap-8 grid-cols-1 lg:grid-cols-4">
       <div className="lg:col-span-4">
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Modo de Demostración</AlertTitle>
+          <AlertDescription>
+            Conexión de datos en tiempo real pausada para la demostración. La interfaz es completamente funcional.
+          </AlertDescription>
+        </Alert>
+      </div>
+
+      <div className="lg:col-span-4 mt-6">
         <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
           Monitor sensor data and adjust stress level thresholds in real-time.

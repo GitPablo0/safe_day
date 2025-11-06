@@ -26,7 +26,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ThresholdConfiguration",
       "type": "object",
-      "description": "Represents the configuration settings for environmental stress detection, including sound and temperature thresholds.",
+      "description": "Represents the configuration settings for environmental stress detection, including sound, light, and temperature thresholds.",
       "properties": {
         "id": {
           "type": "string",
@@ -34,52 +34,71 @@
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N ThresholdConfiguration). The ID of the user who owns this configuration."
+          "description": "The ID of the user who owns this configuration."
         },
         "soundThresholdLow": {
           "type": "number",
-          "description": "The lower threshold for sound level, below which the 'Verde' LED is activated.",
-          "format": "number"
+          "description": "The lower threshold for sound level, which triggers the 'Naranja' state."
         },
         "soundThresholdMedium": {
           "type": "number",
-          "description": "The medium threshold for sound level, above which the 'Naranja' LED is activated.",
-          "format": "number"
+          "description": "The medium threshold for sound level, which triggers the 'Rojo' state."
+        },
+        "lightThresholdLow": {
+          "type": "number",
+          "description": "The lower threshold for light level, which triggers the 'Naranja' state."
+        },
+        "lightThresholdMedium": {
+          "type": "number",
+          "description": "The medium threshold for light level, which triggers the 'Rojo' state."
         },
         "temperatureThresholdVerde": {
           "type": "number",
-          "description": "The temperature threshold (°C) below which the 'Verde' LED is activated.",
-          "format": "number"
+          "description": "The temperature threshold (°C) above which the 'Naranja' state is triggered."
         },
         "temperatureThresholdNaranja": {
           "type": "number",
-          "description": "The temperature threshold (°C) above which the 'Naranja' LED is activated.",
-          "format": "number"
-        },
-        "redSoundEventCount": {
-          "type": "number",
-          "description": "The number of sound events to trigger red blockage",
-          "format": "number"
+          "description": "The temperature threshold (°C) above which the 'Rojo' state is triggered."
         },
         "orangeSoundEventCount": {
           "type": "number",
-          "description": "The number of sound events to trigger orange blockage",
-          "format": "number"
+          "description": "Number of sound events to trigger the orange light blockage."
         },
-        "redBlockDuration": {
+        "redSoundEventCount": {
           "type": "number",
-          "description": "Duration (in ms) the red light is blocked",
-          "format": "number"
-        },
-        "orangeBlockDuration": {
-          "type": "number",
-          "description": "Duration (in ms) the orange light is blocked",
-          "format": "number"
+          "description": "Number of sound events to trigger the red light blockage."
         },
         "timeBetweenEvents": {
           "type": "number",
-          "description": "Duration (in ms) between sound events.",
-          "format": "number"
+          "description": "Time window (in ms) to count sound events for blockage logic."
+        },
+        "orangeBlockDuration": {
+          "type": "number",
+          "description": "Duration (in ms) the orange light stays blocked after sound events."
+        },
+        "redBlockDuration": {
+          "type": "number",
+          "description": "Duration (in ms) the red light stays blocked after sound events."
+        },
+        "orangeLightEventCount": {
+          "type": "number",
+          "description": "Number of light events to trigger the orange light blockage."
+        },
+        "redLightEventCount": {
+          "type": "number",
+          "description": "Number of light events to trigger the red light blockage."
+        },
+        "timeBetweenLightEvents": {
+          "type": "number",
+          "description": "Time window (in ms) to count light events for blockage logic."
+        },
+        "orangeLightBlockDuration": {
+          "type": "number",
+          "description": "Duration (in ms) the orange light stays blocked after light events."
+        },
+        "redLightBlockDuration": {
+          "type": "number",
+          "description": "Duration (in ms) the red light stays blocked after light events."
         }
       },
       "required": [
@@ -87,6 +106,8 @@
         "userId",
         "soundThresholdLow",
         "soundThresholdMedium",
+        "lightThresholdLow",
+        "lightThresholdMedium",
         "temperatureThresholdVerde",
         "temperatureThresholdNaranja"
       ]
@@ -130,9 +151,17 @@
         "soundLevel": {
           "type": "number",
           "description": "The current sound level reading (raw value)."
+        },
+        "lightLevel": {
+          "type": "number",
+          "description": "The current light level reading (raw value)."
+        },
+        "ledStatus": {
+          "type": "number",
+          "description": "The calculated LED status from the device (1:Green, 2:Orange, 3:Red)."
         }
       },
-      "required": ["temperature", "humidity", "soundLevel"]
+      "required": ["temperature", "humidity", "soundLevel", "lightLevel", "ledStatus"]
     }
   },
   "auth": {

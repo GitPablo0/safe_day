@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Thermometer, Droplets, Volume2, User, Link as LinkIcon, Loader2, Copy, History } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, Sun, User, Copy } from 'lucide-react';
 import SensorCard from './sensor-card';
 import ThresholdControlCard from './threshold-control-card';
 import LedStatus from './led-status';
-import { useDoc, useCollection, useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,19 +16,45 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 
 type SoundThresholds = { low: number; medium: number };
+type LightThresholds = { low: number; medium: number };
 type TempThresholds = { green: number; orange: number };
-type ThresholdConfiguration = {
-  id: string;
-  userId: string;
-  soundThresholdLow: number;
-  soundThresholdMedium: number;
-  temperatureThresholdVerde: number;
-  temperatureThresholdNaranja: number;
+
+type EventLogicConfig = {
+  orangeEventCount: number;
+  redEventCount: number;
+  timeBetweenEvents: number;
+  orangeBlockDuration: number;
+  redBlockDuration: number;
 };
+
+type FullThresholdConfiguration = {
+    id?: string;
+    userId: string;
+    soundThresholdLow: number;
+    soundThresholdMedium: number;
+    lightThresholdLow: number;
+    lightThresholdMedium: number;
+    temperatureThresholdVerde: number;
+    temperatureThresholdNaranja: number;
+    orangeSoundEventCount: number;
+    redSoundEventCount: number;
+    timeBetweenEvents: number;
+    orangeBlockDuration: number;
+    redBlockDuration: number;
+    orangeLightEventCount: number;
+    redLightEventCount: number;
+    timeBetweenLightEvents: number;
+    orangeLightBlockDuration: number;
+    redLightBlockDuration: number;
+};
+
+
 type SensorData = {
     temperature: number;
     humidity: number;
     soundLevel: number;
+    lightLevel: number;
+    ledStatus: 1 | 2 | 3;
     timestamp: {
         seconds: number;
         nanoseconds: number;
@@ -36,17 +62,24 @@ type SensorData = {
 }
 
 // Default configuration to be created for new users
-const createDefaultConfig = (userId: string) => ({
+const createDefaultConfig = (userId: string): FullThresholdConfiguration => ({
     userId: userId,
     soundThresholdLow: 300,
     soundThresholdMedium: 380,
+    lightThresholdLow: 400,
+    lightThresholdMedium: 600,
     temperatureThresholdVerde: 24,
     temperatureThresholdNaranja: 28,
-    redSoundEventCount: 5,
     orangeSoundEventCount: 3,
-    redBlockDuration: 5000,
-    orangeBlockDuration: 3000,
-    timeBetweenEvents: 1000,
+    redSoundEventCount: 3,
+    timeBetweenEvents: 10000,
+    orangeBlockDuration: 60000,
+    redBlockDuration: 60000,
+    orangeLightEventCount: 3,
+    redLightEventCount: 3,
+    timeBetweenLightEvents: 10000,
+    orangeLightBlockDuration: 60000,
+    redLightBlockDuration: 60000,
 });
 
 function UserInfoCard({ uid }: { uid: string }) {
@@ -97,17 +130,14 @@ export default function Dashboard() {
   );
   const { data: sensorData } = useDoc<SensorData>(sensorDataRef);
 
-  // Path to the predictable configuration document ID for the logged-in user
   const configDocId = "default_config";
   const thresholdConfigRef = useMemoFirebase(() => 
     (firestore && userId) ? doc(firestore, `users/${userId}/thresholdConfigurations`, configDocId) : null,
     [firestore, userId]
   );
   
-  // Use useDoc to fetch the single, known configuration document for the user
-  const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(thresholdConfigRef);
+  const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<FullThresholdConfiguration>(thresholdConfigRef);
   
-  // Effect to create a default configuration if none exists for the logged-in user
   useEffect(() => {
     if (!isUserLoading && userId && !isConfigLoading && thresholdConfigRef && !activeThresholdConfig) {
       console.log(`No config found for user ${userId}. Creating default config.`);
@@ -121,38 +151,56 @@ export default function Dashboard() {
   const temperature = sensorData?.temperature ?? 0;
   const humidity = sensorData?.humidity ?? 0;
   const soundLevel = sensorData?.soundLevel ?? 0;
+  const lightLevel = sensorData?.lightLevel ?? 0;
+  const ledStatus = sensorData?.ledStatus ?? 1;
 
-  // Thresholds state, initialized with Arduino defaults, updated from Firestore
   const [soundThresholds, setSoundThresholds] = useState<SoundThresholds>({ low: 300, medium: 380 });
+  const [lightThresholds, setLightThresholds] = useState<LightThresholds>({ low: 400, medium: 600 });
   const [tempThresholds, setTempThresholds] = useState<TempThresholds>({ green: 24, orange: 28 });
+  const [soundEventLogic, setSoundEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
+  const [lightEventLogic, setLightEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
 
   useEffect(() => {
     if (activeThresholdConfig) {
       setSoundThresholds({ low: activeThresholdConfig.soundThresholdLow, medium: activeThresholdConfig.soundThresholdMedium });
+      setLightThresholds({ low: activeThresholdConfig.lightThresholdLow, medium: activeThresholdConfig.lightThresholdMedium });
       setTempThresholds({ green: activeThresholdConfig.temperatureThresholdVerde, orange: activeThresholdConfig.temperatureThresholdNaranja });
+      setSoundEventLogic({
+        orangeEventCount: activeThresholdConfig.orangeSoundEventCount,
+        redEventCount: activeThresholdConfig.redSoundEventCount,
+        timeBetweenEvents: activeThresholdConfig.timeBetweenEvents,
+        orangeBlockDuration: activeThresholdConfig.orangeBlockDuration,
+        redBlockDuration: activeThresholdConfig.redBlockDuration,
+      });
+      setLightEventLogic({
+        orangeEventCount: activeThresholdConfig.orangeLightEventCount,
+        redEventCount: activeThresholdConfig.redLightEventCount,
+        timeBetweenEvents: activeThresholdConfig.timeBetweenLightEvents,
+        orangeBlockDuration: activeThresholdConfig.orangeLightBlockDuration,
+        redBlockDuration: activeThresholdConfig.redLightBlockDuration,
+      });
     }
   }, [activeThresholdConfig]);
   
-  // Logic to determine the final LED status
-  const ledStatus = useMemo(() => {
-    let estadoSonido: 1 | 2 | 3 = 1;
-    if (soundLevel >= soundThresholds.low) estadoSonido = 2;
-    if (soundLevel >= soundThresholds.medium) estadoSonido = 3;
-
-    let estadoTemp: 1 | 2 | 3 = 1;
-    if (temperature >= tempThresholds.green) estadoTemp = 2;
-    if (temperature >= tempThresholds.orange) estadoTemp = 3;
-
-    return Math.max(estadoSonido, estadoTemp) as 1 | 2 | 3;
-  }, [soundLevel, temperature, soundThresholds, tempThresholds]);
-
-  const handleSaveConfiguration = (newSoundThresholds: SoundThresholds, newTempThresholds: TempThresholds) => {
+  const handleSaveConfiguration = () => {
     if (thresholdConfigRef) {
         const updatedData = {
-          soundThresholdLow: newSoundThresholds.low,
-          soundThresholdMedium: newSoundThresholds.medium,
-          temperatureThresholdVerde: newTempThresholds.green,
-          temperatureThresholdNaranja: newTempThresholds.orange,
+          soundThresholdLow: soundThresholds.low,
+          soundThresholdMedium: soundThresholds.medium,
+          lightThresholdLow: lightThresholds.low,
+          lightThresholdMedium: lightThresholds.medium,
+          temperatureThresholdVerde: tempThresholds.green,
+          temperatureThresholdNaranja: tempThresholds.orange,
+          orangeSoundEventCount: soundEventLogic.orangeEventCount,
+          redSoundEventCount: soundEventLogic.redEventCount,
+          timeBetweenEvents: soundEventLogic.timeBetweenEvents,
+          orangeBlockDuration: soundEventLogic.orangeBlockDuration,
+          redBlockDuration: soundEventLogic.redBlockDuration,
+          orangeLightEventCount: lightEventLogic.orangeEventCount,
+          redLightEventCount: lightEventLogic.redEventCount,
+          timeBetweenLightEvents: lightEventLogic.timeBetweenEvents,
+          orangeLightBlockDuration: lightEventLogic.orangeBlockDuration,
+          redLightBlockDuration: lightEventLogic.redBlockDuration,
         };
         updateDocumentNonBlocking(thresholdConfigRef, updatedData);
         toast({
@@ -168,10 +216,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number }) => {
+  const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
     if (sensorDataRef) {
         const dataWithTimestamp = {
             ...data,
+            ledStatus: 1, // Simulator doesn't calculate this, device does.
             timestamp: new Date()
         }
       setDocumentNonBlocking(sensorDataRef, dataWithTimestamp, { merge: true });
@@ -191,7 +240,7 @@ export default function Dashboard() {
         </p>
       </div>
       <div className="lg:col-span-4 xl:col-span-3">
-        <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-3">
+        <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
           <SensorCard
             icon={<Thermometer className="h-6 w-6 text-destructive" />}
             title="Temperature"
@@ -210,6 +259,12 @@ export default function Dashboard() {
             value={soundLevel}
             unit="raw"
           />
+          <SensorCard
+            icon={<Sun className="h-6 w-6 text-yellow-400" />}
+            title="Light Level"
+            value={lightLevel}
+            unit="raw"
+          />
         </div>
       </div>
       <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
@@ -222,8 +277,14 @@ export default function Dashboard() {
         <ThresholdControlCard
           soundThresholds={soundThresholds}
           setSoundThresholds={setSoundThresholds}
+          lightThresholds={lightThresholds}
+          setLightThresholds={setLightThresholds}
           tempThresholds={tempThresholds}
           setTempThresholds={setTempThresholds}
+          soundEventLogic={soundEventLogic}
+          setSoundEventLogic={setSoundEventLogic}
+          lightEventLogic={lightEventLogic}
+          setLightEventLogic={setLightEventLogic}
           onSave={handleSaveConfiguration}
         />
       </div>

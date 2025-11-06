@@ -5,35 +5,49 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { Save } from "lucide-react";
 
 type SoundThresholds = { low: number; medium: number };
+type LightThresholds = { low: number; medium: number };
 type TempThresholds = { green: number; orange: number };
+type EventLogicConfig = {
+  orangeEventCount: number;
+  redEventCount: number;
+  timeBetweenEvents: number;
+  orangeBlockDuration: number;
+  redBlockDuration: number;
+};
 
 interface ThresholdControlCardProps {
   soundThresholds: SoundThresholds;
   setSoundThresholds: (value: SoundThresholds) => void;
+  lightThresholds: LightThresholds;
+  setLightThresholds: (value: LightThresholds) => void;
   tempThresholds: TempThresholds;
   setTempThresholds: (value: TempThresholds) => void;
-  onSave: (soundThresholds: SoundThresholds, tempThresholds: TempThresholds) => void;
+  soundEventLogic: EventLogicConfig;
+  setSoundEventLogic: (value: EventLogicConfig) => void;
+  lightEventLogic: EventLogicConfig;
+  setLightEventLogic: (value: EventLogicConfig) => void;
+  onSave: () => void;
 }
 
 export default function ThresholdControlCard({
   soundThresholds,
   setSoundThresholds,
+  lightThresholds,
+  setLightThresholds,
   tempThresholds,
   setTempThresholds,
+  soundEventLogic,
+  setSoundEventLogic,
+  lightEventLogic,
+  setLightEventLogic,
   onSave,
 }: ThresholdControlCardProps) {
-  const { toast } = useToast();
 
   const handleSave = () => {
-    onSave(soundThresholds, tempThresholds);
-    toast({
-      title: "Configuration Saved",
-      description: "Your new threshold settings have been saved successfully.",
-    });
+    onSave();
   };
 
   return (
@@ -41,10 +55,11 @@ export default function ThresholdControlCard({
       <CardHeader>
         <CardTitle>Threshold Configuration</CardTitle>
         <CardDescription>
-          Adjust the sensor thresholds to change the sensitivity of the stress level detection.
+          Adjust the sensor thresholds and event logic to change the sensitivity of the stress level detection.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-8 grid-cols-1 md:grid-cols-2">
+      <CardContent className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {/* Sound Levels */}
         <div className="space-y-6">
           <h3 className="font-semibold text-lg">Sound Levels</h3>
           <div className="grid gap-4">
@@ -88,6 +103,53 @@ export default function ThresholdControlCard({
             </div>
           </div>
         </div>
+
+        {/* Light Levels */}
+        <div className="space-y-6">
+          <h3 className="font-semibold text-lg">Light Levels</h3>
+          <div className="grid gap-4">
+            <Label htmlFor="light-low">Medium Threshold (Orange)</Label>
+            <div className="flex items-center gap-4">
+              <Slider
+                id="light-low"
+                min={0}
+                max={4095}
+                step={10}
+                value={[lightThresholds.low]}
+                onValueChange={(value) => setLightThresholds({ ...lightThresholds, low: value[0] })}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={lightThresholds.low}
+                onChange={(e) => setLightThresholds({ ...lightThresholds, low: Number(e.target.value) })}
+                className="w-24"
+              />
+            </div>
+          </div>
+          <div className="grid gap-4">
+            <Label htmlFor="light-medium">High Threshold (Red)</Label>
+            <div className="flex items-center gap-4">
+              <Slider
+                id="light-medium"
+                min={0}
+                max={4095}
+                step={10}
+                value={[lightThresholds.medium]}
+                onValueChange={(value) => setLightThresholds({ ...lightThresholds, medium: value[0] })}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={lightThresholds.medium}
+                onChange={(e) => setLightThresholds({ ...lightThresholds, medium: Number(e.target.value) })}
+                className="w-24"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Temperature Levels */}
         <div className="space-y-6">
           <h3 className="font-semibold text-lg">Temperature Levels (°C)</h3>
           <div className="grid gap-4">
@@ -131,6 +193,65 @@ export default function ThresholdControlCard({
             </div>
           </div>
         </div>
+
+        {/* Sound Event Logic */}
+        <div className="space-y-6">
+            <h3 className="font-semibold text-lg">Sound Event Logic</h3>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Orange Events</Label>
+                    <Input type="number" value={soundEventLogic.orangeEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeEventCount: Number(e.target.value)})} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Red Events</Label>
+                    <Input type="number" value={soundEventLogic.redEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, redEventCount: Number(e.target.value)})} />
+                </div>
+            </div>
+            <div className="grid gap-2">
+                <Label>Time Window (ms)</Label>
+                <Input type="number" value={soundEventLogic.timeBetweenEvents} onChange={(e) => setSoundEventLogic({...soundEventLogic, timeBetweenEvents: Number(e.target.value)})} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Orange Lock (ms)</Label>
+                    <Input type="number" value={soundEventLogic.orangeBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeBlockDuration: Number(e.target.value)})} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Red Lock (ms)</Label>
+                    <Input type="number" value={soundEventLogic.redBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, redBlockDuration: Number(e.target.value)})} />
+                </div>
+            </div>
+        </div>
+
+        {/* Light Event Logic */}
+        <div className="space-y-6">
+            <h3 className="font-semibold text-lg">Light Event Logic</h3>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Orange Events</Label>
+                    <Input type="number" value={lightEventLogic.orangeEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeEventCount: Number(e.target.value)})} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Red Events</Label>
+                    <Input type="number" value={lightEventLogic.redEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, redEventCount: Number(e.target.value)})} />
+                </div>
+            </div>
+            <div className="grid gap-2">
+                <Label>Time Window (ms)</Label>
+                <Input type="number" value={lightEventLogic.timeBetweenEvents} onChange={(e) => setLightEventLogic({...lightEventLogic, timeBetweenEvents: Number(e.target.value)})} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Orange Lock (ms)</Label>
+                    <Input type="number" value={lightEventLogic.orangeBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeBlockDuration: Number(e.target.value)})} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Red Lock (ms)</Label>
+                    <Input type="number" value={lightEventLogic.redBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, redBlockDuration: Number(e.target.value)})} />
+                </div>
+            </div>
+        </div>
+
       </CardContent>
       <CardFooter className="flex justify-end">
         <Button onClick={handleSave}>

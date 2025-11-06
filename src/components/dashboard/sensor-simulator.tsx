@@ -7,7 +7,7 @@ import { Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface SensorSimulatorProps {
-    onSendSampleData: (data: { temperature: number; humidity: number; soundLevel: number }) => void;
+    onSendSampleData: (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => void;
 }
 
 export default function SensorSimulator({ onSendSampleData }: SensorSimulatorProps) {
@@ -16,8 +16,9 @@ export default function SensorSimulator({ onSendSampleData }: SensorSimulatorPro
     const generateRandomData = () => {
         const temperature = parseFloat((Math.random() * 15 + 15).toFixed(1)); // 15.0 to 30.0
         const humidity = parseFloat((Math.random() * 50 + 30).toFixed(1)); // 30.0 to 80.0
-        const soundLevel = Math.floor(Math.random() * 4000); // 0 to 4000
-        return { temperature, humidity, soundLevel };
+        const soundLevel = Math.floor(Math.random() * 800); // 0 to 800
+        const lightLevel = Math.floor(Math.random() * 1000); // 0 to 1000
+        return { temperature, humidity, soundLevel, lightLevel };
     }
 
     const handleSend = () => {
@@ -25,7 +26,7 @@ export default function SensorSimulator({ onSendSampleData }: SensorSimulatorPro
         onSendSampleData(data);
         toast({
             title: "Sample Data Sent",
-            description: `Temp: ${data.temperature}°C, Sound: ${data.soundLevel}`,
+            description: `Temp: ${data.temperature}°C, Sound: ${data.soundLevel}, Light: ${data.lightLevel}`,
         });
     };
 

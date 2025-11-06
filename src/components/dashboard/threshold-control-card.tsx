@@ -53,17 +53,17 @@ export default function ThresholdControlCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Threshold Configuration</CardTitle>
+        <CardTitle>Configuración de Umbrales</CardTitle>
         <CardDescription>
-          Adjust the sensor thresholds and event logic to change the sensitivity of the stress level detection.
+          Ajusta los umbrales de los sensores y la lógica de eventos para cambiar la sensibilidad de la detección de estrés.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {/* Sound Levels */}
         <div className="space-y-6">
-          <h3 className="font-semibold text-lg">Sound Levels</h3>
+          <h3 className="font-semibold text-lg">Niveles de Sonido</h3>
           <div className="grid gap-4">
-            <Label htmlFor="sound-low">Medium Threshold (Orange)</Label>
+            <Label htmlFor="sound-low">Umbral Medio (Naranja)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="sound-low"
@@ -83,7 +83,7 @@ export default function ThresholdControlCard({
             </div>
           </div>
           <div className="grid gap-4">
-            <Label htmlFor="sound-medium">High Threshold (Red)</Label>
+            <Label htmlFor="sound-medium">Umbral Alto (Rojo)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="sound-medium"
@@ -106,9 +106,9 @@ export default function ThresholdControlCard({
 
         {/* Light Levels */}
         <div className="space-y-6">
-          <h3 className="font-semibold text-lg">Light Levels</h3>
+          <h3 className="font-semibold text-lg">Niveles de Luz</h3>
           <div className="grid gap-4">
-            <Label htmlFor="light-low">Medium Threshold (Orange)</Label>
+            <Label htmlFor="light-low">Umbral Medio (Naranja)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="light-low"
@@ -128,7 +128,7 @@ export default function ThresholdControlCard({
             </div>
           </div>
           <div className="grid gap-4">
-            <Label htmlFor="light-medium">High Threshold (Red)</Label>
+            <Label htmlFor="light-medium">Umbral Alto (Rojo)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="light-medium"
@@ -151,9 +151,9 @@ export default function ThresholdControlCard({
 
         {/* Temperature Levels */}
         <div className="space-y-6">
-          <h3 className="font-semibold text-lg">Temperature Levels (°C)</h3>
+          <h3 className="font-semibold text-lg">Niveles de Temperatura (°C)</h3>
           <div className="grid gap-4">
-            <Label htmlFor="temp-green">Medium Threshold (Orange)</Label>
+            <Label htmlFor="temp-green">Umbral Medio (Naranja)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="temp-green"
@@ -173,7 +173,7 @@ export default function ThresholdControlCard({
             </div>
           </div>
           <div className="grid gap-4">
-            <Label htmlFor="temp-orange">High Threshold (Red)</Label>
+            <Label htmlFor="temp-orange">Umbral Alto (Rojo)</Label>
             <div className="flex items-center gap-4">
               <Slider
                 id="temp-orange"
@@ -196,28 +196,28 @@ export default function ThresholdControlCard({
 
         {/* Sound Event Logic */}
         <div className="space-y-6">
-            <h3 className="font-semibold text-lg">Sound Event Logic</h3>
+            <h3 className="font-semibold text-lg">Lógica de Eventos de Sonido</h3>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label>Orange Events</Label>
+                    <Label>Eventos Naranja</Label>
                     <Input type="number" value={soundEventLogic.orangeEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeEventCount: Number(e.target.value)})} />
                 </div>
                 <div className="grid gap-2">
-                    <Label>Red Events</Label>
+                    <Label>Eventos Rojos</Label>
                     <Input type="number" value={soundEventLogic.redEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, redEventCount: Number(e.target.value)})} />
                 </div>
             </div>
             <div className="grid gap-2">
-                <Label>Time Window (ms)</Label>
+                <Label>Ventana de Tiempo (ms)</Label>
                 <Input type="number" value={soundEventLogic.timeBetweenEvents} onChange={(e) => setSoundEventLogic({...soundEventLogic, timeBetweenEvents: Number(e.target.value)})} />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label>Orange Lock (ms)</Label>
+                    <Label>Bloqueo Naranja (ms)</Label>
                     <Input type="number" value={soundEventLogic.orangeBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeBlockDuration: Number(e.target.value)})} />
                 </div>
                 <div className="grid gap-2">
-                    <Label>Red Lock (ms)</Label>
+                    <Label>Bloqueo Rojo (ms)</Label>
                     <Input type="number" value={soundEventLogic.redBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, redBlockDuration: Number(e.target.value)})} />
                 </div>
             </div>
@@ -225,28 +225,28 @@ export default function ThresholdControlCard({
 
         {/* Light Event Logic */}
         <div className="space-y-6">
-            <h3 className="font-semibold text-lg">Light Event Logic</h3>
+            <h3 className="font-semibold text-lg">Lógica de Eventos de Luz</h3>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label>Orange Events</Label>
+                    <Label>Eventos Naranja</Label>
                     <Input type="number" value={lightEventLogic.orangeEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeEventCount: Number(e.target.value)})} />
                 </div>
                 <div className="grid gap-2">
-                    <Label>Red Events</Label>
+                    <Label>Eventos Rojos</Label>
                     <Input type="number" value={lightEventLogic.redEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, redEventCount: Number(e.target.value)})} />
                 </div>
             </div>
             <div className="grid gap-2">
-                <Label>Time Window (ms)</Label>
+                <Label>Ventana de Tiempo (ms)</Label>
                 <Input type="number" value={lightEventLogic.timeBetweenEvents} onChange={(e) => setLightEventLogic({...lightEventLogic, timeBetweenEvents: Number(e.target.value)})} />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label>Orange Lock (ms)</Label>
+                    <Label>Bloqueo Naranja (ms)</Label>
                     <Input type="number" value={lightEventLogic.orangeBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeBlockDuration: Number(e.target.value)})} />
                 </div>
                 <div className="grid gap-2">
-                    <Label>Red Lock (ms)</Label>
+                    <Label>Bloqueo Rojo (ms)</Label>
                     <Input type="number" value={lightEventLogic.redBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, redBlockDuration: Number(e.target.value)})} />
                 </div>
             </div>
@@ -256,7 +256,7 @@ export default function ThresholdControlCard({
       <CardFooter className="flex justify-end">
         <Button onClick={handleSave}>
           <Save className="mr-2 h-4 w-4" />
-          Save Configuration
+          Guardar Configuración
         </Button>
       </CardFooter>
     </Card>

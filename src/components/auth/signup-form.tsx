@@ -21,14 +21,14 @@ import { Loader2 } from "lucide-react";
 
 const formSchema = z
   .object({
-    email: z.string().email({ message: "Please enter a valid email." }),
+    email: z.string().email({ message: "Por favor, introduce un correo electrónico válido." }),
     password: z
       .string()
-      .min(6, { message: "Password must be at least 6 characters." }),
+      .min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
+    message: "Las contraseñas no coinciden",
     path: ["confirmPassword"],
   });
 
@@ -68,9 +68,9 @@ export function SignupForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Correo Electrónico</FormLabel>
               <FormControl>
-                <Input placeholder="name@example.com" {...field} />
+                <Input placeholder="nombre@ejemplo.com" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -81,7 +81,7 @@ export function SignupForm() {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>Contraseña</FormLabel>
               <FormControl>
                 <Input type="password" placeholder="********" {...field} />
               </FormControl>
@@ -94,7 +94,7 @@ export function SignupForm() {
           name="confirmPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
+              <FormLabel>Confirmar Contraseña</FormLabel>
               <FormControl>
                 <Input type="password" placeholder="********" {...field} />
               </FormControl>
@@ -103,7 +103,7 @@ export function SignupForm() {
           )}
         />
         <Button type="submit" className="w-full" disabled={isSubmitting || isUserLoading}>
-          {isSubmitting || isUserLoading ? <Loader2 className="animate-spin" /> : "Create Account"}
+          {isSubmitting || isUserLoading ? <Loader2 className="animate-spin" /> : "Crear Cuenta"}
         </Button>
       </form>
     </Form>

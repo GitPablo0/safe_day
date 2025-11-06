@@ -9,22 +9,22 @@ interface LedStatusProps {
 
 const statusConfig = {
   1: {
-    label: "Calm",
+    label: "Calma",
     color: "bg-green-500",
     textColor: "text-green-500",
-    description: "Environment is stable."
+    description: "El ambiente está estable."
   },
   2: {
-    label: "Elevated",
+    label: "Elevado",
     color: "bg-orange-400",
     textColor: "text-orange-400",
-    description: "Moderate environmental stimuli detected."
+    description: "Se detectaron estímulos ambientales moderados."
   },
   3: {
-    label: "High Stress",
+    label: "Estrés Alto",
     color: "bg-red-500",
     textColor: "text-red-500",
-    description: "High environmental stimuli detected."
+    description: "Se detectaron estímulos ambientales altos."
   },
 };
 
@@ -34,7 +34,7 @@ export default function LedStatus({ level }: LedStatusProps) {
   return (
     <Card className="flex flex-col h-full">
       <CardHeader>
-        <CardTitle>System Status</CardTitle>
+        <CardTitle>Estado del Sistema</CardTitle>
         <p className="text-sm text-muted-foreground">{currentStatus.description}</p>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col items-center justify-center gap-4">

@@ -17,7 +17,7 @@ export default function SensorCard({ icon, title, value, unit }: SensorCardProps
       </CardHeader>
       <CardContent>
         <div className="text-4xl font-bold">
-          {value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+          {value.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
         </div>
         <p className="text-xs text-muted-foreground">{unit}</p>
       </CardContent>

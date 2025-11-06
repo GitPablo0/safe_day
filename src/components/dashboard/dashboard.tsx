@@ -60,23 +60,23 @@ function UserInfoCard({ uid }: { uid: string }) {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(uid);
     toast({
-      title: "Device UID Copied!",
-      description: "You can now paste it in your device code.",
+      title: "¡UID de Dispositivo Copiado!",
+      description: "Ahora puedes pegarlo en el código de tu dispositivo.",
     });
   };
 
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Device Sync</CardTitle>
+        <CardTitle>Sincronización de Dispositivo</CardTitle>
         <CardDescription>
-          Your unique User ID to sync with your hardware device.
+          Tu ID de Usuario único para sincronizar con tu dispositivo de hardware.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col justify-center gap-4">
         <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="user-uid" className="text-sm font-medium">Your User UID</Label>
+            <Label htmlFor="user-uid" className="text-sm font-medium">Tu UID de Usuario</Label>
         </div>
         <div className="flex gap-2">
             <Input id="user-uid" readOnly value={uid} className="flex-1" />
@@ -137,20 +137,20 @@ export default function Dashboard() {
   
   const handleSaveConfiguration = () => {
     toast({
-      title: "Demonstration Mode",
-      description: "Saving is disabled while live data is paused.",
+      title: "Modo de Demostración",
+      description: "El guardado está deshabilitado mientras los datos en vivo están pausados.",
     });
   };
 
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
      toast({
-        title: "Demonstration Mode",
-        description: `Sample data generation is disabled. Showing static data.`,
+        title: "Modo de Demostración",
+        description: `La generación de datos de muestra está deshabilitada. Mostrando datos estáticos.`,
     });
   };
 
   if (isUserLoading || !userId) {
-    return <div className="flex items-center justify-center min-h-screen">Loading User Data...</div>
+    return <div className="flex items-center justify-center min-h-screen">Cargando Datos de Usuario...</div>
   }
 
   return (
@@ -168,34 +168,34 @@ export default function Dashboard() {
       <div className="lg:col-span-4 mt-6">
         <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
-          Monitor sensor data and adjust stress level thresholds in real-time.
+          Monitorea datos de sensores y ajusta los umbrales de nivel de estrés en tiempo real.
         </p>
       </div>
       <div className="lg:col-span-4 xl:col-span-3">
         <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
           <SensorCard
             icon={<Thermometer className="h-6 w-6 text-destructive" />}
-            title="Temperature"
+            title="Temperatura"
             value={temperature}
             unit="°C"
           />
           <SensorCard
             icon={<Droplets className="h-6 w-6 text-blue-500" />}
-            title="Humidity"
+            title="Humedad"
             value={humidity}
             unit="%"
           />
           <SensorCard
             icon={<Volume2 className="h-6 w-6 text-amber-500" />}
-            title="Sound Level"
+            title="Nivel de Sonido"
             value={soundLevel}
-            unit="raw"
+            unit="bruto"
           />
           <SensorCard
             icon={<Sun className="h-6 w-6 text-yellow-400" />}
-            title="Light Level"
+            title="Nivel de Luz"
             value={lightLevel}
-            unit="raw"
+            unit="bruto"
           />
         </div>
       </div>

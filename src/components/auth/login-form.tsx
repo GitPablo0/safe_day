@@ -20,8 +20,8 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email." }),
-  password: z.string().min(1, { message: "Password is required." }),
+  email: z.string().email({ message: "Por favor, introduce un correo electrónico válido." }),
+  password: z.string().min(1, { message: "La contraseña es obligatoria." }),
 });
 
 export function LoginForm() {
@@ -59,9 +59,9 @@ export function LoginForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Correo Electrónico</FormLabel>
               <FormControl>
-                <Input placeholder="name@example.com" {...field} />
+                <Input placeholder="nombre@ejemplo.com" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -72,7 +72,7 @@ export function LoginForm() {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>Contraseña</FormLabel>
               <FormControl>
                 <Input type="password" placeholder="********" {...field} />
               </FormControl>
@@ -81,7 +81,7 @@ export function LoginForm() {
           )}
         />
         <Button type="submit" className="w-full" disabled={isSubmitting || isUserLoading}>
-          {isSubmitting || isUserLoading ? <Loader2 className="animate-spin" /> : "Log In"}
+          {isSubmitting || isUserLoading ? <Loader2 className="animate-spin" /> : "Iniciar Sesión"}
         </Button>
       </form>
     </Form>

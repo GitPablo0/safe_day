@@ -25,23 +25,23 @@ export default function SensorSimulator({ onSendSampleData }: SensorSimulatorPro
         const data = generateRandomData();
         onSendSampleData(data);
         toast({
-            title: "Sample Data Sent",
-            description: `Temp: ${data.temperature}°C, Sound: ${data.soundLevel}, Light: ${data.lightLevel}`,
+            title: "Datos de Muestra Enviados",
+            description: `Temp: ${data.temperature}°C, Sonido: ${data.soundLevel}, Luz: ${data.lightLevel}`,
         });
     };
 
     return (
         <Card className="h-full">
             <CardHeader>
-                <CardTitle>Sensor Simulator</CardTitle>
+                <CardTitle>Simulador de Sensor</CardTitle>
                 <CardDescription>
-                    Send random sensor data to test the application without hardware.
+                    Envía datos de sensor aleatorios para probar la aplicación sin hardware.
                 </CardDescription>
             </CardHeader>
             <CardContent className="flex items-center justify-center h-full pb-16">
                 <Button onClick={handleSend}>
                     <Zap className="mr-2 h-4 w-4" />
-                    Send Sample Data
+                    Enviar Datos de Muestra
                 </Button>
             </CardContent>
         </Card>

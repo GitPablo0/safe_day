@@ -1,5 +1,8 @@
-"use client";
+'use client';
 
+import { useState, useEffect } from 'react';
+import { useUser } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -18,47 +21,73 @@ type EventLogicConfig = {
   redBlockDuration: number;
 };
 
-interface ThresholdControlCardProps {
-  soundThresholds: SoundThresholds;
-  setSoundThresholds: (value: SoundThresholds) => void;
-  lightThresholds: LightThresholds;
-  setLightThresholds: (value: LightThresholds) => void;
-  tempThresholds: TempThresholds;
-  setTempThresholds: (value: TempThresholds) => void;
-  soundEventLogic: EventLogicConfig;
-  setSoundEventLogic: (value: EventLogicConfig) => void;
-  lightEventLogic: EventLogicConfig;
-  setLightEventLogic: (value: EventLogicConfig) => void;
-  onSave: () => void;
-}
+// Mock data to ensure the UI is always functional for presentation
+const MOCK_THRESHOLD_CONFIG = {
+    soundThresholdLow: 300,
+    soundThresholdMedium: 380,
+    lightThresholdLow: 400,
+    lightThresholdMedium: 600,
+    temperatureThresholdVerde: 24,
+    temperatureThresholdNaranja: 28,
+    orangeSoundEventCount: 3,
+    redSoundEventCount: 3,
+    timeBetweenEvents: 10000,
+    orangeBlockDuration: 60000,
+    redBlockDuration: 60000,
+    orangeLightEventCount: 3,
+    redLightEventCount: 3,
+    timeBetweenLightEvents: 10000,
+    orangeLightBlockDuration: 60000,
+    redLightBlockDuration: 60000,
+};
 
-export default function ThresholdControlCard({
-  soundThresholds,
-  setSoundThresholds,
-  lightThresholds,
-  setLightThresholds,
-  tempThresholds,
-  setTempThresholds,
-  soundEventLogic,
-  setSoundEventLogic,
-  lightEventLogic,
-  setLightEventLogic,
-  onSave,
-}: ThresholdControlCardProps) {
+export default function ThresholdForm() {
+  const { user } = useUser();
+  const { toast } = useToast();
+  
+  const userId = user?.uid;
+  
+  // Use mock data for presentation
+  const activeThresholdConfig = MOCK_THRESHOLD_CONFIG;
 
-  const handleSave = () => {
-    onSave();
+  const [soundThresholds, setSoundThresholds] = useState<SoundThresholds>({ low: 300, medium: 380 });
+  const [lightThresholds, setLightThresholds] = useState<LightThresholds>({ low: 400, medium: 600 });
+  const [tempThresholds, setTempThresholds] = useState<TempThresholds>({ green: 24, orange: 28 });
+  const [soundEventLogic, setSoundEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
+  const [lightEventLogic, setLightEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
+
+  useEffect(() => {
+    if (activeThresholdConfig) {
+      setSoundThresholds({ low: activeThresholdConfig.soundThresholdLow, medium: activeThresholdConfig.soundThresholdMedium });
+      setLightThresholds({ low: activeThresholdConfig.lightThresholdLow, medium: activeThresholdConfig.lightThresholdMedium });
+      setTempThresholds({ green: activeThresholdConfig.temperatureThresholdVerde, orange: activeThresholdConfig.temperatureThresholdNaranja });
+      setSoundEventLogic({
+        orangeEventCount: activeThresholdConfig.orangeSoundEventCount,
+        redEventCount: activeThresholdConfig.redSoundEventCount,
+        timeBetweenEvents: activeThresholdConfig.timeBetweenEvents,
+        orangeBlockDuration: activeThresholdConfig.orangeBlockDuration,
+        redBlockDuration: activeThresholdConfig.redBlockDuration,
+      });
+      setLightEventLogic({
+        orangeEventCount: activeThresholdConfig.orangeLightEventCount,
+        redEventCount: activeThresholdConfig.redLightEventCount,
+        timeBetweenEvents: activeThresholdConfig.timeBetweenLightEvents,
+        orangeBlockDuration: activeThresholdConfig.orangeLightBlockDuration,
+        redBlockDuration: activeThresholdConfig.redLightBlockDuration,
+      });
+    }
+  }, [activeThresholdConfig]);
+  
+  const handleSaveConfiguration = () => {
+    toast({
+      title: "Modo de Demostración",
+      description: "El guardado está deshabilitado mientras los datos en vivo están pausados.",
+    });
   };
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Configuración de Umbrales</CardTitle>
-        <CardDescription>
-          Ajusta los umbrales de los sensores y la lógica de eventos para cambiar la sensibilidad de la detección de estrés.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <CardContent className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 pt-6">
         {/* Sound Levels */}
         <div className="space-y-6">
           <h3 className="font-semibold text-lg">Niveles de Sonido</h3>
@@ -72,7 +101,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[soundThresholds.low]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, low: value[0] })}
-                className="[&>span>span]:bg-amber-500 [&>span]:bg-amber-500/30"
+                color="primary"
               />
               <Input
                 type="number"
@@ -92,7 +121,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[soundThresholds.medium]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, medium: value[0] })}
-                className="[&>span>span]:bg-amber-500 [&>span]:bg-amber-500/30"
+                color="primary"
               />
               <Input
                 type="number"
@@ -117,7 +146,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[lightThresholds.low]}
                 onValueChange={(value) => setLightThresholds({ ...lightThresholds, low: value[0] })}
-                className="[&>span>span]:bg-yellow-400 [&>span]:bg-yellow-400/30"
+                color="yellow"
               />
               <Input
                 type="number"
@@ -137,7 +166,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[lightThresholds.medium]}
                 onValueChange={(value) => setLightThresholds({ ...lightThresholds, medium: value[0] })}
-                className="[&>span>span]:bg-yellow-400 [&>span]:bg-yellow-400/30"
+                color="yellow"
               />
               <Input
                 type="number"
@@ -162,7 +191,7 @@ export default function ThresholdControlCard({
                 step={0.5}
                 value={[tempThresholds.green]}
                 onValueChange={(value) => setTempThresholds({ ...tempThresholds, green: value[0] })}
-                className="[&>span>span]:bg-destructive [&>span]:bg-destructive/30"
+                color="destructive"
               />
               <Input
                 type="number"
@@ -182,7 +211,7 @@ export default function ThresholdControlCard({
                 step={0.5}
                 value={[tempThresholds.orange]}
                 onValueChange={(value) => setTempThresholds({ ...tempThresholds, orange: value[0] })}
-                className="[&>span>span]:bg-destructive [&>span]:bg-destructive/30"
+                color="destructive"
               />
               <Input
                 type="number"
@@ -254,7 +283,7 @@ export default function ThresholdControlCard({
 
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={handleSave}>
+        <Button onClick={handleSaveConfiguration}>
           <Save className="mr-2 h-4 w-4" />
           Guardar Configuración
         </Button>

@@ -38,9 +38,13 @@ long timeBetweenEventsMillis = 10000;
 long orangeBlockDurationMillis = 60000;
 long redBlockDurationMillis = 60000;
 
-// Luz (LÓGICA INVERTIDA: MENOR VALOR = MÁS LUZ)
-float lightThresholdLow = 400; // Se activa cuando la luz CAE POR DEBAJO de este valor
-float lightThresholdMedium = 200; // Se activa cuando la luz CAE POR DEBAJO de este valor aún más bajo
+// Luz (LÓGICA INVERTIDA: MENOR VALOR NUMÉRICO = MÁS LUZ)
+// El estado se activa cuando el valor del sensor CAE POR DEBAJO del umbral.
+// Por ejemplo: si en oscuridad es 3500 y con luz es 600, los umbrales podrían ser:
+// lightThresholdLow = 3000 (se activa con un poco de luz)
+// lightThresholdMedium = 1000 (se activa con mucha luz)
+float lightThresholdLow = 3000;      // Umbral para estado Naranja.
+float lightThresholdMedium = 1000;   // Umbral para estado Rojo.
 int orangeLightEventCountThreshold = 3;
 int redLightEventCountThreshold = 3;
 long timeBetweenLightEventsMillis = 10000;
@@ -180,7 +184,7 @@ void loop() {
             }
         }
         
-        // --- Lógica de Eventos de Luz (INVERTIDA) ---
+        // --- Lógica de Eventos de Luz (INVERTIDA: MENOS VALOR = MÁS LUZ) ---
         bool orangeLightStateActive = orangeLightLedBlockedUntil > currentMillis;
         if (lightLevel <= lightThresholdLow) {
             orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;

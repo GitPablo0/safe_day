@@ -166,7 +166,7 @@ export default function Dashboard() {
       </div>
 
       <div className="lg:col-span-4 mt-6">
-        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Panel de Control</h1>
         <p className="text-muted-foreground mt-1">
           Monitorea datos de sensores y ajusta los umbrales de nivel de estrés en tiempo real.
         </p>

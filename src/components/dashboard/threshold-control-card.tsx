@@ -68,11 +68,11 @@ export default function ThresholdControlCard({
               <Slider
                 id="sound-low"
                 min={0}
-                max={4095}
+                max={1023}
                 step={10}
                 value={[soundThresholds.low]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, low: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-amber-500 [&>span]:bg-amber-500/30"
               />
               <Input
                 type="number"
@@ -88,11 +88,11 @@ export default function ThresholdControlCard({
               <Slider
                 id="sound-medium"
                 min={0}
-                max={4095}
+                max={1023}
                 step={10}
                 value={[soundThresholds.medium]}
                 onValueChange={(value) => setSoundThresholds({ ...soundThresholds, medium: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-amber-500 [&>span]:bg-amber-500/30"
               />
               <Input
                 type="number"
@@ -117,7 +117,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[lightThresholds.low]}
                 onValueChange={(value) => setLightThresholds({ ...lightThresholds, low: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-yellow-400 [&>span]:bg-yellow-400/30"
               />
               <Input
                 type="number"
@@ -137,7 +137,7 @@ export default function ThresholdControlCard({
                 step={10}
                 value={[lightThresholds.medium]}
                 onValueChange={(value) => setLightThresholds({ ...lightThresholds, medium: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-yellow-400 [&>span]:bg-yellow-400/30"
               />
               <Input
                 type="number"
@@ -162,7 +162,7 @@ export default function ThresholdControlCard({
                 step={0.5}
                 value={[tempThresholds.green]}
                 onValueChange={(value) => setTempThresholds({ ...tempThresholds, green: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-destructive [&>span]:bg-destructive/30"
               />
               <Input
                 type="number"
@@ -182,7 +182,7 @@ export default function ThresholdControlCard({
                 step={0.5}
                 value={[tempThresholds.orange]}
                 onValueChange={(value) => setTempThresholds({ ...tempThresholds, orange: value[0] })}
-                className="flex-1"
+                className="[&>span>span]:bg-destructive [&>span]:bg-destructive/30"
               />
               <Input
                 type="number"

@@ -11,7 +11,7 @@
  */
 #include <Arduino.h>
 #include "DHT.h"
-#include "SoftwareSerial.h"
+#include <HardwareSerial.h>
 #include "DFRobotDFPlayerMini.h"
 
 // ===============================================
@@ -31,10 +31,10 @@ const int LED_ROJO_PIN = 25;
 // ===============================================
 // 2. CONFIGURACIÓN DFPLAYER MINI
 // ===============================================
-const int DFPLAYER_RX_PIN = 26;
-const int DFPLAYER_TX_PIN = 27;
+const int DFPLAYER_RX_PIN = 26; // Conectar al TX del DFPlayer
+const int DFPLAYER_TX_PIN = 27; // Conectar al RX del DFPlayer
 
-SoftwareSerial mySoftwareSerial(DFPLAYER_RX_PIN, DFPLAYER_TX_PIN); // RX, TX
+HardwareSerial mySoftwareSerial(1); // Usar UART1 del ESP32
 DFRobotDFPlayerMini myDFPlayer;
 bool isPlaying = false;
 
@@ -100,7 +100,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Inicializando NeuroSense en modo autónomo...");
 
-    mySoftwareSerial.begin(9600);
+    mySoftwareSerial.begin(9600, SERIAL_8N1, DFPLAYER_TX_PIN, DFPLAYER_RX_PIN);
 
     dht.begin();
     delay(2000);
@@ -327,3 +327,5 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    

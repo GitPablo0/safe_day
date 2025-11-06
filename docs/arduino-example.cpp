@@ -11,8 +11,8 @@
  */
 #include <Arduino.h>
 #include "DHT.h"
-// #include <HardwareSerial.h>
-// #include "DFRobotDFPlayerMini.h"
+// #include <HardwareSerial.h> // Deshabilitado porque SoftwareSerial da error en ESP32
+// #include "DFRobotDFPlayerMini.h" // Deshabilitado por falta de SD
 
 // ===============================================
 // 1. PINES Y SENSORES
@@ -76,10 +76,10 @@ const long sendDataInterval = 2000; // Intervalo de lectura aumentado a 2 segund
 
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
-long orangeEventTimestamps[MAX_SOUND_EVENTS];
-int orangeEventIndex = 0;
-long redEventTimestamps[MAX_SOUND_EVENTS];
-int redEventIndex = 0;
+long orangeSoundEventTimestamps[MAX_SOUND_EVENTS];
+int orangeSoundEventIndex = 0;
+long redSoundEventTimestamps[MAX_SOUND_EVENTS];
+int redSoundEventIndex = 0;
 
 // Variables para eventos de luz
 const int MAX_LIGHT_EVENTS = 10;
@@ -114,8 +114,8 @@ void setup() {
 
     // Inicializar arrays de timestamps a cero
     for (int i = 0; i < MAX_SOUND_EVENTS; i++) {
-        orangeEventTimestamps[i] = 0;
-        redEventTimestamps[i] = 0;
+        orangeSoundEventTimestamps[i] = 0;
+        redSoundEventTimestamps[i] = 0;
     }
     for (int i = 0; i < MAX_LIGHT_EVENTS; i++) {
         orangeLightEventTimestamps[i] = 0;
@@ -221,22 +221,22 @@ void loop() {
         // --- Lógica de Eventos de Sonido ---
         bool orangeSoundStateActive = orangeLedBlockedUntil > currentMillis;
         if (soundLevel >= soundThresholdLow) {
-            orangeEventTimestamps[orangeEventIndex] = currentMillis;
-            orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
-            if (!orangeSoundStateActive && countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
+            orangeSoundEventTimestamps[orangeSoundEventIndex] = currentMillis;
+            orangeSoundEventIndex = (orangeSoundEventIndex + 1) % MAX_SOUND_EVENTS;
+            if (!orangeSoundStateActive && countRecentEvents(orangeSoundEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
                 orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
             }
         }
         
         bool redSoundStateActive = redLedBlockedUntil > currentMillis;
         if (soundLevel >= soundThresholdMedium) { // Lógica de bloqueo rojo independiente
-            redEventTimestamps[redEventIndex] = currentMillis;
-            redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
-            if (!redSoundStateActive && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
+            redSoundEventTimestamps[redSoundEventIndex] = currentMillis;
+            redSoundEventIndex = (redSoundEventIndex + 1) % MAX_SOUND_EVENTS;
+            if (!redSoundStateActive && countRecentEvents(redSoundEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
                 // Opcional: Reiniciar eventos naranjas para dar prioridad al rojo
-                for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; } 
-                orangeEventIndex = 0;
+                for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; } 
+                orangeSoundEventIndex = 0;
             }
         }
         
@@ -254,7 +254,7 @@ void loop() {
         if (lightLevel <= lightThresholdMedium) { // Lógica de bloqueo rojo independiente para la luz
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
-            if (!redLightStateActive && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
+            if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
                 redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
                 // Opcional: Reiniciar eventos naranjas de luz para dar prioridad al rojo
                 for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }

@@ -44,17 +44,13 @@ export default function Header() {
               <span className="sr-only">Abrir menú</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[300px] flex flex-col p-0">
+          <SheetContent side="right" className="w-[300px] flex flex-col">
             <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="p-4 border-b border-border">
                 <div className="flex items-center gap-3">
                     <Shield className="h-8 w-8 text-primary" />
                     <span className="text-xl font-bold">SafePlace</span>
                 </div>
-                <Button variant="ghost" size="icon" onClick={closeSheet} className="text-destructive hover:bg-destructive/10">
-                    <X className="h-6 w-6" />
-                    <span className="sr-only">Cerrar menú</span>
-                </Button>
             </div>
             
             <nav className="flex-grow p-4 space-y-2">

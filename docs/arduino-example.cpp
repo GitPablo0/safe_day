@@ -153,6 +153,30 @@ int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
     return count;
 }
 
+void printStateReason(int finalStatus, int temp, int soundI, int lightI, int soundB, int lightB) {
+    if (finalStatus == 1) {
+        Serial.println(" -> Causa: Calma");
+        return;
+    }
+    
+    String reason = " -> Causa: ";
+    if (finalStatus == lightB) {
+        reason += (finalStatus == 3 ? "Bloqueo Rojo por Luz" : "Bloqueo Naranja por Luz");
+    } else if (finalStatus == soundB) {
+        reason += (finalStatus == 3 ? "Bloqueo Rojo por Sonido" : "Bloqueo Naranja por Sonido");
+    } else if (finalStatus == lightI) {
+        reason += "Luz Instantánea";
+    } else if (finalStatus == soundI) {
+        reason += "Sonido Instantáneo";
+    } else if (finalStatus == temp) {
+        reason += "Temperatura";
+    } else {
+        reason += "Desconocida";
+    }
+    Serial.println(reason);
+}
+
+
 void loop() {
     unsigned long currentMillis = millis();
 
@@ -246,6 +270,8 @@ void loop() {
         Serial.print(", Luz: ");
         Serial.print(lightLevel);
         Serial.print(" -> Estado LED: ");
-        Serial.println(currentLedStatus);
+        Serial.print(currentLedStatus);
+
+        printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
     }
 }

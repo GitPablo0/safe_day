@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, Menu, X, LayoutDashboard, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { cn } from '@/lib/utils';
@@ -45,6 +45,7 @@ export default function Header() {
             </Button>
           </SheetTrigger>
           <SheetContent side="right" className="w-[300px] flex flex-col p-0">
+            <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
             <div className="flex items-center justify-between p-4 border-b border-border">
                 <div className="flex items-center gap-3">
                     <Shield className="h-8 w-8 text-primary" />

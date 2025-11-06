@@ -38,9 +38,9 @@ long timeBetweenEventsMillis = 10000;
 long orangeBlockDurationMillis = 60000;
 long redBlockDurationMillis = 60000;
 
-// Luz
-float lightThresholdLow = 400;
-float lightThresholdMedium = 600;
+// Luz (LÓGICA INVERTIDA: MENOR VALOR = MÁS LUZ)
+float lightThresholdLow = 400; // Se activa cuando la luz CAE POR DEBAJO de este valor
+float lightThresholdMedium = 200; // Se activa cuando la luz CAE POR DEBAJO de este valor aún más bajo
 int orangeLightEventCountThreshold = 3;
 int redLightEventCountThreshold = 3;
 long timeBetweenLightEventsMillis = 10000;
@@ -180,9 +180,9 @@ void loop() {
             }
         }
         
-        // --- Lógica de Eventos de Luz ---
+        // --- Lógica de Eventos de Luz (INVERTIDA) ---
         bool orangeLightStateActive = orangeLightLedBlockedUntil > currentMillis;
-        if (lightLevel >= lightThresholdLow) {
+        if (lightLevel <= lightThresholdLow) {
             orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
             orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!orangeLightStateActive && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
@@ -191,7 +191,7 @@ void loop() {
         }
 
         bool redLightStateActive = redLightLedBlockedUntil > currentMillis;
-        if (orangeLightStateActive && lightLevel >= lightThresholdMedium) {
+        if (orangeLightStateActive && lightLevel <= lightThresholdMedium) {
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
@@ -215,8 +215,8 @@ void loop() {
         if (soundLevel >= soundThresholdMedium) estadoSonidoInstantaneo = 3;
 
         int estadoLuzInstantaneo = 1;
-        if (lightLevel >= lightThresholdLow) estadoLuzInstantaneo = 2;
-        if (lightLevel >= lightThresholdMedium) estadoLuzInstantaneo = 3;
+        if (lightLevel <= lightThresholdLow) estadoLuzInstantaneo = 2;
+        if (lightLevel <= lightThresholdMedium) estadoLuzInstantaneo = 3;
 
         int estadoTemp = 1;
         if (temperature >= tempThresholdVerde) estadoTemp = 2;

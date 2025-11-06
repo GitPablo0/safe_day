@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
-import SidebarNav from './sidebar-nav';
+import Header from './header';
 
 export default function MainLayout({
   children,
@@ -28,12 +28,10 @@ export default function MainLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <SidebarNav />
-      <main className="flex-1 p-8 overflow-auto">
-        <div className="max-w-6xl mx-auto">
-            {children}
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-1">
+        {children}
       </main>
     </div>
   );

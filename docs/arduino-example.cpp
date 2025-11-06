@@ -139,7 +139,13 @@ int readSoundLevel() {
 }
 
 int readLightLevel() {
-    return analogRead(LIGHT_SENSOR_PIN);
+    long total = 0;
+    int samples = 10;
+    for (int i = 0; i < samples; i++) {
+        total += analogRead(LIGHT_SENSOR_PIN);
+        delay(5); // Pequeña pausa entre lecturas
+    }
+    return total / samples;
 }
 
 int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
@@ -277,3 +283,4 @@ void loop() {
         printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
     }
 }
+

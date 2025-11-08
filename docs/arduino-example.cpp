@@ -197,6 +197,16 @@ void tokenStatusCallback(TokenInfo info) {
   }
 }
 
+void setupFirebase() {
+    config.api_key = API_KEY;
+    auth.user.uid = USER_UID;
+    config.signer.test_mode = true;
+    config.token_status_callback = tokenStatusCallback;
+    
+    Firebase.begin(&config, &auth);
+    Firebase.reconnectWiFi(true);
+}
+
 String buildSensorDataJson(float temp, float hum, int sound, int light, int status) {
     FirebaseJson json;
     json.set("fields/temperature/doubleValue", String(temp, 2));
@@ -250,19 +260,7 @@ void setup() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.print("Conectado! IP: ");
         Serial.println(WiFi.localIP());
-
-        configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-        
-        config.api_key = API_KEY;
-        config.signer.test_mode = true; // Importante para auth con UID
-        config.token_status_callback = tokenStatusCallback;
-
-        Firebase.begin(&config, &auth);
-        Firebase.reconnectWiFi(true);
-
-        // Asignar UID para autenticación personalizada
-        auth.token.uid = USER_UID;
-        
+        setupFirebase();
     } else {
         Serial.println("No se pudo conectar a WiFi. Funcionando en modo offline.");
     }
@@ -390,3 +388,6 @@ void loop() {
       // Puedes añadir aquí prints de depuración del DFPlayer si es necesario
     }
 }
+
+
+    

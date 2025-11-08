@@ -169,17 +169,15 @@ void streamTimeoutCallback(bool timeout) {
 
 void setupFirebase() {
     config.api_key = API_KEY;
-    config.database_url = String("https://") + FIREBASE_PROJECT_ID + "-default-rtdb.firebaseio.com";
+    config.database_url = "studio-4253330981-dcdc9-default-rtdb.firebaseio.com";
     auth.user.email = ""; // Usamos Custom Token, no es necesario email/pass
     auth.user.password = "";
     
-    // IMPORTANTE: Soluciona el error "missing required credentials"
     config.signer.test_mode = true;
 
     Firebase.begin(&config, &auth);
     Firebase.reconnectWiFi(true);
     
-    // Esperar a que Firebase se conecte
     Serial.print("Conectando a Firebase...");
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
@@ -190,22 +188,22 @@ void setupFirebase() {
 
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("Conectado a WiFi.");
-        // Construir las rutas de Firebase
         thresholdConfigPath = "users/" + String(USER_UID) + "/thresholdConfigurations/main";
         sensorDataPath = "users/" + String(USER_UID) + "/sensorData/latest";
 
-        // Obtener la configuración de umbrales una vez al inicio
         if (Firebase.RTDB.getJSON(&fbdo, thresholdConfigPath)) {
             if(fbdo.dataType() == "json"){
                 FirebaseJson* json = fbdo.to<FirebaseJson*>();
                 processConfigJson(json);
+            } else {
+                Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
+                Serial.println(fbdo.errorReason());
             }
         } else {
             Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
             Serial.println(fbdo.errorReason());
         }
         
-        // Iniciar el stream para escuchar cambios en la configuración
         if (!Firebase.RTDB.beginStream(&stream, thresholdConfigPath)) {
             Serial.println("No se pudo iniciar el stream de configuración.");
             Serial.println(stream.errorReason());
@@ -332,7 +330,6 @@ void setup() {
     } else {
        Serial.println("DFPlayer Mini iniciado.");
        myDFPlayer.volume(15);
-       myDFPlayer.play(3); // Prueba de sonido inicial
     }
 
     Serial.println("Configuración finalizada. El dispositivo está listo.");
@@ -366,7 +363,7 @@ void loop() {
             if (redLedBlockedUntil <= currentMillis && countRecentEvents(redSoundEventTimestamps, timeBetweenEventsMillis, MAX_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
                 for(int i=0; i<MAX_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; } 
-                orangeSoundEventIndex = 0;
+                orangeEventIndex = 0;
             }
         }
         

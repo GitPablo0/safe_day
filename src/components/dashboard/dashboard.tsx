@@ -10,14 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// Mock data to ensure the UI is always functional for presentation
+// TODO: Replace with live data from Firebase
 const MOCK_SENSOR_DATA = {
-    temperature: 22.5,
-    humidity: 45.1,
-    soundLevel: 120,
-    lightLevel: 350,
+    temperature: 0,
+    humidity: 0,
+    soundLevel: 0,
+    lightLevel: 0,
     ledStatus: 1 as 1 | 2 | 3,
 };
 
@@ -62,10 +61,9 @@ export default function Dashboard() {
   
   const userId = user?.uid;
 
-  // Use mock data for presentation
+  // TODO: Replace with live data from Firebase
   const sensorData = MOCK_SENSOR_DATA;
 
-  // Sensor data state with mock values as fallback
   const temperature = sensorData?.temperature ?? 0;
   const humidity = sensorData?.humidity ?? 0;
   const soundLevel = sensorData?.soundLevel ?? 0;
@@ -75,8 +73,9 @@ export default function Dashboard() {
   
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
      toast({
-        title: "Modo de Demostración",
-        description: `La generación de datos de muestra está deshabilitada. Mostrando datos estáticos.`,
+        title: "Funcionalidad no implementada",
+        variant: "destructive",
+        description: `La escritura de datos de ejemplo a Firebase aún no está conectada.`,
     });
   };
 
@@ -86,14 +85,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertTitle>Modo de Demostración</AlertTitle>
-        <AlertDescription>
-          Conexión de datos en tiempo real pausada para la demostración. La interfaz es completamente funcional.
-        </AlertDescription>
-      </Alert>
-
       <div className="grid gap-6 md:gap-8 grid-cols-1 lg:grid-cols-4">
         <div className="lg:col-span-4 xl:col-span-3">
           <div className="grid gap-6 md:gap-8 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">

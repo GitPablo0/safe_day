@@ -11,8 +11,8 @@
  */
 #include <Arduino.h>
 #include "DHT.h"
-// #include <HardwareSerial.h> // Deshabilitado porque SoftwareSerial da error en ESP32
-// #include "DFRobotDFPlayerMini.h" // Deshabilitado por falta de SD
+#include <HardwareSerial.h>
+#include "DFRobotDFPlayerMini.h"
 
 // ===============================================
 // 1. PINES Y SENSORES
@@ -29,14 +29,14 @@ const int LED_NARANJA_PIN = 33;
 const int LED_ROJO_PIN = 25;
 
 // ===============================================
-// 2. CONFIGURACIÓN DFPLAYER MINI (Deshabilitado)
+// 2. CONFIGURACIÓN DFPLAYER MINI
 // ===============================================
-// const int DFPLAYER_RX_PIN = 26; // Conectar al TX del DFPlayer
-// const int DFPLAYER_TX_PIN = 27; // Conectar al RX del DFPlayer
+const int DFPLAYER_RX_PIN = 26; // Conectar al TX del DFPlayer
+const int DFPLAYER_TX_PIN = 27; // Conectar al RX del DFPlayer
 
-// HardwareSerial mySoftwareSerial(1); // Usar UART1 del ESP32
-// DFRobotDFPlayerMini myDFPlayer;
-// bool isPlaying = false;
+HardwareSerial mySoftwareSerial(1); // Usar UART1 del ESP32
+DFRobotDFPlayerMini myDFPlayer;
+bool isPlaying = false;
 
 
 // ===============================================
@@ -52,10 +52,6 @@ long orangeBlockDurationMillis = 60000;
 long redBlockDurationMillis = 60000;
 
 // Luz (LÓGICA INVERTIDA: MENOR VALOR NUMÉRICO = MÁS LUZ)
-// El estado se activa cuando el valor del sensor CAE POR DEBAJO del umbral.
-// Por ejemplo: si en oscuridad es 3500 y con luz es 600, los umbrales podrían ser:
-// lightThresholdLow = 3000 (se activa con un poco de luz)
-// lightThresholdMedium = 1000 (se activa con mucha luz)
 float lightThresholdLow = 3000;      // Umbral para estado Naranja.
 float lightThresholdMedium = 1000;   // Umbral para estado Rojo.
 int orangeLightEventCountThreshold = 3;
@@ -68,11 +64,14 @@ long redLightBlockDurationMillis = 60000;
 float tempThresholdVerde = 24;
 float tempThresholdNaranja = 28;
 
+// Música
+const unsigned long musicPlayDuration = 180000; // 3 minutos
+
 // ===============================================
 // 4. VARIABLES DE ESTADO
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 2000; // Intervalo de lectura aumentado a 2 segundos para no saturar el monitor
+const long sendDataInterval = 2000; // Intervalo de lectura aumentado a 2 segundos
 
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
@@ -96,11 +95,14 @@ unsigned long redLightLedBlockedUntil = 0;
 
 int currentLedStatus = 1;
 
+// Variables para DFPlayer
+unsigned long musicStopTime = 0;
+
 void setup() {
     Serial.begin(115200);
     Serial.println("Inicializando NeuroSense en modo autónomo...");
 
-    // mySoftwareSerial.begin(9600, SERIAL_8N1, DFPLAYER_TX_PIN, DFPLAYER_RX_PIN);
+    mySoftwareSerial.begin(9600, SERIAL_8N1, DFPLAYER_TX_PIN, DFPLAYER_RX_PIN);
 
     dht.begin();
     delay(2000);
@@ -122,14 +124,15 @@ void setup() {
         redLightEventTimestamps[i] = 0;
     }
 
-    // Serial.println("Inicializando DFPlayer... (Funcionalidad deshabilitada, no se requiere SD)");
-    // if (!myDFPlayer.begin(mySoftwareSerial)) {
-    //     Serial.println("No se pudo iniciar el DFPlayer (ignorado).");
-    // } else {
-    //    Serial.println("DFPlayer Mini iniciado.");
-    //    myDFPlayer.volume(15); // Ajusta el volumen (0-30)
-    //    myDFPlayer.play(3); // Reproduce un sonido de notificación al inicio
-    // }
+    Serial.println("Inicializando DFPlayer...");
+    if (!myDFPlayer.begin(mySoftwareSerial)) {
+        Serial.println("No se pudo iniciar el DFPlayer. Verifica las conexiones y la tarjeta SD.");
+        while(true); // Detener si el DFPlayer no funciona
+    } else {
+       Serial.println("DFPlayer Mini iniciado.");
+       myDFPlayer.volume(15); // Ajusta el volumen (0-30)
+       myDFPlayer.play(3); // Reproduce un sonido de notificación al inicio
+    }
 
 
     Serial.println("Configuración manual cargada. El dispositivo está listo.");
@@ -295,16 +298,30 @@ void loop() {
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
         
-        // --- Lógica de DFPlayer (Deshabilitada) ---
-        // if (currentLedStatus >= 2 && !isPlaying) {
-        //     myDFPlayer.loop(1); // Reproduce la primera pista en bucle
-        //     isPlaying = true;
-        //     Serial.println("-> DFPlayer: Iniciando reproducción.");
-        // } else if (currentLedStatus == 1 && isPlaying) {
-        //     myDFPlayer.stop(); // Detiene la reproducción
-        //     isPlaying = false;
-        //     Serial.println("-> DFPlayer: Deteniendo reproducción.");
-        // }
+        // --- Lógica de DFPlayer con Temporizador ---
+        if (currentLedStatus >= 2) {
+            // Si el ambiente está estresado
+            if (!isPlaying) {
+                // Y la música no está sonando, iniciarla
+                myDFPlayer.loop(1);
+                isPlaying = true;
+                musicStopTime = currentMillis + musicPlayDuration;
+                Serial.println("-> DFPlayer: Iniciando reproducción por 3 minutos.");
+            } else if (currentMillis >= musicStopTime - sendDataInterval) {
+                // Si la música ya está sonando y nos acercamos al final del tiempo, renovar.
+                musicStopTime = currentMillis + musicPlayDuration;
+                Serial.println("-> DFPlayer: Ambiente aún estresante. Renovando música por 3 minutos más.");
+            }
+        } else {
+            // Si el ambiente está en calma
+            if (isPlaying) {
+                // Y la música está sonando, detenerla.
+                myDFPlayer.stop();
+                isPlaying = false;
+                musicStopTime = 0; // Reiniciar el temporizador
+                Serial.println("-> DFPlayer: Ambiente en calma. Deteniendo reproducción.");
+            }
+        }
 
         // --- Salida al Monitor Serie ---
         Serial.print("Temp: ");
@@ -319,11 +336,9 @@ void loop() {
         printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
     }
     
-    // --- Lógica de DFPlayer (Deshabilitada) ---
-    // if (myDFPlayer.available()) {
+    // --- Mantenimiento DFPlayer ---
+    if (myDFPlayer.available()) {
       // Imprime mensajes del DFPlayer si los hay (útil para depuración)
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
-    // }
+    }
 }
-
-    

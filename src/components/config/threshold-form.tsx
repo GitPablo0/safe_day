@@ -21,8 +21,8 @@ type EventLogicConfig = {
   redBlockDuration: number;
 };
 
-// Mock data to ensure the UI is always functional for presentation
-const MOCK_THRESHOLD_CONFIG = {
+// TODO: Replace with live data from Firebase
+const INITIAL_THRESHOLD_CONFIG = {
     soundThresholdLow: 300,
     soundThresholdMedium: 380,
     lightThresholdLow: 400,
@@ -47,8 +47,8 @@ export default function ThresholdForm() {
   
   const userId = user?.uid;
   
-  // Use mock data for presentation
-  const activeThresholdConfig = MOCK_THRESHOLD_CONFIG;
+  // TODO: Replace with live data from Firebase
+  const activeThresholdConfig = INITIAL_THRESHOLD_CONFIG;
 
   const [soundThresholds, setSoundThresholds] = useState<SoundThresholds>({ low: 300, medium: 380 });
   const [lightThresholds, setLightThresholds] = useState<LightThresholds>({ low: 400, medium: 600 });
@@ -80,8 +80,9 @@ export default function ThresholdForm() {
   
   const handleSaveConfiguration = () => {
     toast({
-      title: "Modo de Demostración",
-      description: "El guardado está deshabilitado mientras los datos en vivo están pausados.",
+      title: "Funcionalidad no implementada",
+      variant: "destructive",
+      description: "El guardado de la configuración en Firebase aún no está conectado.",
     });
   };
 

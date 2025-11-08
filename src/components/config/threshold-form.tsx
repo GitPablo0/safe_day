@@ -1,32 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
+import { doc } from 'firebase/firestore';
 
-type SoundThresholds = { low: number; medium: number };
-type LightThresholds = { low: number; medium: number };
-type TempThresholds = { green: number; orange: number };
-type EventLogicConfig = {
-  orangeEventCount: number;
-  redEventCount: number;
-  timeBetweenEvents: number;
-  orangeBlockDuration: number;
-  redBlockDuration: number;
-};
-
-// TODO: Replace with live data from Firebase
 const INITIAL_THRESHOLD_CONFIG = {
     soundThresholdLow: 300,
     soundThresholdMedium: 380,
-    lightThresholdLow: 400,
-    lightThresholdMedium: 600,
+    lightThresholdLow: 3000,
+    lightThresholdMedium: 1000,
     temperatureThresholdVerde: 24,
     temperatureThresholdNaranja: 28,
     orangeSoundEventCount: 3,
@@ -41,50 +30,77 @@ const INITIAL_THRESHOLD_CONFIG = {
     redLightBlockDuration: 60000,
 };
 
+type ThresholdConfiguration = typeof INITIAL_THRESHOLD_CONFIG;
+
 export default function ThresholdForm() {
   const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
-  
-  const userId = user?.uid;
-  
-  // TODO: Replace with live data from Firebase
-  const activeThresholdConfig = INITIAL_THRESHOLD_CONFIG;
+  const [isSaving, setIsSaving] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  const [soundThresholds, setSoundThresholds] = useState<SoundThresholds>({ low: 300, medium: 380 });
-  const [lightThresholds, setLightThresholds] = useState<LightThresholds>({ low: 400, medium: 600 });
-  const [tempThresholds, setTempThresholds] = useState<TempThresholds>({ green: 24, orange: 28 });
-  const [soundEventLogic, setSoundEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
-  const [lightEventLogic, setLightEventLogic] = useState<EventLogicConfig>({ orangeEventCount: 3, redEventCount: 3, timeBetweenEvents: 10000, orangeBlockDuration: 60000, redBlockDuration: 60000 });
+  const configRef = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, `users/${user.uid}/thresholdConfigurations/main`);
+  }, [firestore, user?.uid]);
+
+  const { data: activeThresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(configRef);
+
+  const [config, setConfig] = useState<ThresholdConfiguration>(INITIAL_THRESHOLD_CONFIG);
 
   useEffect(() => {
-    if (activeThresholdConfig) {
-      setSoundThresholds({ low: activeThresholdConfig.soundThresholdLow, medium: activeThresholdConfig.soundThresholdMedium });
-      setLightThresholds({ low: activeThresholdConfig.lightThresholdLow, medium: activeThresholdConfig.lightThresholdMedium });
-      setTempThresholds({ green: activeThresholdConfig.temperatureThresholdVerde, orange: activeThresholdConfig.temperatureThresholdNaranja });
-      setSoundEventLogic({
-        orangeEventCount: activeThresholdConfig.orangeSoundEventCount,
-        redEventCount: activeThresholdConfig.redSoundEventCount,
-        timeBetweenEvents: activeThresholdConfig.timeBetweenEvents,
-        orangeBlockDuration: activeThresholdConfig.orangeBlockDuration,
-        redBlockDuration: activeThresholdConfig.redBlockDuration,
-      });
-      setLightEventLogic({
-        orangeEventCount: activeThresholdConfig.orangeLightEventCount,
-        redEventCount: activeThresholdConfig.redLightEventCount,
-        timeBetweenEvents: activeThresholdConfig.timeBetweenLightEvents,
-        orangeBlockDuration: activeThresholdConfig.orangeLightBlockDuration,
-        redBlockDuration: activeThresholdConfig.redLightBlockDuration,
-      });
+    if (!isConfigLoading) {
+      if (activeThresholdConfig) {
+        setConfig(activeThresholdConfig);
+      } else {
+        setConfig(INITIAL_THRESHOLD_CONFIG);
+      }
+      setIsInitialLoading(false);
     }
-  }, [activeThresholdConfig]);
+  }, [activeThresholdConfig, isConfigLoading]);
   
-  const handleSaveConfiguration = () => {
-    toast({
-      title: "Funcionalidad no implementada",
-      variant: "destructive",
-      description: "El guardado de la configuración en Firebase aún no está conectado.",
-    });
+  const handleInputChange = (field: keyof ThresholdConfiguration, value: string | number) => {
+    setConfig(prev => ({ ...prev, [field]: Number(value) }));
   };
+  
+  const handleSliderChange = (field: keyof ThresholdConfiguration, value: number[]) => {
+      setConfig(prev => ({ ...prev, [field]: value[0] }));
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!configRef) {
+        toast({
+            title: "Error",
+            description: "No se puede guardar la configuración. Referencia de usuario no encontrada.",
+            variant: "destructive"
+        });
+        return;
+    }
+    setIsSaving(true);
+    try {
+        setDocumentNonBlocking(configRef, config, { merge: true });
+        toast({
+            title: "Configuración Guardada",
+            description: "Tus nuevos umbrales se han guardado en Firebase.",
+        });
+    } catch (e: any) {
+        toast({
+            title: "Error al Guardar",
+            description: e.message || "No se pudo guardar la configuración en Firebase.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  if (isInitialLoading) {
+      return (
+          <div className="flex justify-center items-center h-96">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+      )
+  }
 
   return (
     <Card>
@@ -100,14 +116,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={1023}
                 step={10}
-                value={[soundThresholds.low]}
-                onValueChange={(value) => setSoundThresholds({ ...soundThresholds, low: value[0] })}
-                color="primary"
+                value={[config.soundThresholdLow]}
+                onValueChange={(value) => handleSliderChange('soundThresholdLow', value)}
               />
               <Input
                 type="number"
-                value={soundThresholds.low}
-                onChange={(e) => setSoundThresholds({ ...soundThresholds, low: Number(e.target.value) })}
+                value={config.soundThresholdLow}
+                onChange={(e) => handleInputChange('soundThresholdLow', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -120,14 +135,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={1023}
                 step={10}
-                value={[soundThresholds.medium]}
-                onValueChange={(value) => setSoundThresholds({ ...soundThresholds, medium: value[0] })}
-                color="primary"
+                value={[config.soundThresholdMedium]}
+                onValueChange={(value) => handleSliderChange('soundThresholdMedium', value)}
               />
               <Input
                 type="number"
-                value={soundThresholds.medium}
-                onChange={(e) => setSoundThresholds({ ...soundThresholds, medium: Number(e.target.value) })}
+                value={config.soundThresholdMedium}
+                onChange={(e) => handleInputChange('soundThresholdMedium', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -136,7 +150,7 @@ export default function ThresholdForm() {
 
         {/* Light Levels */}
         <div className="space-y-6">
-          <h3 className="font-semibold text-lg">Niveles de Luz</h3>
+          <h3 className="font-semibold text-lg">Niveles de Luz (Inverso)</h3>
           <div className="grid gap-4">
             <Label htmlFor="light-low">Umbral Medio (Naranja)</Label>
             <div className="flex items-center gap-4">
@@ -145,14 +159,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={4095}
                 step={10}
-                value={[lightThresholds.low]}
-                onValueChange={(value) => setLightThresholds({ ...lightThresholds, low: value[0] })}
-                color="yellow"
+                value={[config.lightThresholdLow]}
+                onValueChange={(value) => handleSliderChange('lightThresholdLow', value)}
               />
               <Input
                 type="number"
-                value={lightThresholds.low}
-                onChange={(e) => setLightThresholds({ ...lightThresholds, low: Number(e.target.value) })}
+                value={config.lightThresholdLow}
+                onChange={(e) => handleInputChange('lightThresholdLow', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -165,14 +178,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={4095}
                 step={10}
-                value={[lightThresholds.medium]}
-                onValueChange={(value) => setLightThresholds({ ...lightThresholds, medium: value[0] })}
-                color="yellow"
+                value={[config.lightThresholdMedium]}
+                onValueChange={(value) => handleSliderChange('lightThresholdMedium', value)}
               />
               <Input
                 type="number"
-                value={lightThresholds.medium}
-                onChange={(e) => setLightThresholds({ ...lightThresholds, medium: Number(e.target.value) })}
+                value={config.lightThresholdMedium}
+                onChange={(e) => handleInputChange('lightThresholdMedium', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -190,14 +202,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={40}
                 step={0.5}
-                value={[tempThresholds.green]}
-                onValueChange={(value) => setTempThresholds({ ...tempThresholds, green: value[0] })}
-                color="destructive"
+                value={[config.temperatureThresholdVerde]}
+                onValueChange={(value) => handleSliderChange('temperatureThresholdVerde', value)}
               />
               <Input
                 type="number"
-                value={tempThresholds.green}
-                onChange={(e) => setTempThresholds({ ...tempThresholds, green: Number(e.target.value) })}
+                value={config.temperatureThresholdVerde}
+                onChange={(e) => handleInputChange('temperatureThresholdVerde', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -210,14 +221,13 @@ export default function ThresholdForm() {
                 min={0}
                 max={40}
                 step={0.5}
-                value={[tempThresholds.orange]}
-                onValueChange={(value) => setTempThresholds({ ...tempThresholds, orange: value[0] })}
-                color="destructive"
+                value={[config.temperatureThresholdNaranja]}
+                onValueChange={(value) => handleSliderChange('temperatureThresholdNaranja', value)}
               />
               <Input
                 type="number"
-                value={tempThresholds.orange}
-                onChange={(e) => setTempThresholds({ ...tempThresholds, orange: Number(e.target.value) })}
+                value={config.temperatureThresholdNaranja}
+                onChange={(e) => handleInputChange('temperatureThresholdNaranja', e.target.value)}
                 className="w-24"
               />
             </div>
@@ -230,25 +240,25 @@ export default function ThresholdForm() {
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label>Eventos Naranja</Label>
-                    <Input type="number" value={soundEventLogic.orangeEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeEventCount: Number(e.target.value)})} />
+                    <Input type="number" value={config.orangeSoundEventCount} onChange={(e) => handleInputChange('orangeSoundEventCount', e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                     <Label>Eventos Rojos</Label>
-                    <Input type="number" value={soundEventLogic.redEventCount} onChange={(e) => setSoundEventLogic({...soundEventLogic, redEventCount: Number(e.target.value)})} />
+                    <Input type="number" value={config.redSoundEventCount} onChange={(e) => handleInputChange('redSoundEventCount', e.target.value)} />
                 </div>
             </div>
             <div className="grid gap-2">
                 <Label>Ventana de Tiempo (ms)</Label>
-                <Input type="number" value={soundEventLogic.timeBetweenEvents} onChange={(e) => setSoundEventLogic({...soundEventLogic, timeBetweenEvents: Number(e.target.value)})} />
+                <Input type="number" value={config.timeBetweenEvents} onChange={(e) => handleInputChange('timeBetweenEvents', e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label>Bloqueo Naranja (ms)</Label>
-                    <Input type="number" value={soundEventLogic.orangeBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, orangeBlockDuration: Number(e.target.value)})} />
+                    <Input type="number" value={config.orangeBlockDuration} onChange={(e) => handleInputChange('orangeBlockDuration', e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                     <Label>Bloqueo Rojo (ms)</Label>
-                    <Input type="number" value={soundEventLogic.redBlockDuration} onChange={(e) => setSoundEventLogic({...soundEventLogic, redBlockDuration: Number(e.target.value)})} />
+                    <Input type="number" value={config.redBlockDuration} onChange={(e) => handleInputChange('redBlockDuration', e.target.value)} />
                 </div>
             </div>
         </div>
@@ -259,33 +269,37 @@ export default function ThresholdForm() {
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label>Eventos Naranja</Label>
-                    <Input type="number" value={lightEventLogic.orangeEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeEventCount: Number(e.target.value)})} />
+                    <Input type="number" value={config.orangeLightEventCount} onChange={(e) => handleInputChange('orangeLightEventCount', e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                     <Label>Eventos Rojos</Label>
-                    <Input type="number" value={lightEventLogic.redEventCount} onChange={(e) => setLightEventLogic({...lightEventLogic, redEventCount: Number(e.target.value)})} />
+                    <Input type="number" value={config.redLightEventCount} onChange={(e) => handleInputChange('redLightEventCount', e.target.value)} />
                 </div>
             </div>
             <div className="grid gap-2">
                 <Label>Ventana de Tiempo (ms)</Label>
-                <Input type="number" value={lightEventLogic.timeBetweenEvents} onChange={(e) => setLightEventLogic({...lightEventLogic, timeBetweenEvents: Number(e.target.value)})} />
+                <Input type="number" value={config.timeBetweenLightEvents} onChange={(e) => handleInputChange('timeBetweenLightEvents', e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label>Bloqueo Naranja (ms)</Label>
-                    <Input type="number" value={lightEventLogic.orangeBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, orangeBlockDuration: Number(e.target.value)})} />
+                    <Input type="number" value={config.orangeLightBlockDuration} onChange={(e) => handleInputChange('orangeLightBlockDuration', e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                     <Label>Bloqueo Rojo (ms)</Label>
-                    <Input type="number" value={lightEventLogic.redBlockDuration} onChange={(e) => setLightEventLogic({...lightEventLogic, redBlockDuration: Number(e.target.value)})} />
+                    <Input type="number" value={config.redLightBlockDuration} onChange={(e) => handleInputChange('redLightBlockDuration', e.target.value)} />
                 </div>
             </div>
         </div>
 
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={handleSaveConfiguration}>
-          <Save className="mr-2 h-4 w-4" />
+        <Button onClick={handleSaveConfiguration} disabled={isSaving}>
+            {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+                <Save className="mr-2 h-4 w-4" />
+            )}
           Guardar Configuración
         </Button>
       </CardFooter>

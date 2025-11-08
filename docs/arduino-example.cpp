@@ -125,14 +125,10 @@ unsigned long musicStopTime = 0;
 // 6. FUNCIONES AUXILIARES DE FIREBASE
 // ===============================================
 
-// Callback que se ejecuta cuando hay un cambio en la configuración de umbrales
-void streamCallback(FirebaseStream data) {
-  Serial.println("Stream de configuración recibido. Actualizando umbrales...");
-  if (data.dataType() == "json") {
-    FirebaseJson* json = data.to<FirebaseJson*>();
+// Función para procesar un objeto JSON de configuración
+void processConfigJson(FirebaseJson* json) {
     FirebaseJsonData jsonData;
     
-    // Extraer y actualizar cada valor de umbral
     if (json->get(jsonData, "soundThresholdLow")) soundThresholdLow = jsonData.to<float>();
     if (json->get(jsonData, "soundThresholdMedium")) soundThresholdMedium = jsonData.to<float>();
     if (json->get(jsonData, "lightThresholdLow")) lightThresholdLow = jsonData.to<float>();
@@ -153,6 +149,15 @@ void streamCallback(FirebaseStream data) {
     if (json->get(jsonData, "redLightBlockDuration")) redLightBlockDurationMillis = jsonData.to<long>();
 
     Serial.println("Umbrales actualizados desde Firebase.");
+}
+
+
+// Callback que se ejecuta cuando hay un cambio en la configuración de umbrales
+void streamCallback(FirebaseStream data) {
+  Serial.println("Stream de configuración recibido. Actualizando umbrales...");
+  if (data.dataType() == "json") {
+    FirebaseJson* json = data.to<FirebaseJson*>();
+    processConfigJson(json);
   }
 }
 
@@ -164,7 +169,7 @@ void streamTimeoutCallback(bool timeout) {
 
 void setupFirebase() {
     config.api_key = API_KEY;
-    config.database_url = String(FIREBASE_PROJECT_ID) + ".firebaseio.com";
+    config.database_url = String("https://") + FIREBASE_PROJECT_ID + "-default-rtdb.firebaseio.com";
     auth.user.email = ""; // Usamos Custom Token, no es necesario email/pass
     auth.user.password = "";
 
@@ -189,7 +194,8 @@ void setupFirebase() {
         // Obtener la configuración de umbrales una vez al inicio
         if (Firebase.RTDB.getJSON(&fbdo, thresholdConfigPath)) {
             if(fbdo.dataType() == "json"){
-                streamCallback(FirebaseStream(fbdo.to<FirebaseJson*>()));
+                FirebaseJson* json = fbdo.to<FirebaseJson*>();
+                processConfigJson(json);
             }
         } else {
             Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
@@ -437,3 +443,5 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    

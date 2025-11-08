@@ -134,16 +134,6 @@ int readLightLevel() {
 // 7. LÓGICA DE FIREBASE Y ESTADOS
 // ===============================================
 
-// Helper para obtener un valor de un JSON de Firestore
-double getFirestoreDouble(FirebaseJson &json, const char* fieldName) {
-    FirebaseJsonData result;
-    String path = String(fieldName) + "/doubleValue";
-    if(json.get(result, path)) return result.to<double>();
-    path = String(fieldName) + "/integerValue";
-    if(json.get(result, path)) return result.to<double>();
-    return -1; // Valor por defecto si no se encuentra
-}
-
 void fetchThresholdsFromFirebase() {
     if (!Firebase.ready()) {
         Serial.println("Firebase no listo. Saltando fetch.");
@@ -156,33 +146,35 @@ void fetchThresholdsFromFirebase() {
     if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
         if (fbdo.httpCode() == 200 && fbdo.dataType() == "json") {
             FirebaseJson json(fbdo.payload().c_str());
-            FirebaseJsonData fields;
-            json.get(fields, "fields"); // El documento de Firestore anida los campos en "fields"
+            FirebaseJsonData result;
             
-            if (fields.dataType == "json") {
-                FirebaseJson *fieldsJson = fields.to<FirebaseJson*>();
-                FirebaseJsonData val;
+            // Extraer el objeto 'fields'
+            FirebaseJson fieldsJson;
+            json.get(result, "fields");
+            if (result.success) {
+                fieldsJson.setJsonData(result.stringValue);
 
-                if(fieldsJson->get(val, "soundThresholdLow")) soundThresholdLow = val.to<float>();
-                if(fieldsJson->get(val, "soundThresholdMedium")) soundThresholdMedium = val.to<float>();
-                if(fieldsJson->get(val, "lightThresholdLow")) lightThresholdLow = val.to<float>();
-                if(fieldsJson->get(val, "lightThresholdMedium")) lightThresholdMedium = val.to<float>();
-                if(fieldsJson->get(val, "temperatureThresholdVerde")) tempThresholdVerde = val.to<float>();
-                if(fieldsJson->get(val, "temperatureThresholdNaranja")) tempThresholdNaranja = val.to<float>();
-                if(fieldsJson->get(val, "orangeSoundEventCount")) orangeSoundEventCountThreshold = val.to<int>();
-                if(fieldsJson->get(val, "redSoundEventCount")) redSoundEventCountThreshold = val.to<int>();
-                if(fieldsJson->get(val, "timeBetweenEvents")) timeBetweenEventsMillis = val.to<long>();
-                if(fieldsJson->get(val, "orangeBlockDuration")) orangeBlockDurationMillis = val.to<long>();
-                if(fieldsJson->get(val, "redBlockDuration")) redBlockDurationMillis = val.to<long>();
-                if(fieldsJson->get(val, "orangeLightEventCount")) orangeLightEventCountThreshold = val.to<int>();
-                if(fieldsJson->get(val, "redLightEventCount")) redLightEventCountThreshold = val.to<int>();
-                if(fieldsJson->get(val, "timeBetweenLightEvents")) timeBetweenLightEventsMillis = val.to<long>();
-                if(fieldsJson->get(val, "orangeLightBlockDuration")) orangeLightBlockDurationMillis = val.to<long>();
-                if(fieldsJson->get(val, "redLightBlockDuration")) redLightBlockDurationMillis = val.to<long>();
+                // Leer cada valor del objeto 'fields'
+                if(fieldsJson.get(result, "soundThresholdLow/doubleValue") || fieldsJson.get(result, "soundThresholdLow/integerValue")) soundThresholdLow = result.to<float>();
+                if(fieldsJson.get(result, "soundThresholdMedium/doubleValue") || fieldsJson.get(result, "soundThresholdMedium/integerValue")) soundThresholdMedium = result.to<float>();
+                if(fieldsJson.get(result, "lightThresholdLow/doubleValue") || fieldsJson.get(result, "lightThresholdLow/integerValue")) lightThresholdLow = result.to<float>();
+                if(fieldsJson.get(result, "lightThresholdMedium/doubleValue") || fieldsJson.get(result, "lightThresholdMedium/integerValue")) lightThresholdMedium = result.to<float>();
+                if(fieldsJson.get(result, "temperatureThresholdVerde/doubleValue") || fieldsJson.get(result, "temperatureThresholdVerde/integerValue")) tempThresholdVerde = result.to<float>();
+                if(fieldsJson.get(result, "temperatureThresholdNaranja/doubleValue") || fieldsJson.get(result, "temperatureThresholdNaranja/integerValue")) tempThresholdNaranja = result.to<float>();
+                if(fieldsJson.get(result, "orangeSoundEventCount/integerValue")) orangeSoundEventCountThreshold = result.to<int>();
+                if(fieldsJson.get(result, "redSoundEventCount/integerValue")) redSoundEventCountThreshold = result.to<int>();
+                if(fieldsJson.get(result, "timeBetweenEvents/integerValue")) timeBetweenEventsMillis = result.to<long>();
+                if(fieldsJson.get(result, "orangeBlockDuration/integerValue")) orangeBlockDurationMillis = result.to<long>();
+                if(fieldsJson.get(result, "redBlockDuration/integerValue")) redBlockDurationMillis = result.to<long>();
+                if(fieldsJson.get(result, "orangeLightEventCount/integerValue")) orangeLightEventCountThreshold = result.to<int>();
+                if(fieldsJson.get(result, "redLightEventCount/integerValue")) redLightEventCountThreshold = result.to<int>();
+                if(fieldsJson.get(result, "timeBetweenLightEvents/integerValue")) timeBetweenLightEventsMillis = result.to<long>();
+                if(fieldsJson.get(result, "orangeLightBlockDuration/integerValue")) orangeLightBlockDurationMillis = result.to<long>();
+                if(fieldsJson.get(result, "redLightBlockDuration/integerValue")) redLightBlockDurationMillis = result.to<long>();
                 
                 Serial.println("Umbrales actualizados desde Firestore.");
             } else {
-                 Serial.println("Error: El campo 'fields' no es un JSON.");
+                 Serial.println("Error: No se encontró el campo 'fields' en la respuesta JSON.");
             }
 
         } else {
@@ -262,7 +254,6 @@ void setup() {
         configTime(0, 0, "pool.ntp.org", "time.nist.gov");
         
         config.api_key = API_KEY;
-        config.project_id = FIREBASE_PROJECT_ID;
         config.signer.test_mode = true; // Importante para auth con UID
         config.token_status_callback = tokenStatusCallback;
 
@@ -323,7 +314,7 @@ void loop() {
         }
         
         // --- Lógica de Eventos de Luz (luz baja = estrés) ---
-        if (lightLevel <= lightThresholdMedium) {
+         if (lightLevel <= lightThresholdMedium) {
              redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_EVENTS;
             if (redLightLedBlockedUntil <= currentMillis && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_EVENTS) >= redLightEventCountThreshold) {

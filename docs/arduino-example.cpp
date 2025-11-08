@@ -1,3 +1,4 @@
+
 /**
  * ==================================================================================
  * Proyecto NeuroSense - Firmware para ESP32
@@ -349,7 +350,16 @@ void loop() {
         int lightLevel = readLightLevel();
         
         // --- Lógica de Eventos de Sonido ---
-        if (soundLevel >= soundThresholdLow) {
+        if (soundLevel >= soundThresholdMedium) {
+            redSoundEventTimestamps[redSoundEventIndex] = currentMillis;
+            redSoundEventIndex = (redSoundEventIndex + 1) % MAX_EVENTS;
+            if (redLedBlockedUntil <= currentMillis && countRecentEvents(redSoundEventTimestamps, timeBetweenEventsMillis, MAX_EVENTS) >= redSoundEventCountThreshold) {
+                redLedBlockedUntil = currentMillis + redBlockDurationMillis;
+                for(int i=0; i<MAX_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; }
+                orangeSoundEventIndex = 0;
+            }
+        }
+        else if (soundLevel >= soundThresholdLow) {
             orangeSoundEventTimestamps[orangeSoundEventIndex] = currentMillis;
             orangeSoundEventIndex = (orangeSoundEventIndex + 1) % MAX_EVENTS;
             if (orangeLedBlockedUntil <= currentMillis && countRecentEvents(orangeSoundEventTimestamps, timeBetweenEventsMillis, MAX_EVENTS) >= orangeSoundEventCountThreshold) {
@@ -357,25 +367,7 @@ void loop() {
             }
         }
         
-        if (soundLevel >= soundThresholdMedium) {
-            redSoundEventTimestamps[redSoundEventIndex] = currentMillis;
-            redSoundEventIndex = (redSoundEventIndex + 1) % MAX_EVENTS;
-            if (redLedBlockedUntil <= currentMillis && countRecentEvents(redSoundEventTimestamps, timeBetweenEventsMillis, MAX_EVENTS) >= redSoundEventCountThreshold) {
-                redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-                for(int i=0; i<MAX_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; } 
-                orangeEventIndex = 0;
-            }
-        }
-        
         // --- Lógica de Eventos de Luz ---
-        if (lightLevel <= lightThresholdLow) {
-            orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
-            orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_EVENTS;
-            if (orangeLightLedBlockedUntil <= currentMillis && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_EVENTS) >= orangeLightEventCountThreshold) {
-                orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
-            }
-        }
-
         if (lightLevel <= lightThresholdMedium) {
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_EVENTS;
@@ -383,6 +375,13 @@ void loop() {
                 redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
                 for(int i=0; i<MAX_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
                 orangeLightEventIndex = 0;
+            }
+        }
+        else if (lightLevel <= lightThresholdLow) {
+            orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
+            orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_EVENTS;
+            if (orangeLightLedBlockedUntil <= currentMillis && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_EVENTS) >= orangeLightEventCountThreshold) {
+                orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
             }
         }
         
@@ -443,3 +442,5 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    

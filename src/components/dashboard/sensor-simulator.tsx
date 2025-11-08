@@ -24,10 +24,6 @@ export default function SensorSimulator({ onSendSampleData }: SensorSimulatorPro
     const handleSend = () => {
         const data = generateRandomData();
         onSendSampleData(data);
-        toast({
-            title: "Datos de Muestra Enviados",
-            description: `Temp: ${data.temperature}°C, Sonido: ${data.soundLevel}, Luz: ${data.lightLevel}`,
-        });
     };
 
     return (

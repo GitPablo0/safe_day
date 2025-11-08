@@ -3,21 +3,21 @@
 import { Thermometer, Droplets, Volume2, Sun, User, Copy, Info } from 'lucide-react';
 import SensorCard from './sensor-card';
 import LedStatus from './led-status';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
 import SensorSimulator from './sensor-simulator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { doc } from 'firebase/firestore';
 
-// TODO: Replace with live data from Firebase
-const MOCK_SENSOR_DATA = {
-    temperature: 0,
-    humidity: 0,
-    soundLevel: 0,
-    lightLevel: 0,
-    ledStatus: 1 as 1 | 2 | 3,
+type SensorData = {
+    temperature: number;
+    humidity: number;
+    soundLevel: number;
+    lightLevel: number;
+    ledStatus: 1 | 2 | 3;
 };
 
 function UserInfoCard({ uid }: { uid: string }) {
@@ -57,12 +57,17 @@ function UserInfoCard({ uid }: { uid: string }) {
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
   
   const userId = user?.uid;
 
-  // TODO: Replace with live data from Firebase
-  const sensorData = MOCK_SENSOR_DATA;
+  const sensorDataRef = useMemoFirebase(() => {
+    if (!firestore || !userId) return null;
+    return doc(firestore, `users/${userId}/sensorData/latest`);
+  }, [firestore, userId]);
+
+  const { data: sensorData, isLoading: isSensorDataLoading } = useDoc<SensorData>(sensorDataRef);
 
   const temperature = sensorData?.temperature ?? 0;
   const humidity = sensorData?.humidity ?? 0;
@@ -72,15 +77,27 @@ export default function Dashboard() {
 
   
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
-     toast({
-        title: "Funcionalidad no implementada",
-        variant: "destructive",
-        description: `La escritura de datos de ejemplo a Firebase aún no está conectada.`,
+    if (sensorDataRef) {
+      setDocumentNonBlocking(sensorDataRef, { ...data, ledStatus: 1 }, { merge: true });
+       toast({
+        title: "Datos de Muestra Enviados a Firebase",
+        description: `Temp: ${data.temperature}°C, Sonido: ${data.soundLevel}, Luz: ${data.lightLevel}`,
     });
+    } else {
+        toast({
+            title: "Error al enviar datos",
+            variant: "destructive",
+            description: "No se pudo obtener la referencia a la base de datos.",
+        });
+    }
   };
 
   if (isUserLoading || !userId) {
     return <div className="flex items-center justify-center min-h-screen">Cargando Datos de Usuario...</div>
+  }
+  
+  if (isSensorDataLoading) {
+    return <div className="flex items-center justify-center min-h-screen">Cargando Datos del Sensor...</div>
   }
 
   return (

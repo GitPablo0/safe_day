@@ -90,8 +90,8 @@ const unsigned long musicPlayDuration = 180000; // 3 minutos
 // 5. VARIABLES DE ESTADO Y FIREBASE
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 2000; // Intervalo de lectura de sensores
-const long firebaseUpdateInterval = 10000; // Intervalo de envío de datos a Firebase
+const long sendDataInterval = 1000; // Intervalo de lectura de sensores
+const long firebaseUpdateInterval = 1000; // Intervalo de envío de datos a Firebase
 
 FirebaseData fbdo;
 FirebaseData stream;

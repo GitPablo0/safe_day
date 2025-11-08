@@ -172,6 +172,9 @@ void setupFirebase() {
     config.database_url = String("https://") + FIREBASE_PROJECT_ID + "-default-rtdb.firebaseio.com";
     auth.user.email = ""; // Usamos Custom Token, no es necesario email/pass
     auth.user.password = "";
+    
+    // IMPORTANTE: Soluciona el error "missing required credentials"
+    config.signer.test_mode = true;
 
     Firebase.begin(&config, &auth);
     Firebase.reconnectWiFi(true);
@@ -329,7 +332,7 @@ void setup() {
     } else {
        Serial.println("DFPlayer Mini iniciado.");
        myDFPlayer.volume(15);
-       myDFPlayer.play(3);
+       myDFPlayer.play(3); // Prueba de sonido inicial
     }
 
     Serial.println("Configuración finalizada. El dispositivo está listo.");
@@ -443,7 +446,3 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
-
-    
-
-    

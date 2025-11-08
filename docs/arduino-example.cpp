@@ -128,7 +128,7 @@ unsigned long musicStopTime = 0;
 // Callback que se ejecuta cuando hay un cambio en la configuración de umbrales
 void streamCallback(FirebaseStream data) {
   Serial.println("Stream de configuración recibido. Actualizando umbrales...");
-  if (data.dataTypeEnum() == fb_esp_pgm_str_t::json) {
+  if (data.dataType() == "json") {
     FirebaseJson* json = data.to<FirebaseJson*>();
     FirebaseJsonData jsonData;
     
@@ -188,7 +188,9 @@ void setupFirebase() {
 
         // Obtener la configuración de umbrales una vez al inicio
         if (Firebase.RTDB.getJSON(&fbdo, thresholdConfigPath)) {
-            streamCallback(FirebaseStream(&fbdo));
+            if(fbdo.dataType() == "json"){
+                streamCallback(FirebaseStream(fbdo.to<FirebaseJson*>()));
+            }
         } else {
             Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
             Serial.println(fbdo.errorReason());
@@ -419,7 +421,7 @@ void loop() {
         printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
         
         // --- Enviar datos a Firebase ---
-        if (firebaseReady && currentMillis - sendDataPrevMillis >= firebaseUpdateInterval) {
+        if (firebaseReady && (currentMillis % firebaseUpdateInterval < sendDataInterval)) {
             FirebaseJson json;
             json.set("temperature", temperature);
             json.set("humidity", humidity);

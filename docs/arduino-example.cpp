@@ -21,15 +21,15 @@
 // ===============================================
 // 1. CONFIGURACIÓN DE WIFI Y FIREBASE (DEBES RELLENAR ESTO)
 // ===============================================
-#define WIFI_SSID "TU_WIFI_SSID"
-#define WIFI_PASSWORD "TU_WIFI_PASSWORD"
+#define WIFI_SSID "Telecentro-416b"
+#define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // Pega aquí la API Key y el Project ID de tu proyecto de Firebase
-#define API_KEY "TU_API_KEY"
-#define FIREBASE_PROJECT_ID "TU_PROJECT_ID"
+#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
+#define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
 
 // Pega aquí el User ID que aparece en el panel de la aplicación web
-#define USER_UID "TU_USER_ID"
+#define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
 
 // ===============================================
@@ -443,5 +443,7 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    
 
     

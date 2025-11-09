@@ -58,9 +58,8 @@ const int LED_NARANJA_PIN = 33;
 const int LED_ROJO_PIN = 25;
 
 // Configuración DFPlayer Mini
-const int DFPLAYER_RX_PIN = 27; // Conectar al TX del DFPlayer
-const int DFPLAYER_TX_PIN = 26; // Conectar al RX del DFPlayer
-HardwareSerial mySoftwareSerial(1);
+// Usamos Serial2 (pines 16, 17 por defecto), pero los remapeamos.
+HardwareSerial mySerial(2);
 DFRobotDFPlayerMini myDFPlayer;
 
 // ===============================================
@@ -141,7 +140,8 @@ void setup() {
     Serial.println("Inicializando...");
 
     dht.begin();
-    mySoftwareSerial.begin(9600, SERIAL_8N1, DFPLAYER_TX_PIN, DFPLAYER_RX_PIN);
+    // Usamos Serial2 para el DFPlayer, pines RX=27, TX=26
+    mySerial.begin(9600, SERIAL_8N1, 27, 26); 
     delay(2000);
 
     pinMode(LED_VERDE_PIN, OUTPUT);
@@ -160,12 +160,11 @@ void setup() {
         redLightEventTimestamps[i] = 0;
     }
     
-    Serial.println("Inicializando DFPlayer...");
-    if (!myDFPlayer.begin(mySoftwareSerial, false)) { 
-        Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones.");
+    Serial.println("Iniciando DFPlayer...");
+    if (!myDFPlayer.begin(mySerial)) { 
+        Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones y tarjeta SD.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
-       delay(1000); // CRÍTICO: Delay para que el DFPlayer se estabilice
        myDFPlayer.volume(15);
     }
 

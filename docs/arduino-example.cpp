@@ -148,13 +148,11 @@ void fetchThresholdsFromFirebase() {
             FirebaseJson json(fbdo.payload().c_str());
             FirebaseJsonData result;
             
-            // Extraer el objeto 'fields'
             FirebaseJson fieldsJson;
             json.get(result, "fields");
             if (result.success) {
                 fieldsJson.setJsonData(result.stringValue);
 
-                // Leer cada valor del objeto 'fields'
                 if(fieldsJson.get(result, "soundThresholdLow/doubleValue") || fieldsJson.get(result, "soundThresholdLow/integerValue")) soundThresholdLow = result.to<float>();
                 if(fieldsJson.get(result, "soundThresholdMedium/doubleValue") || fieldsJson.get(result, "soundThresholdMedium/integerValue")) soundThresholdMedium = result.to<float>();
                 if(fieldsJson.get(result, "lightThresholdLow/doubleValue") || fieldsJson.get(result, "lightThresholdLow/integerValue")) lightThresholdLow = result.to<float>();
@@ -199,7 +197,6 @@ void tokenStatusCallback(TokenInfo info) {
 
 void setupFirebase() {
     config.api_key = API_KEY;
-    auth.user.uid = USER_UID;
     config.signer.test_mode = true;
     config.token_status_callback = tokenStatusCallback;
     
@@ -216,7 +213,7 @@ String buildSensorDataJson(float temp, float hum, int sound, int light, int stat
     json.set("fields/ledStatus/integerValue", String(status));
     
     String jsonString;
-    json.toString(jsonString, false); // false para formato compacto
+    json.toString(jsonString, false);
     return jsonString;
 }
 
@@ -280,7 +277,6 @@ void setup() {
 void loop() {
     unsigned long currentMillis = millis();
 
-    // Actualiza la configuración de umbrales periódicamente
     if (firebaseReady && (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval)) {
         fetchConfigPrevMillis = currentMillis;
         fetchThresholdsFromFirebase();
@@ -294,7 +290,6 @@ void loop() {
         int soundLevel = readSoundLevel();
         int lightLevel = readLightLevel();
         
-        // --- Lógica de Eventos de Sonido ---
         if (soundLevel >= soundThresholdMedium) {
             redSoundEventTimestamps[redSoundEventIndex] = currentMillis;
             redSoundEventIndex = (redSoundEventIndex + 1) % MAX_EVENTS;
@@ -311,8 +306,7 @@ void loop() {
             }
         }
         
-        // --- Lógica de Eventos de Luz (luz baja = estrés) ---
-         if (lightLevel <= lightThresholdMedium) {
+        if (lightLevel <= lightThresholdMedium) {
              redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_EVENTS;
             if (redLightLedBlockedUntil <= currentMillis && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_EVENTS) >= redLightEventCountThreshold) {
@@ -328,7 +322,6 @@ void loop() {
             }
         }
         
-        // --- Lógica de Determinación de Estado del LED ---
         int finalStatus = 1;
         if(temperature != -99.0) {
              if (temperature >= tempThresholdNaranja) finalStatus = 3;
@@ -350,7 +343,6 @@ void loop() {
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
         
-        // --- Lógica de DFPlayer con Temporizador ---
         if (currentLedStatus >= 2) {
             if (!isPlaying) {
                 myDFPlayer.loop(1);
@@ -370,13 +362,11 @@ void loop() {
             }
         }
 
-        // --- Salida al Monitor Serie ---
         Serial.print("Temp: "); Serial.print(temperature, 1);
         Serial.print(" *C, Sonido: "); Serial.print(soundLevel);
         Serial.print(", Luz: "); Serial.print(lightLevel);
         Serial.print(" -> Estado LED: "); Serial.println(currentLedStatus);
         
-        // --- Enviar datos a Firebase ---
         if (firebaseReady) {
             String docPath = "users/" + String(USER_UID) + "/sensorData/latest";
             String content = buildSensorDataJson(temperature, humidity, soundLevel, lightLevel, currentLedStatus);
@@ -385,9 +375,5 @@ void loop() {
     }
     
     if (myDFPlayer.available()) {
-      // Puedes añadir aquí prints de depuración del DFPlayer si es necesario
     }
 }
-
-
-    

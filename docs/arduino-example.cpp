@@ -172,16 +172,16 @@ void setupFirebase() {
     
     // --- Asignación de configuración ---
     config.api_key = API_KEY;
-    // ¡IMPORTANTE! Asignar la URL completa directamente evita errores de concatenación de Strings.
     config.database_url = "studio-4253330981-dcdc9-default-rtdb.firebaseio.com";
-    auth.user.email = ""; // Usamos Custom Token, no es necesario email/pass
-    auth.user.password = "";
-    config.signer.test_mode = true; // Usar modo de prueba para autenticación simplificada
     
+    // --- Configuración de Autenticación Anónima ---
+    // Esto es crucial para que el dispositivo obtenga un token de acceso.
+    config.signer.anonymous = true;
+
     Firebase.begin(&config, &auth);
     Firebase.reconnectWiFi(true);
 
-    // Espera a que Firebase esté listo
+    // Espera a que Firebase esté listo y autenticado
     unsigned long startTime = millis();
     while (Firebase.getToken() == "" && millis() - startTime < 10000) {
         Serial.print(".");
@@ -190,7 +190,7 @@ void setupFirebase() {
     
     if (Firebase.getToken() == "") {
         Serial.println("\nError: No se pudo obtener el token de autenticación de Firebase.");
-        return;
+        return; // Detener si la autenticación falla
     }
     
     Serial.println("\nAutenticación con Firebase exitosa.");

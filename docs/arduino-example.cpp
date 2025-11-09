@@ -58,8 +58,8 @@ const int LED_NARANJA_PIN = 33;
 const int LED_ROJO_PIN = 25;
 
 // Configuración DFPlayer Mini
-const int DFPLAYER_RX_PIN = 26; // Conectar al TX del DFPlayer
-const int DFPLAYER_TX_PIN = 27; // Conectar al RX del DFPlayer
+const int DFPLAYER_RX_PIN = 27; // Conectar al TX del DFPlayer
+const int DFPLAYER_TX_PIN = 26; // Conectar al RX del DFPlayer
 HardwareSerial mySoftwareSerial(1);
 DFRobotDFPlayerMini myDFPlayer;
 

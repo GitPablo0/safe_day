@@ -40,7 +40,6 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
-FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -96,9 +95,13 @@ const unsigned long musicPlayDuration = 180000; // 3 minutos
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
 unsigned long playerStatusPrevMillis = 0;
+unsigned long fetchCommandsPrevMillis = 0;
+
 const long sendDataInterval = 1000;
 const long fetchConfigInterval = 60000;
 const long playerStatusInterval = 5000; // Intervalo para reportar estado del reproductor
+const long fetchCommandsInterval = 3000; // Intervalo para buscar nuevos comandos
+
 
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
@@ -128,23 +131,15 @@ unsigned long lastCommandTimestamp = 0; // Para evitar comandos repetidos
 
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
-void streamCallback(StreamData data);
-void streamTimeoutCallback(bool timeout);
 void reportPlayerStatus();
+void fetchMusicCommands();
 
 // Función de callback para el estado del token
 void tokenStatusCallback(TokenInfo info) {
     if (info.status == token_status_ready) {
         Serial.println("Estado del Token: listo");
+        // Una vez que el token está listo, podemos obtener la configuración inicial.
         fetchThresholdsFromFirebase();
-
-        // Iniciar el stream para control de música
-        String streamPath = "users/" + String(USER_UID) + "/musicControl";
-        if (!Firebase.Firestore.documentStream(&stream, FIREBASE_PROJECT_ID, "", streamPath.c_str(), streamCallback, streamTimeoutCallback)) {
-            Serial.printf("Error al iniciar el stream de control: %s\n", stream.errorReason().c_str());
-        } else {
-             Serial.println("-> Stream de control de música iniciado.");
-        }
     } else {
         Serial.printf("Estado del Token: error, %s\n", info.error.message.c_str());
     }
@@ -242,6 +237,7 @@ int readLightLevel() {
     return analogRead(LIGHT_SENSOR_PIN);
 }
 
+// Función auxiliar para extraer el objeto "fields" del JSON de respuesta de Firestore
 String getJsonString(String& payload, const char* fieldName) {
     String searchKey = "\"" + String(fieldName) + "\":";
     int startIndex = payload.indexOf(searchKey);
@@ -258,49 +254,58 @@ String getJsonString(String& payload, const char* fieldName) {
     return payload.substring(startIndex, endIndex);
 }
 
-void streamCallback(StreamData data) {
-    Serial.printf("-> Stream recibió datos: %s, %s\n", data.streamPath().c_str(), data.payload().c_str());
+void fetchMusicCommands() {
+    if (!Firebase.ready()) return;
 
-    String fieldsJsonString = getJsonString(data.payload(), "fields");
-    FirebaseJson json;
-    json.setJsonData(fieldsJsonString);
-    FirebaseJsonData result;
+    String docPath = "users/" + String(USER_UID) + "/musicControl/state";
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+        if (fbdo.httpCode() == 200) {
+            String payload = fbdo.payload();
+            String fieldsJsonString = getJsonString(payload, "fields");
+            FirebaseJson json;
+            json.setJsonData(fieldsJsonString);
+            FirebaseJsonData result;
 
-    if(json.get(result, "lastCommandTimestamp/integerValue")) {
-        unsigned long newTimestamp = (unsigned long)atol(result.stringValue.c_str());
-        if (newTimestamp <= lastCommandTimestamp) {
-            return; // Comando ya procesado
+            if (json.get(result, "lastCommandTimestamp/integerValue") || json.get(result, "lastCommandTimestamp/doubleValue")) {
+                unsigned long newTimestamp = (unsigned long)atol(result.stringValue.c_str());
+                if (newTimestamp <= lastCommandTimestamp) {
+                    return; // Comando ya procesado o es antiguo.
+                }
+                lastCommandTimestamp = newTimestamp; // Actualizar al timestamp más reciente
+
+                // Procesar comando de volumen
+                if (json.get(result, "volume/integerValue")) {
+                    int newVolume = result.intValue;
+                    if(newVolume >= 0 && newVolume <= 30) {
+                        myDFPlayer.volume(newVolume);
+                        Serial.printf("-> Comando Remoto: Volumen ajustado a %d\n", newVolume);
+                    }
+                }
+                
+                // Procesar comando de reproducción
+                if (json.get(result, "command/stringValue")) {
+                    String command = result.stringValue.c_str();
+                    Serial.printf("-> Comando Remoto: %s\n", command.c_str());
+                    if (command == "play") {
+                        myDFPlayer.start();
+                        isPlayingMusic = true;
+                    } else if (command == "pause") {
+                        myDFPlayer.pause();
+                        isPlayingMusic = false;
+                    } else if (command == "next") {
+                        myDFPlayer.next();
+                    } else if (command == "prev") {
+                        myDFPlayer.previous();
+                    }
+                }
+                reportPlayerStatus(); // Reportar estado después de ejecutar un comando
+            }
         }
-        lastCommandTimestamp = newTimestamp;
+    } else {
+         // Serial.printf("Fallo en la llamada a getDocument para comandos: %s\n", fbdo.errorReason().c_str());
     }
-
-    if (json.get(result, "volume/integerValue")) {
-        int newVolume = result.intValue;
-        myDFPlayer.volume(newVolume);
-        Serial.printf("-> Comando Remoto: Volumen ajustado a %d\n", newVolume);
-    }
-    
-    if (json.get(result, "command/stringValue")) {
-        String command = result.stringValue.c_str();
-        Serial.printf("-> Comando Remoto: %s\n", command.c_str());
-        if (command == "play") {
-            myDFPlayer.start();
-        } else if (command == "pause") {
-            myDFPlayer.pause();
-        } else if (command == "next") {
-            myDFPlayer.next();
-        } else if (command == "prev") {
-            myDFPlayer.previous();
-        }
-    }
-    reportPlayerStatus(); // Reportar estado después de un comando
 }
 
-void streamTimeoutCallback(bool timeout) {
-    if (timeout) {
-        Serial.println("-> Stream de control: timeout, reiniciando...");
-    }
-}
 
 void fetchThresholdsFromFirebase() {
     if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
@@ -379,17 +384,31 @@ void reportPlayerStatus() {
     if (!Firebase.ready()) return;
 
     String status = "stopped";
-    if (myDFPlayer.readState() == 513) status = "playing"; // 513 is playing state
-    if (myDFPlayer.readState() == 514) status = "paused";  // 514 is paused state
+    // La librería a veces devuelve 512 para play y 513 para stop. Depende de la versión del chip.
+    // Usaremos isPlayingMusic como fuente de verdad, y leemos el estado solo para debug/info.
+    int deviceState = myDFPlayer.readState();
+
+    if (isPlayingMusic && deviceState != 514) { // Si nuestra lógica dice que está sonando y no está en pausa
+        status = "playing";
+    } else if (deviceState == 514) { // 514 es pausa
+        status = "paused";
+        isPlayingMusic = false; // Corregir nuestro estado si se pausó manualmente
+    } else {
+        status = "stopped";
+        isPlayingMusic = false;
+    }
     
     int currentTrack = myDFPlayer.readCurrentFileNumber();
+    if (currentTrack < 0) currentTrack = 0;
     int trackCount = myDFPlayer.readFileCounts();
+    if (trackCount < 0) trackCount = 0;
 
     String path = "users/" + String(USER_UID) + "/musicControl/state";
     String content = "{\"fields\":{\"status\":{\"stringValue\":\"" + status + "\"},\"currentTrack\":{\"integerValue\":" + String(currentTrack) + "},\"trackCount\":{\"integerValue\":" + String(trackCount) + "}}}";
     
-    if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "")) {
-        Serial.printf("Fallo al reportar estado del reproductor: %s\n", fbdo.errorReason().c_str());
+    // Usamos patchDocument para no sobreescribir los comandos que vienen de la app
+    if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "status,currentTrack,trackCount")) {
+        // Silencio en éxito
     }
 }
 
@@ -397,21 +416,30 @@ void reportPlayerStatus() {
 void loop() {
     unsigned long currentMillis = millis();
 
-    // Loop para queries del DFPlayer
+    // Es necesario llamar a myDFPlayer.available() para que la librería procese datos internos
     if (myDFPlayer.available()) {
-        // No hacer nada aquí, pero es necesario para que las lecturas de estado funcionen
+      // No necesitamos hacer nada aquí, solo llamar a la función
     }
     
+    // Intervalo para obtener comandos de música
+    if (Firebase.ready() && currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {
+        fetchCommandsPrevMillis = currentMillis;
+        fetchMusicCommands();
+    }
+
+    // Intervalo para reportar el estado del reproductor
     if (Firebase.ready() && currentMillis - playerStatusPrevMillis >= playerStatusInterval) {
         playerStatusPrevMillis = currentMillis;
         reportPlayerStatus();
     }
 
+    // Intervalo para obtener la configuración de umbrales
     if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
         fetchConfigPrevMillis = currentMillis;
         fetchThresholdsFromFirebase();
     }
 
+    // Intervalo para leer sensores y enviar datos
     if (currentMillis - sendDataPrevMillis >= sendDataInterval) {
         sendDataPrevMillis = currentMillis;
 
@@ -456,7 +484,7 @@ void loop() {
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
-                redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
+                redLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
                 for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
                 orangeLightEventIndex = 0;
             }
@@ -484,7 +512,7 @@ void loop() {
             reportPlayerStatus();
         }
 
-        // Verifica si el tiempo de reproducción ha terminado
+        // Verifica si el tiempo de reproducción ha terminado (y no fue pausado manualmente)
         if (isPlayingMusic && currentMillis >= musicStopTime) {
             myDFPlayer.stop();
             isPlayingMusic = false;

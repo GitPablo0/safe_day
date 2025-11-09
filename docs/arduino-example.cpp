@@ -172,11 +172,9 @@ void setupFirebase() {
     
     // --- Asignación de configuración ---
     config.api_key = API_KEY;
-    config.project_id = FIREBASE_PROJECT_ID; // CRÍTICO: Añadido para la autenticación anónima
     config.database_url = "studio-4253330981-dcdc9-default-rtdb.firebaseio.com";
     
     // --- Configuración de Autenticación Anónima ---
-    // Esto es crucial para que el dispositivo obtenga un token de acceso.
     config.signer.anonymous = true;
 
     Firebase.begin(&config, &auth);
@@ -447,3 +445,5 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    

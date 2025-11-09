@@ -9,13 +9,13 @@
  * 3. Pega ese UID en la línea de abajo, reemplazando "PASTE_YOUR_USER_UID_HERE".
  *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
- * Este código está diseñado para la versión 2.x.x de la biblioteca
+ * Este código está diseñado para la versión 4.x.x de la biblioteca
  * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
  * ==================================================================================
  */
 #include <Arduino.h>
 #include <WiFi.h>
-#include <FirebaseESP32.h> // Librería principal para v2.x
+#include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
 #include "DHT.h"
 #include "time.h"
@@ -38,10 +38,8 @@
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
 #define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
-// Objetos de Firebase para v2.x
+// Objetos de Firebase
 FirebaseData fbdo;
-FirebaseData fbdo_config;
-FirebaseData fbdo_commands;
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -51,7 +49,7 @@ FirebaseConfig config;
 #define DHTPIN 4
 #define DHTTYPE DHT22
 const int SOUND_SENSOR_PIN = 34;
-const int LIGHT_SENSOR_PIN = 36; 
+const int LIGHT_SENSOR_PIN = 36;
 
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -104,7 +102,6 @@ const long fetchConfigInterval = 60000;
 const long playerStatusInterval = 5000; // Intervalo para reportar estado del reproductor
 const long fetchCommandsInterval = 3000; // Intervalo para buscar nuevos comandos
 
-
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
 long orangeEventTimestamps[MAX_SOUND_EVENTS];
@@ -142,14 +139,14 @@ void setup() {
     Serial.println("Inicializando...");
 
     dht.begin();
-    mySerial.begin(9600, SERIAL_8N1, 27, 26); 
+    mySerial.begin(9600, SERIAL_8N1, 27, 26);
     delay(2000);
 
     pinMode(LED_VERDE_PIN, OUTPUT);
     pinMode(LED_NARANJA_PIN, OUTPUT);
     pinMode(LED_ROJO_PIN, OUTPUT);
     digitalWrite(LED_VERDE_PIN, LOW);
-    digitalWrite(LED_NARANja_PIN, LOW);
+    digitalWrite(LED_NARANJA_PIN, LOW);
     digitalWrite(LED_ROJO_PIN, LOW);
 
     for (int i = 0; i < MAX_SOUND_EVENTS; i++) {
@@ -162,7 +159,7 @@ void setup() {
     }
     
     Serial.println("Iniciando DFPlayer...");
-    if (!myDFPlayer.begin(mySerial)) { 
+    if (!myDFPlayer.begin(mySerial)) {
         Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones y tarjeta SD.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
@@ -189,15 +186,15 @@ void setup() {
     }
     Serial.println("Hora sincronizada.");
 
-    Serial.println("Configurando Firebase (API v2.x)...");
+    Serial.println("Configurando Firebase...");
     config.api_key = API_KEY;
-    auth.user.email = "placeholder@email.com"; // Requerido por la v2.x para auth anónima
-    auth.user.password = "placeholder";      // Requerido por la v2.x para auth anónima
     config.database_url = DATABASE_URL;
+    auth.user.email = "placeholder@email.com";
+    auth.user.password = "placeholder";
     config.token_status_callback = tokenStatusCallback;
-
-    Firebase.begin(&config, &auth);
+    config.signer.test_mode = true;
     Firebase.reconnectWiFi(true);
+    Firebase.begin(&config, &auth);
 }
 
 // Función de callback para el estado del token
@@ -207,7 +204,7 @@ void tokenStatusCallback(TokenInfo info) {
         // Una vez que el token está listo, podemos obtener la configuración inicial.
         fetchThresholdsFromFirebase();
     } else {
-        Serial.printf("Estado del Token: error, %s\n", info.error.message().c_str());
+        Serial.printf("Estado del Token: error, %s\n", info.error.message.c_str());
     }
 }
 
@@ -243,37 +240,52 @@ int readLightLevel() {
     return analogRead(LIGHT_SENSOR_PIN);
 }
 
+
+String getJsonString(String& payload, const char* fieldName) {
+    String searchKey = "\"" + String(fieldName) + "\":";
+    int startIndex = payload.indexOf(searchKey);
+    if (startIndex == -1) return "{}";
+    startIndex = payload.indexOf("{", startIndex);
+    int braceCount = 1;
+    int endIndex = startIndex + 1;
+    while (endIndex < payload.length() && braceCount > 0) {
+        if (payload[endIndex] == '{') braceCount++;
+        if (payload[endIndex] == '}') braceCount--;
+        endIndex++;
+    }
+    if (endIndex > payload.length()) return "{}";
+    return payload.substring(startIndex, endIndex);
+}
+
 void fetchMusicCommands() {
     if (!Firebase.ready()) return;
 
     String docPath = "users/" + String(USER_UID) + "/musicControl/state";
-    if (Firebase.Firestore.getDocument(&fbdo_commands, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
-        if (fbdo_commands.httpCode() == 200) {
-            String payload = fbdo_commands.payload();
-            
-            // La v2.x no tiene la misma estructura de "fields", el JSON es más directo
-            DynamicJsonDocument jsonDoc(1024);
-            deserializeJson(jsonDoc, payload);
-            
-            unsigned long newTimestamp = jsonDoc["fields"]["lastCommandTimestamp"]["integerValue"].as<unsigned long>();
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+        if (fbdo.httpCode() == 200) {
+            String payload = fbdo.payload();
+            FirebaseJson json;
+            json.setJsonData(getJsonString(payload, "fields"));
+            FirebaseJsonData result;
 
-            if (newTimestamp > 0 && newTimestamp <= lastCommandTimestamp) {
-                return; // Comando ya procesado o es antiguo.
+            if (json.get(result, "lastCommandTimestamp/integerValue")) {
+                unsigned long newTimestamp = atol(result.stringValue.c_str());
+                if (newTimestamp > 0 && newTimestamp <= lastCommandTimestamp) {
+                    return; // Comando ya procesado o es antiguo.
+                }
+                lastCommandTimestamp = newTimestamp;
             }
-            lastCommandTimestamp = newTimestamp; // Actualizar al timestamp más reciente
 
-            // Procesar comando de volumen
-            if (jsonDoc["fields"].containsKey("volume")) {
-                int newVolume = jsonDoc["fields"]["volume"]["integerValue"].as<int>();
+            if (json.get(result, "volume/integerValue")) {
+                int newVolume = result.intValue;
                 if(newVolume >= 0 && newVolume <= 30) {
                     myDFPlayer.volume(newVolume);
                     Serial.printf("-> Comando Remoto: Volumen ajustado a %d\n", newVolume);
                 }
             }
-            
-            // Procesar comando de reproducción
-            if (jsonDoc["fields"].containsKey("command")) {
-                String command = jsonDoc["fields"]["command"]["stringValue"].as<String>();
+
+            if (json.get(result, "command/stringValue")) {
+                String command = result.stringValue;
                 Serial.printf("-> Comando Remoto: %s\n", command.c_str());
                 if (command == "play") {
                     myDFPlayer.start();
@@ -290,7 +302,7 @@ void fetchMusicCommands() {
             reportPlayerStatus(); // Reportar estado después de ejecutar un comando
         }
     } else {
-         // Silencio
+        // Silencio
     }
 }
 
@@ -306,47 +318,45 @@ void fetchThresholdsFromFirebase() {
     }
     String docPath = "users/" + String(USER_UID) + "/thresholdConfigurations/main";
     Serial.println("Obteniendo documento de configuración desde: " + docPath);
-    if (Firebase.Firestore.getDocument(&fbdo_config, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
-        if (fbdo_config.httpCode() == 200) {
-            String payload = fbdo_config.payload();
-            DynamicJsonDocument jsonDoc(2048); // Aumentar tamaño para configuraciones complejas
-            deserializeJson(jsonDoc, payload);
-
-            JsonObject fields = jsonDoc["fields"];
-            if (fields.isNull()) return;
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+        if (fbdo.httpCode() == 200) {
+            String payload = fbdo.payload();
+            FirebaseJson json;
+            json.setJsonData(getJsonString(payload, "fields"));
+            FirebaseJsonData result;
 
             Serial.println("Umbrales actualizados desde Firebase:");
-            if (fields.containsKey("soundThresholdLow")) soundThresholdLow = fields["soundThresholdLow"]["doubleValue"].as<float>();
-            if (fields.containsKey("soundThresholdMedium")) soundThresholdMedium = fields["soundThresholdMedium"]["doubleValue"].as<float>();
+            if (json.get(result, "soundThresholdLow/doubleValue") || json.get(result, "soundThresholdLow/integerValue")) soundThresholdLow = result.doubleValue;
+            if (json.get(result, "soundThresholdMedium/doubleValue") || json.get(result, "soundThresholdMedium/integerValue")) soundThresholdMedium = result.doubleValue;
             Serial.printf("  - Sonido (Naranja): %.0f, Sonido (Rojo): %.0f\n", soundThresholdLow, soundThresholdMedium);
             
-            if (fields.containsKey("temperatureThresholdVerde")) tempThresholdVerde = fields["temperatureThresholdVerde"]["doubleValue"].as<float>();
-            if (fields.containsKey("temperatureThresholdNaranja")) tempThresholdNaranja = fields["temperatureThresholdNaranja"]["doubleValue"].as<float>();
+            if (json.get(result, "temperatureThresholdVerde/doubleValue") || json.get(result, "temperatureThresholdVerde/integerValue")) tempThresholdVerde = result.doubleValue;
+            if (json.get(result, "temperatureThresholdNaranja/doubleValue") || json.get(result, "temperatureThresholdNaranja/integerValue")) tempThresholdNaranja = result.doubleValue;
             Serial.printf("  - Temp (Naranja): %.1f, Temp (Rojo): %.1f\n", tempThresholdVerde, tempThresholdNaranja);
 
-            if (fields.containsKey("lightThresholdLow")) lightThresholdLow = fields["lightThresholdLow"]["doubleValue"].as<float>();
-            if (fields.containsKey("lightThresholdMedium")) lightThresholdMedium = fields["lightThresholdMedium"]["doubleValue"].as<float>();
+            if (json.get(result, "lightThresholdLow/doubleValue") || json.get(result, "lightThresholdLow/integerValue")) lightThresholdLow = result.doubleValue;
+            if (json.get(result, "lightThresholdMedium/doubleValue") || json.get(result, "lightThresholdMedium/integerValue")) lightThresholdMedium = result.doubleValue;
             Serial.printf("  - Luz (Naranja): %.0f, Luz (Rojo): %.0f\n", lightThresholdLow, lightThresholdMedium);
 
-            if (fields.containsKey("orangeSoundEventCount")) orangeSoundEventCountThreshold = fields["orangeSoundEventCount"]["integerValue"].as<int>();
-            if (fields.containsKey("redSoundEventCount")) redSoundEventCountThreshold = fields["redSoundEventCount"]["integerValue"].as<int>();
-            if (fields.containsKey("timeBetweenEvents")) timeBetweenEventsMillis = fields["timeBetweenEvents"]["integerValue"].as<long>();
-            if (fields.containsKey("orangeBlockDuration")) orangeBlockDurationMillis = fields["orangeBlockDuration"]["integerValue"].as<long>();
-            if (fields.containsKey("redBlockDuration")) redBlockDurationMillis = fields["redBlockDuration"]["integerValue"].as<long>();
+            if (json.get(result, "orangeSoundEventCount/integerValue")) orangeSoundEventCountThreshold = result.intValue;
+            if (json.get(result, "redSoundEventCount/integerValue")) redSoundEventCountThreshold = result.intValue;
+            if (json.get(result, "timeBetweenEvents/integerValue")) timeBetweenEventsMillis = result.intValue;
+            if (json.get(result, "orangeBlockDuration/integerValue")) orangeBlockDurationMillis = result.intValue;
+            if (json.get(result, "redBlockDuration/integerValue")) redBlockDurationMillis = result.intValue;
             Serial.printf("  - Logica Eventos Sonido: Naranja Cnt: %d, Rojo Cnt: %d, Ventana: %ldms, Bloqueo N: %ldms, Bloqueo R: %ldms\n", orangeSoundEventCountThreshold, redSoundEventCountThreshold, timeBetweenEventsMillis, orangeBlockDurationMillis, redBlockDurationMillis);
 
-            if (fields.containsKey("orangeLightEventCount")) orangeLightEventCountThreshold = fields["orangeLightEventCount"]["integerValue"].as<int>();
-            if (fields.containsKey("redLightEventCount")) redLightEventCountThreshold = fields["redLightEventCount"]["integerValue"].as<int>();
-            if (fields.containsKey("timeBetweenLightEvents")) timeBetweenLightEventsMillis = fields["timeBetweenLightEvents"]["integerValue"].as<long>();
-            if (fields.containsKey("orangeLightBlockDuration")) orangeLightBlockDurationMillis = fields["orangeLightBlockDuration"]["integerValue"].as<long>();
-            if (fields.containsKey("redLightBlockDuration")) redLightBlockDurationMillis = fields["redLightBlockDuration"]["integerValue"].as<long>();
+            if (json.get(result, "orangeLightEventCount/integerValue")) orangeLightEventCountThreshold = result.intValue;
+            if (json.get(result, "redLightEventCount/integerValue")) redLightEventCountThreshold = result.intValue;
+            if (json.get(result, "timeBetweenLightEvents/integerValue")) timeBetweenLightEventsMillis = result.intValue;
+            if (json.get(result, "orangeLightBlockDuration/integerValue")) orangeLightBlockDurationMillis = result.intValue;
+            if (json.get(result, "redLightBlockDuration/integerValue")) redLightBlockDurationMillis = result.intValue;
             Serial.printf("  - Logica Eventos Luz: Naranja Cnt: %d, Rojo Cnt: %d, Ventana: %ldms, Bloqueo N: %ldms, Bloqueo R: %ldms\n", orangeLightEventCountThreshold, redLightEventCountThreshold, timeBetweenLightEventsMillis, orangeLightBlockDurationMillis, redLightBlockDurationMillis);
 
         } else {
-            Serial.printf("Error al obtener documento de configuración: %s\n", fbdo_config.error().c_str());
+            Serial.printf("Error al obtener documento de configuración: %s\n", fbdo.errorReason().c_str());
         }
     } else {
-        Serial.printf("Fallo en la llamada a getDocument para la configuración: %s\n", fbdo_config.error().c_str());
+        Serial.printf("Fallo en la llamada a getDocument para la configuración: %s\n", fbdo.errorReason().c_str());
     }
 }
 
@@ -390,12 +400,10 @@ void reportPlayerStatus() {
     int trackCount = myDFPlayer.readFileCounts();
     if (trackCount < 0) trackCount = 0;
 
-    String path = "users/" + String(USER_UID) + "/musicControl/state";
-    String content = "{\"fields\":{\"status\":{\"stringValue\":\"" + status + "\"},\"currentTrack\":{\"integerValue\":\"" + String(currentTrack) + "\"},\"trackCount\":{\"integerValue\":\"" + String(trackCount) + "\"}}}";
+    String documentPath = "users/" + String(USER_UID) + "/musicControl/state";
+    String content = "{\"fields\":{\"status\":{\"stringValue\":\"" + status + "\"},\"currentTrack\":{\"integerValue\":" + String(currentTrack) + "},\"trackCount\":{\"integerValue\":" + String(trackCount) + "}}}";
     
-    if (!Firebase.Firestore.patchDocument(&fbdo_commands, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "status,currentTrack,trackCount")) {
-        // Silencio en éxito
-    }
+    Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "status,currentTrack,trackCount");
 }
 
 
@@ -465,7 +473,7 @@ void loop() {
             redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
-                redLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
+                redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
                 for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
                 orangeLightEventIndex = 0;
             }
@@ -510,12 +518,12 @@ void loop() {
         }
         
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
-        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":\"" + String(soundLevel) + "\"},\"lightLevel\":{\"integerValue\":\"" + String(lightLevel) + "\"},\"ledStatus\":{\"integerValue\":\"" + String(currentLedStatus) + "\"},\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}}}";
+        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"lightLevel\":{\"integerValue\":" + String(lightLevel) + "},\"ledStatus\":{\"integerValue\":" + String(currentLedStatus) + "},\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}}}";
 
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" )) {
              // Silencio en éxito
         } else {
-            Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.error().c_str());
+            Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.errorReason().c_str());
         }
     }
 }

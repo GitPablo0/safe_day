@@ -17,16 +17,20 @@
 #include "DHT.h"
 #include <HardwareSerial.h>
 #include "DFRobotDFPlayerMini.h"
-#include "time.h"
 
 // ===============================================
-// 1. CONFIGURACIÓN DE WIFI Y FIREBASE (YA RELLENADO)
+// 1. CONFIGURACIÓN DE WIFI Y FIREBASE (DEBES RELLENAR ESTO)
 // ===============================================
 #define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
+
+// Pega aquí la API Key y el Project ID de tu proyecto de Firebase
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+
+// Pega aquí el User ID que aparece en el panel de la aplicación web
 #define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
+
 
 // ===============================================
 // 2. PINES Y SENSORES
@@ -52,62 +56,193 @@ HardwareSerial mySoftwareSerial(1);
 DFRobotDFPlayerMini myDFPlayer;
 bool isPlaying = false;
 
+
 // ===============================================
 // 4. UMBRALES Y LÓGICA DE EVENTOS (Valores por defecto)
+// Estos valores serán sobreescritos por la configuración de Firebase si está disponible.
 // ===============================================
-float soundThresholdLow = 300, soundThresholdMedium = 380;
-float lightThresholdLow = 3000, lightThresholdMedium = 1000;
-float tempThresholdVerde = 24, tempThresholdNaranja = 28;
-int orangeSoundEventCountThreshold = 3, redSoundEventCountThreshold = 3;
+// Sonido
+float soundThresholdLow = 300;
+float soundThresholdMedium = 380;
+int orangeSoundEventCountThreshold = 3;
+int redSoundEventCountThreshold = 3;
 long timeBetweenEventsMillis = 10000;
-long orangeBlockDurationMillis = 60000, redBlockDurationMillis = 60000;
-int orangeLightEventCountThreshold = 3, redLightEventCountThreshold = 3;
+long orangeBlockDurationMillis = 60000;
+long redBlockDurationMillis = 60000;
+
+// Luz
+float lightThresholdLow = 3000;
+float lightThresholdMedium = 1000;
+int orangeLightEventCountThreshold = 3;
+int redLightEventCountThreshold = 3;
 long timeBetweenLightEventsMillis = 10000;
-long orangeLightBlockDurationMillis = 60000, redLightBlockDurationMillis = 60000;
+long orangeLightBlockDurationMillis = 60000;
+long redLightBlockDurationMillis = 60000;
+
+// Temperatura
+float tempThresholdVerde = 24;
+float tempThresholdNaranja = 28;
+
+// Música
 const unsigned long musicPlayDuration = 180000; // 3 minutos
 
 // ===============================================
 // 5. VARIABLES DE ESTADO Y FIREBASE
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
-const long sendDataInterval = 1000;
-unsigned long fetchConfigPrevMillis = 0;
-const long fetchConfigInterval = 300000; // 5 minutos
+const long sendDataInterval = 1000; // Intervalo de lectura de sensores
+const long firebaseUpdateInterval = 1000; // Intervalo de envío de datos a Firebase
 
 FirebaseData fbdo;
+FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
+
+String thresholdConfigPath;
+String sensorDataPath;
 bool firebaseReady = false;
 
-// Eventos
+// Variables para eventos
 const int MAX_EVENTS = 10;
-long orangeSoundEventTimestamps[MAX_EVENTS], redSoundEventTimestamps[MAX_EVENTS];
-int orangeSoundEventIndex = 0, redSoundEventIndex = 0;
-long orangeLightEventTimestamps[MAX_EVENTS], redLightEventTimestamps[MAX_EVENTS];
-int orangeLightEventIndex = 0, redLightEventIndex = 0;
+long orangeSoundEventTimestamps[MAX_EVENTS];
+int orangeSoundEventIndex = 0;
+long redSoundEventTimestamps[MAX_EVENTS];
+int redSoundEventIndex = 0;
+long orangeLightEventTimestamps[MAX_EVENTS];
+int orangeLightEventIndex = 0;
+long redLightEventTimestamps[MAX_EVENTS];
+int redLightEventIndex = 0;
 
-unsigned long orangeLedBlockedUntil = 0, redLedBlockedUntil = 0;
-unsigned long orangeLightLedBlockedUntil = 0, redLightLedBlockedUntil = 0;
-unsigned long musicStopTime = 0;
+unsigned long orangeLedBlockedUntil = 0;
+unsigned long redLedBlockedUntil = 0;
+unsigned long orangeLightLedBlockedUntil = 0;
+unsigned long redLightLedBlockedUntil = 0;
+
 int currentLedStatus = 1;
+unsigned long musicStopTime = 0;
+
+// ===============================================
+// 6. FUNCIONES AUXILIARES DE FIREBASE
+// ===============================================
+
+// Función para procesar un objeto JSON de configuración
+void processConfigJson(FirebaseJson* json) {
+    FirebaseJsonData jsonData;
+    
+    if (json->get(jsonData, "soundThresholdLow")) soundThresholdLow = jsonData.to<float>();
+    if (json->get(jsonData, "soundThresholdMedium")) soundThresholdMedium = jsonData.to<float>();
+    if (json->get(jsonData, "lightThresholdLow")) lightThresholdLow = jsonData.to<float>();
+    if (json->get(jsonData, "lightThresholdMedium")) lightThresholdMedium = jsonData.to<float>();
+    if (json->get(jsonData, "temperatureThresholdVerde")) tempThresholdVerde = jsonData.to<float>();
+    if (json->get(jsonData, "temperatureThresholdNaranja")) tempThresholdNaranja = jsonData.to<float>();
+    
+    if (json->get(jsonData, "orangeSoundEventCount")) orangeSoundEventCountThreshold = jsonData.to<int>();
+    if (json->get(jsonData, "redSoundEventCount")) redSoundEventCountThreshold = jsonData.to<int>();
+    if (json->get(jsonData, "timeBetweenEvents")) timeBetweenEventsMillis = jsonData.to<long>();
+    if (json->get(jsonData, "orangeBlockDuration")) orangeBlockDurationMillis = jsonData.to<long>();
+    if (json->get(jsonData, "redBlockDuration")) redBlockDurationMillis = jsonData.to<long>();
+    
+    if (json->get(jsonData, "orangeLightEventCount")) orangeLightEventCountThreshold = jsonData.to<int>();
+    if (json->get(jsonData, "redLightEventCount")) redLightEventCountThreshold = jsonData.to<int>();
+    if (json->get(jsonData, "timeBetweenLightEvents")) timeBetweenLightEventsMillis = jsonData.to<long>();
+    if (json->get(jsonData, "orangeLightBlockDuration")) orangeLightBlockDurationMillis = jsonData.to<long>();
+    if (json->get(jsonData, "redLightBlockDuration")) redLightBlockDurationMillis = jsonData.to<long>();
+
+    Serial.println("Umbrales actualizados desde Firebase.");
+}
+
+
+// Callback que se ejecuta cuando hay un cambio en la configuración de umbrales
+void streamCallback(FirebaseStream data) {
+  Serial.println("Stream de configuración recibido. Actualizando umbrales...");
+  if (data.dataType() == "json") {
+    FirebaseJson* json = data.to<FirebaseJson*>();
+    processConfigJson(json);
+  }
+}
+
+void streamTimeoutCallback(bool timeout) {
+  if (timeout) {
+    Serial.println("Stream de configuración timed out. Intentando reiniciar...");
+  }
+}
+
+void setupFirebase() {
+    Serial.println("Conectando a Firebase...");
+    
+    // --- Asignación de configuración ---
+    config.api_key = API_KEY;
+    // ¡IMPORTANTE! Asignar la URL completa directamente evita errores de concatenación de Strings.
+    config.database_url = "studio-4253330981-dcdc9-default-rtdb.firebaseio.com";
+    auth.user.email = ""; // Usamos Custom Token, no es necesario email/pass
+    auth.user.password = "";
+    config.signer.test_mode = true; // Usar modo de prueba para autenticación simplificada
+    
+    Firebase.begin(&config, &auth);
+    Firebase.reconnectWiFi(true);
+
+    // Espera a que Firebase esté listo
+    unsigned long startTime = millis();
+    while (Firebase.getToken() == "" && millis() - startTime < 10000) {
+        Serial.print(".");
+        delay(500);
+    }
+    
+    if (Firebase.getToken() == "") {
+        Serial.println("\nError: No se pudo obtener el token de autenticación de Firebase.");
+        return;
+    }
+    
+    Serial.println("\nAutenticación con Firebase exitosa.");
+    
+    // Definir rutas para RTDB
+    thresholdConfigPath = "users/" + String(USER_UID) + "/thresholdConfigurations/main";
+    sensorDataPath = "users/" + String(USER_UID) + "/sensorData/latest";
+
+    // Obtener la configuración inicial de umbrales
+    if (Firebase.RTDB.getJSON(&fbdo, thresholdConfigPath)) {
+        if(fbdo.dataType() == "json"){
+            FirebaseJson* json = fbdo.to<FirebaseJson*>();
+            processConfigJson(json);
+        } else {
+            Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
+            Serial.println(fbdo.errorReason());
+        }
+    } else {
+        Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
+        Serial.println(fbdo.errorReason());
+    }
+    
+    // Iniciar el stream para escuchar cambios en la configuración
+    if (!Firebase.RTDB.beginStream(&stream, thresholdConfigPath)) {
+        Serial.println("Error: No se pudo iniciar el stream de configuración.");
+        Serial.println(stream.errorReason());
+    } else {
+        Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
+        firebaseReady = true;
+        Serial.println("Firebase listo y escuchando cambios.");
+    }
+}
 
 
 // ===============================================
-// 6. FUNCIONES DE LECTURA DE SENSORES
+// 7. FUNCIONES DE LECTURA DE SENSORES
 // ===============================================
 float readTemperature() {
     float t = dht.readTemperature();
-    return isnan(t) ? -99.0 : t; // Retorna un valor distintivo para errores
+    return isnan(t) ? 0 : t;
 }
 
 float readHumidity() {
     float h = dht.readHumidity();
-    return isnan(h) ? -99.0 : h;
+    return isnan(h) ? 0 : h;
 }
 
 int readSoundLevel() {
     const int sampleWindow = 50;
-    unsigned int peakToPeak = 0, signalMax = 0, signalMin = 4095;
+    unsigned int peakToPeak = 0;
+    unsigned int signalMax = 0;
+    unsigned int signalMin = 4095;
     unsigned long startMillis = millis();
     while (millis() - startMillis < sampleWindow) {
         unsigned int sample = analogRead(SOUND_SENSOR_PIN);
@@ -122,101 +257,17 @@ int readSoundLevel() {
 
 int readLightLevel() {
     long total = 0;
-    int samples = 5;
+    int samples = 10;
     for (int i = 0; i < samples; i++) {
         total += analogRead(LIGHT_SENSOR_PIN);
-        delay(2);
+        delay(5);
     }
     return total / samples;
 }
 
 // ===============================================
-// 7. LÓGICA DE FIREBASE Y ESTADOS
+// 8. LÓGICA PRINCIPAL Y SETUP/LOOP
 // ===============================================
-
-void fetchThresholdsFromFirebase() {
-    if (!Firebase.ready()) {
-        Serial.println("Firebase no listo. Saltando fetch.");
-        return;
-    }
-    
-    String docPath = "users/" + String(USER_UID) + "/thresholdConfigurations/main";
-    Serial.println("Obteniendo config desde: " + docPath);
-
-    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
-        if (fbdo.httpCode() == 200 && fbdo.dataType() == "json") {
-            FirebaseJson json(fbdo.payload().c_str());
-            FirebaseJsonData result;
-            
-            FirebaseJson fieldsJson;
-            json.get(result, "fields");
-            if (result.success) {
-                fieldsJson.setJsonData(result.stringValue);
-
-                if(fieldsJson.get(result, "soundThresholdLow/doubleValue") || fieldsJson.get(result, "soundThresholdLow/integerValue")) soundThresholdLow = result.to<float>();
-                if(fieldsJson.get(result, "soundThresholdMedium/doubleValue") || fieldsJson.get(result, "soundThresholdMedium/integerValue")) soundThresholdMedium = result.to<float>();
-                if(fieldsJson.get(result, "lightThresholdLow/doubleValue") || fieldsJson.get(result, "lightThresholdLow/integerValue")) lightThresholdLow = result.to<float>();
-                if(fieldsJson.get(result, "lightThresholdMedium/doubleValue") || fieldsJson.get(result, "lightThresholdMedium/integerValue")) lightThresholdMedium = result.to<float>();
-                if(fieldsJson.get(result, "temperatureThresholdVerde/doubleValue") || fieldsJson.get(result, "temperatureThresholdVerde/integerValue")) tempThresholdVerde = result.to<float>();
-                if(fieldsJson.get(result, "temperatureThresholdNaranja/doubleValue") || fieldsJson.get(result, "temperatureThresholdNaranja/integerValue")) tempThresholdNaranja = result.to<float>();
-                if(fieldsJson.get(result, "orangeSoundEventCount/integerValue")) orangeSoundEventCountThreshold = result.to<int>();
-                if(fieldsJson.get(result, "redSoundEventCount/integerValue")) redSoundEventCountThreshold = result.to<int>();
-                if(fieldsJson.get(result, "timeBetweenEvents/integerValue")) timeBetweenEventsMillis = result.to<long>();
-                if(fieldsJson.get(result, "orangeBlockDuration/integerValue")) orangeBlockDurationMillis = result.to<long>();
-                if(fieldsJson.get(result, "redBlockDuration/integerValue")) redBlockDurationMillis = result.to<long>();
-                if(fieldsJson.get(result, "orangeLightEventCount/integerValue")) orangeLightEventCountThreshold = result.to<int>();
-                if(fieldsJson.get(result, "redLightEventCount/integerValue")) redLightEventCountThreshold = result.to<int>();
-                if(fieldsJson.get(result, "timeBetweenLightEvents/integerValue")) timeBetweenLightEventsMillis = result.to<long>();
-                if(fieldsJson.get(result, "orangeLightBlockDuration/integerValue")) orangeLightBlockDurationMillis = result.to<long>();
-                if(fieldsJson.get(result, "redLightBlockDuration/integerValue")) redLightBlockDurationMillis = result.to<long>();
-                
-                Serial.println("Umbrales actualizados desde Firestore.");
-            } else {
-                 Serial.println("Error: No se encontró el campo 'fields' en la respuesta JSON.");
-            }
-
-        } else {
-            Serial.println("No se pudo obtener config inicial. Usando valores por defecto.");
-            Serial.println("Razón: " + fbdo.errorReason());
-        }
-    } else {
-        Serial.println("Fallo en llamada a Firestore.getDocument. Razón: " + fbdo.errorReason());
-    }
-}
-
-void tokenStatusCallback(TokenInfo info) {
-  if (info.status == token_status_ready) {
-    Serial.println("Token de Firebase listo.");
-    firebaseReady = true;
-    fetchThresholdsFromFirebase(); // Primera carga de umbrales
-  } else {
-    Serial.println("Error en token de Firebase: " + String(info.error.message.c_str()));
-    firebaseReady = false;
-  }
-}
-
-void setupFirebase() {
-    config.api_key = API_KEY;
-    config.signer.test_mode = true;
-    config.token_status_callback = tokenStatusCallback;
-    
-    Firebase.begin(&config, &auth);
-    Firebase.reconnectWiFi(true);
-}
-
-String buildSensorDataJson(float temp, float hum, int sound, int light, int status) {
-    FirebaseJson json;
-    json.set("fields/temperature/doubleValue", String(temp, 2));
-    json.set("fields/humidity/doubleValue", String(hum, 2));
-    json.set("fields/soundLevel/integerValue", String(sound));
-    json.set("fields/lightLevel/integerValue", String(light));
-    json.set("fields/ledStatus/integerValue", String(status));
-    
-    String jsonString;
-    json.toString(jsonString, false);
-    return jsonString;
-}
-
 int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
     int count = 0;
     unsigned long now = millis();
@@ -228,9 +279,23 @@ int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
     return count;
 }
 
-// ===============================================
-// 8. LÓGICA PRINCIPAL Y SETUP/LOOP
-// ===============================================
+void printStateReason(int finalStatus, int temp, int soundI, int lightI, int soundB, int lightB) {
+    if (finalStatus == 1) {
+        Serial.println(" -> Causa: Calma");
+        return;
+    }
+    
+    String reason = " -> Causa: ";
+    if (finalStatus == lightB) reason += (finalStatus == 3 ? "Bloqueo Rojo por Luz" : "Bloqueo Naranja por Luz");
+    else if (finalStatus == soundB) reason += (finalStatus == 3 ? "Bloqueo Rojo por Sonido" : "Bloqueo Naranja por Sonido");
+    else if (finalStatus == lightI) reason += "Luz Instantánea";
+    else if (finalStatus == soundI) reason += "Sonido Instantáneo";
+    else if (finalStatus == temp) reason += "Temperatura";
+    else reason += "Desconocida";
+    Serial.println(reason);
+}
+
+
 void setup() {
     Serial.begin(115200);
     Serial.println("Inicializando NeuroSense...");
@@ -242,8 +307,11 @@ void setup() {
     pinMode(LED_VERDE_PIN, OUTPUT);
     pinMode(LED_NARANJA_PIN, OUTPUT);
     pinMode(LED_ROJO_PIN, OUTPUT);
-    digitalWrite(LED_VERDE_PIN, HIGH);
+    digitalWrite(LED_VERDE_PIN, LOW);
+    digitalWrite(LED_NARANJA_PIN, LOW);
+    digitalWrite(LED_ROJO_PIN, LOW);
 
+    // Conectar a WiFi
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     Serial.print("Conectando a WiFi ");
     int wifi_retries = 20;
@@ -259,11 +327,11 @@ void setup() {
         Serial.println(WiFi.localIP());
         setupFirebase();
     } else {
-        Serial.println("No se pudo conectar a WiFi. Funcionando en modo offline.");
+        Serial.println("No se pudo conectar a WiFi. El dispositivo funcionará en modo offline.");
     }
     
     Serial.println("Inicializando DFPlayer...");
-    if (!myDFPlayer.begin(mySoftwareSerial, false)) {
+    if (!myDFPlayer.begin(mySoftwareSerial, false)) { // 'false' para no esperar respuesta, útil si hay ruido al inicio
         Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
@@ -271,16 +339,12 @@ void setup() {
     }
 
     Serial.println("Configuración finalizada. El dispositivo está listo.");
+    digitalWrite(LED_VERDE_PIN, HIGH);
 }
 
 
 void loop() {
     unsigned long currentMillis = millis();
-
-    if (firebaseReady && (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval)) {
-        fetchConfigPrevMillis = currentMillis;
-        fetchThresholdsFromFirebase();
-    }
 
     if (currentMillis - sendDataPrevMillis >= sendDataInterval) {
         sendDataPrevMillis = currentMillis;
@@ -290,12 +354,13 @@ void loop() {
         int soundLevel = readSoundLevel();
         int lightLevel = readLightLevel();
         
+        // --- Lógica de Eventos de Sonido ---
         if (soundLevel >= soundThresholdMedium) {
             redSoundEventTimestamps[redSoundEventIndex] = currentMillis;
             redSoundEventIndex = (redSoundEventIndex + 1) % MAX_EVENTS;
             if (redLedBlockedUntil <= currentMillis && countRecentEvents(redSoundEventTimestamps, timeBetweenEventsMillis, MAX_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-                for(int i=0; i<MAX_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; }
+                for(int i=0; i<MAX_EVENTS; i++) { orangeSoundEventTimestamps[i] = 0; } 
                 orangeSoundEventIndex = 0;
             }
         } else if (soundLevel >= soundThresholdLow) {
@@ -306,8 +371,9 @@ void loop() {
             }
         }
         
+        // --- Lógica de Eventos de Luz ---
         if (lightLevel <= lightThresholdMedium) {
-             redLightEventTimestamps[redLightEventIndex] = currentMillis;
+            redLightEventTimestamps[redLightEventIndex] = currentMillis;
             redLightEventIndex = (redLightEventIndex + 1) % MAX_EVENTS;
             if (redLightLedBlockedUntil <= currentMillis && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_EVENTS) >= redLightEventCountThreshold) {
                 redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
@@ -322,34 +388,28 @@ void loop() {
             }
         }
         
-        int finalStatus = 1;
-        if(temperature != -99.0) {
-             if (temperature >= tempThresholdNaranja) finalStatus = 3;
-             else if (temperature >= tempThresholdVerde) finalStatus = 2;
-        }
+        // --- Lógica de Determinación de Estado del LED ---
+        int estadoSonidoBloqueado = (redLedBlockedUntil > currentMillis) ? 3 : ((orangeLedBlockedUntil > currentMillis) ? 2 : 1);
+        int estadoLuzBloqueado = (redLightLedBlockedUntil > currentMillis) ? 3 : ((orangeLightLedBlockedUntil > currentMillis) ? 2 : 1);
+        int estadoSonidoInstantaneo = (soundLevel >= soundThresholdMedium) ? 3 : ((soundLevel >= soundThresholdLow) ? 2 : 1);
+        int estadoLuzInstantaneo = (lightLevel <= lightThresholdMedium) ? 3 : ((lightLevel <= lightThresholdLow) ? 2 : 1);
+        int estadoTemp = (temperature >= tempThresholdNaranja) ? 3 : ((temperature >= tempThresholdVerde) ? 2 : 1);
 
-        if (soundLevel >= soundThresholdMedium) finalStatus = max(finalStatus, 3);
-        else if (soundLevel >= soundThresholdLow) finalStatus = max(finalStatus, 2);
-
-        if (lightLevel <= lightThresholdMedium) finalStatus = max(finalStatus, 3);
-        else if (lightLevel <= lightThresholdLow) finalStatus = max(finalStatus, 2);
-        
-        if (redLedBlockedUntil > currentMillis || redLightLedBlockedUntil > currentMillis) finalStatus = max(finalStatus, 3);
-        else if (orangeLedBlockedUntil > currentMillis || orangeLightLedBlockedUntil > currentMillis) finalStatus = max(finalStatus, 2);
-        
-        currentLedStatus = finalStatus;
+        currentLedStatus = max({estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado});
 
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
         
+        // --- Lógica de DFPlayer con Temporizador ---
         if (currentLedStatus >= 2) {
             if (!isPlaying) {
                 myDFPlayer.loop(1);
                 isPlaying = true;
                 musicStopTime = currentMillis + musicPlayDuration;
                 Serial.println("-> DFPlayer: Iniciando reproducción por 3 minutos.");
-            } else if (currentMillis >= musicStopTime) {
+            } else if (currentMillis >= musicStopTime) { // Si el tiempo se acabó
+                 // Reinicia el ciclo de música si el ambiente sigue estresante
                  musicStopTime = currentMillis + musicPlayDuration;
                  Serial.println("-> DFPlayer: Ambiente aún estresante. Renovando música.");
             }
@@ -362,18 +422,29 @@ void loop() {
             }
         }
 
-        Serial.print("Temp: "); Serial.print(temperature, 1);
+        // --- Salida al Monitor Serie ---
+        Serial.print("Temp: "); Serial.print(temperature);
         Serial.print(" *C, Sonido: "); Serial.print(soundLevel);
         Serial.print(", Luz: "); Serial.print(lightLevel);
-        Serial.print(" -> Estado LED: "); Serial.println(currentLedStatus);
+        Serial.print(" -> Estado LED: "); Serial.print(currentLedStatus);
+        printStateReason(currentLedStatus, estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado);
         
-        if (firebaseReady) {
-            String docPath = "users/" + String(USER_UID) + "/sensorData/latest";
-            String content = buildSensorDataJson(temperature, humidity, soundLevel, lightLevel, currentLedStatus);
-            Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), content.c_str(), "");
+        // --- Enviar datos a Firebase ---
+        if (firebaseReady && (currentMillis % firebaseUpdateInterval < sendDataInterval)) {
+            FirebaseJson json;
+            json.set("temperature", temperature);
+            json.set("humidity", humidity);
+            json.set("soundLevel", soundLevel);
+            json.set("lightLevel", lightLevel);
+            json.set("ledStatus", currentLedStatus);
+            Firebase.RTDB.setJSON(&fbdo, sensorDataPath, &json);
         }
     }
     
+    // --- Mantenimiento DFPlayer ---
     if (myDFPlayer.available()) {
+      // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
+
+    

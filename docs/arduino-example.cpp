@@ -40,6 +40,7 @@
 
 // Objetos de Firebase
 FirebaseData fbdo;
+FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -58,7 +59,6 @@ const int LED_NARANJA_PIN = 33;
 const int LED_ROJO_PIN = 25;
 
 // Configuración DFPlayer Mini
-// Usamos Serial2 (pines 16, 17 por defecto), pero los remapeamos.
 HardwareSerial mySerial(2);
 DFRobotDFPlayerMini myDFPlayer;
 
@@ -75,8 +75,8 @@ long orangeBlockDurationMillis = 60000;
 long redBlockDurationMillis = 60000;
 
 // Luz (Lógica inversa: valores MÁS BAJOS indican MÁS oscuridad/estrés)
-float lightThresholdLow = 3000;  // Umbral Naranja (si baja de este valor)
-float lightThresholdMedium = 1000; // Umbral Rojo (si baja de este valor)
+float lightThresholdLow = 3000;
+float lightThresholdMedium = 1000;
 int orangeLightEventCountThreshold = 3;
 int redLightEventCountThreshold = 3;
 long timeBetweenLightEventsMillis = 10000;
@@ -95,8 +95,10 @@ const unsigned long musicPlayDuration = 180000; // 3 minutos
 // ===============================================
 unsigned long sendDataPrevMillis = 0;
 unsigned long fetchConfigPrevMillis = 0;
+unsigned long playerStatusPrevMillis = 0;
 const long sendDataInterval = 1000;
 const long fetchConfigInterval = 60000;
+const long playerStatusInterval = 5000; // Intervalo para reportar estado del reproductor
 
 // Variables para eventos de sonido
 const int MAX_SOUND_EVENTS = 10;
@@ -122,14 +124,27 @@ int currentLedStatus = 1;
 bool isPlayingMusic = false;
 unsigned long musicStopTime = 0;
 
+unsigned long lastCommandTimestamp = 0; // Para evitar comandos repetidos
+
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
+void streamCallback(StreamData data);
+void streamTimeoutCallback(bool timeout);
+void reportPlayerStatus();
 
 // Función de callback para el estado del token
 void tokenStatusCallback(TokenInfo info) {
     if (info.status == token_status_ready) {
         Serial.println("Estado del Token: listo");
         fetchThresholdsFromFirebase();
+
+        // Iniciar el stream para control de música
+        String streamPath = "users/" + String(USER_UID) + "/musicControl";
+        if (!Firebase.Firestore.documentStream(&stream, FIREBASE_PROJECT_ID, "", streamPath.c_str(), streamCallback, streamTimeoutCallback)) {
+            Serial.printf("Error al iniciar el stream de control: %s\n", stream.errorReason().c_str());
+        } else {
+             Serial.println("-> Stream de control de música iniciado.");
+        }
     } else {
         Serial.printf("Estado del Token: error, %s\n", info.error.message.c_str());
     }
@@ -140,7 +155,6 @@ void setup() {
     Serial.println("Inicializando...");
 
     dht.begin();
-    // Usamos Serial2 para el DFPlayer, pines RX=27, TX=26
     mySerial.begin(9600, SERIAL_8N1, 27, 26); 
     delay(2000);
 
@@ -165,6 +179,7 @@ void setup() {
         Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones y tarjeta SD.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
+       delay(1000); // Dar tiempo al DFPlayer para inicializar
        myDFPlayer.volume(15);
     }
 
@@ -243,6 +258,50 @@ String getJsonString(String& payload, const char* fieldName) {
     return payload.substring(startIndex, endIndex);
 }
 
+void streamCallback(StreamData data) {
+    Serial.printf("-> Stream recibió datos: %s, %s\n", data.streamPath().c_str(), data.payload().c_str());
+
+    String fieldsJsonString = getJsonString(data.payload(), "fields");
+    FirebaseJson json;
+    json.setJsonData(fieldsJsonString);
+    FirebaseJsonData result;
+
+    if(json.get(result, "lastCommandTimestamp/integerValue")) {
+        unsigned long newTimestamp = (unsigned long)atol(result.stringValue.c_str());
+        if (newTimestamp <= lastCommandTimestamp) {
+            return; // Comando ya procesado
+        }
+        lastCommandTimestamp = newTimestamp;
+    }
+
+    if (json.get(result, "volume/integerValue")) {
+        int newVolume = result.intValue;
+        myDFPlayer.volume(newVolume);
+        Serial.printf("-> Comando Remoto: Volumen ajustado a %d\n", newVolume);
+    }
+    
+    if (json.get(result, "command/stringValue")) {
+        String command = result.stringValue.c_str();
+        Serial.printf("-> Comando Remoto: %s\n", command.c_str());
+        if (command == "play") {
+            myDFPlayer.start();
+        } else if (command == "pause") {
+            myDFPlayer.pause();
+        } else if (command == "next") {
+            myDFPlayer.next();
+        } else if (command == "prev") {
+            myDFPlayer.previous();
+        }
+    }
+    reportPlayerStatus(); // Reportar estado después de un comando
+}
+
+void streamTimeoutCallback(bool timeout) {
+    if (timeout) {
+        Serial.println("-> Stream de control: timeout, reiniciando...");
+    }
+}
+
 void fetchThresholdsFromFirebase() {
     if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
         Serial.println("No hay UID configurado para obtener umbrales.");
@@ -316,8 +375,37 @@ int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
     return count;
 }
 
+void reportPlayerStatus() {
+    if (!Firebase.ready()) return;
+
+    String status = "stopped";
+    if (myDFPlayer.readState() == 513) status = "playing"; // 513 is playing state
+    if (myDFPlayer.readState() == 514) status = "paused";  // 514 is paused state
+    
+    int currentTrack = myDFPlayer.readCurrentFileNumber();
+    int trackCount = myDFPlayer.readFileCounts();
+
+    String path = "users/" + String(USER_UID) + "/musicControl/state";
+    String content = "{\"fields\":{\"status\":{\"stringValue\":\"" + status + "\"},\"currentTrack\":{\"integerValue\":" + String(currentTrack) + "},\"trackCount\":{\"integerValue\":" + String(trackCount) + "}}}";
+    
+    if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "")) {
+        Serial.printf("Fallo al reportar estado del reproductor: %s\n", fbdo.errorReason().c_str());
+    }
+}
+
+
 void loop() {
     unsigned long currentMillis = millis();
+
+    // Loop para queries del DFPlayer
+    if (myDFPlayer.available()) {
+        // No hacer nada aquí, pero es necesario para que las lecturas de estado funcionen
+    }
+    
+    if (Firebase.ready() && currentMillis - playerStatusPrevMillis >= playerStatusInterval) {
+        playerStatusPrevMillis = currentMillis;
+        reportPlayerStatus();
+    }
 
     if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
         fetchConfigPrevMillis = currentMillis;
@@ -393,6 +481,7 @@ void loop() {
             isPlayingMusic = true;
             musicStopTime = currentMillis + musicPlayDuration;
             Serial.println("-> DFPlayer: Estado de estrés detectado. Iniciando música por 3 minutos.");
+            reportPlayerStatus();
         }
 
         // Verifica si el tiempo de reproducción ha terminado
@@ -401,10 +490,7 @@ void loop() {
             isPlayingMusic = false;
             musicStopTime = 0; // Resetea el temporizador
             Serial.println("-> DFPlayer: 3 minutos completados. Deteniendo música.");
-        }
-
-        if (myDFPlayer.available()) {
-          // Puedes imprimir detalles del DFPlayer aquí si lo necesitas para depurar
+            reportPlayerStatus();
         }
 
         if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {

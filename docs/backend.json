@@ -22,6 +22,40 @@
       },
       "required": ["pairingToken", "createdAt"]
     },
+    "MusicControlState": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MusicControlState",
+      "type": "object",
+      "description": "Represents the desired and reported state of the music player device.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "enum": ["play", "pause", "next", "prev"],
+          "description": "The command sent from the app to the device."
+        },
+        "lastCommandTimestamp": {
+          "type": "number",
+          "description": "Timestamp of the last command sent, to avoid re-triggering."
+        },
+        "volume": {
+          "type": "number",
+          "description": "The desired volume level (0-30)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["playing", "paused", "stopped"],
+          "description": "The current status reported by the device."
+        },
+        "currentTrack": {
+          "type": "number",
+          "description": "The track number currently playing, reported by the device."
+        },
+        "trackCount": {
+          "type": "number",
+          "description": "The total number of tracks on the SD card, reported by the device."
+        }
+      }
+    },
     "ThresholdConfiguration": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ThresholdConfiguration",
@@ -216,6 +250,22 @@
                 }
               ]
             }
+          },
+          {
+            "path": "musicControl/{musicControlId}",
+            "definition": {
+              "entityName": "MusicControlState",
+              "schema": {
+                "$ref": "#/backend/entities/MusicControlState"
+              },
+              "description": "Stores the music player state and commands.",
+              "params": [
+                {
+                  "name": "musicControlId",
+                  "description": "The unique identifier for the music control document, e.g., 'state'."
+                }
+              ]
+            }
           }
         ]
       },
@@ -236,6 +286,6 @@
         }
       }
     ],
-    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds and seeing real-time data, the Firestore structure is centered around a 'users' collection. Each user document contains subcollections for 'thresholdConfigurations' and 'sensorData', ensuring data is properly isolated and secured by user. A separate top-level 'devicePairing' collection facilitates linking hardware to user accounts securely."
+    "reasoning": "Based on the user's request to create an application that allows modifying sensor thresholds and seeing real-time data, the Firestore structure is centered around a 'users' collection. Each user document contains subcollections for 'thresholdConfigurations' and 'sensorData', ensuring data is properly isolated and secured by user. A separate top-level 'devicePairing' collection facilitates linking hardware to user accounts securely. A 'musicControl' subcollection is added to manage playback commands between the app and the device."
   }
 }

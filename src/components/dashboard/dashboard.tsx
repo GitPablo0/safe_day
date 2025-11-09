@@ -1,6 +1,6 @@
 'use client';
 
-import { Thermometer, Droplets, Volume2, Sun, User, Copy, Info } from 'lucide-react';
+import { Thermometer, Droplets, Volume2, Sun, User, Copy } from 'lucide-react';
 import SensorCard from './sensor-card';
 import LedStatus from './led-status';
 import { useUser, useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { doc } from 'firebase/firestore';
+import MusicPlayerCard from './music-player-card';
 
 type SensorData = {
     temperature: number;
@@ -129,6 +130,9 @@ export default function Dashboard() {
               value={lightLevel}
               unit="bruto"
             />
+          </div>
+           <div className="mt-6">
+            <MusicPlayerCard />
           </div>
         </div>
         <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">

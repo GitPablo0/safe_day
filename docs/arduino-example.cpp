@@ -165,6 +165,7 @@ void setup() {
         Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
+       delay(1000); // CRÍTICO: Delay para que el DFPlayer se estabilice
        myDFPlayer.volume(15);
     }
 
@@ -389,7 +390,7 @@ void loop() {
 
         // --- Lógica de DFPlayer con Temporizador ---
         if (currentLedStatus >= 2 && !isPlayingMusic) {
-            myDFPlayer.loop(1); // Inicia la reproducción en bucle de la primera pista
+            myDFPlayer.play(1); // Inicia la reproducción de la primera pista
             isPlayingMusic = true;
             musicStopTime = currentMillis + musicPlayDuration;
             Serial.println("-> DFPlayer: Estado de estrés detectado. Iniciando música por 3 minutos.");

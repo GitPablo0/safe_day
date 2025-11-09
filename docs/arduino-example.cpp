@@ -170,55 +170,36 @@ void streamTimeoutCallback(bool timeout) {
 void setupFirebase() {
     Serial.println("Conectando a Firebase...");
     
-    // --- Asignación de configuración ---
     config.api_key = API_KEY;
     config.database_url = "studio-4253330981-dcdc9-default-rtdb.firebaseio.com";
     
-    // --- Configuración de Autenticación Anónima ---
+    // Autenticación Anónima
     config.signer.anonymous = true;
 
     Firebase.begin(&config, &auth);
     Firebase.reconnectWiFi(true);
 
-    // Espera a que Firebase esté listo y autenticado
-    unsigned long startTime = millis();
-    while (Firebase.getToken() == "" && millis() - startTime < 10000) {
-        Serial.print(".");
-        delay(500);
-    }
-    
-    if (Firebase.getToken() == "") {
-        Serial.println("\nError: No se pudo obtener el token de autenticación de Firebase.");
-        return; // Detener si la autenticación falla
-    }
-    
-    Serial.println("\nAutenticación con Firebase exitosa.");
-    
-    // Definir rutas para RTDB
     thresholdConfigPath = "users/" + String(USER_UID) + "/thresholdConfigurations/main";
     sensorDataPath = "users/" + String(USER_UID) + "/sensorData/latest";
 
-    // Obtener la configuración inicial de umbrales
+    // Obtener la configuración inicial una sola vez.
     if (Firebase.RTDB.getJSON(&fbdo, thresholdConfigPath)) {
         if(fbdo.dataType() == "json"){
             FirebaseJson* json = fbdo.to<FirebaseJson*>();
             processConfigJson(json);
-        } else {
-            Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
-            Serial.println(fbdo.errorReason());
         }
     } else {
         Serial.println("No se pudo obtener la configuración inicial. Usando valores por defecto.");
         Serial.println(fbdo.errorReason());
     }
     
-    // Iniciar el stream para escuchar cambios en la configuración
+    // Iniciar el stream para escuchar cambios en la configuración (NO BLOQUEANTE)
     if (!Firebase.RTDB.beginStream(&stream, thresholdConfigPath)) {
         Serial.println("Error: No se pudo iniciar el stream de configuración.");
         Serial.println(stream.errorReason());
     } else {
         Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
-        firebaseReady = true;
+        firebaseReady = true; // Marcamos Firebase como listo
         Serial.println("Firebase listo y escuchando cambios.");
     }
 }
@@ -330,7 +311,7 @@ void setup() {
     }
     
     Serial.println("Inicializando DFPlayer...");
-    if (!myDFPlayer.begin(mySoftwareSerial, false)) { // 'false' para no esperar respuesta, útil si hay ruido al inicio
+    if (!myDFPlayer.begin(mySoftwareSerial, false)) { 
         Serial.println("No se pudo iniciar el DFPlayer. Verifica conexiones.");
     } else {
        Serial.println("DFPlayer Mini iniciado.");
@@ -448,5 +429,3 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
-
-    

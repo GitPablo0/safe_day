@@ -446,5 +446,3 @@ void loop() {
       // printDetail(myDFPlayer.readType(), myDFPlayer.read()); 
     }
 }
-
-    

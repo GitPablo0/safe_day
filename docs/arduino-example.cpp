@@ -407,8 +407,11 @@ void loop() {
                 isPlaying = true;
                 musicStopTime = currentMillis + musicPlayDuration;
                 Serial.println("-> DFPlayer: Iniciando reproducción por 3 minutos.");
-            } else if (currentMillis >= musicStopTime) { // Si el tiempo se acabó
-                 // Reinicia el ciclo de música si el ambiente sigue estresante
+            } else if (currentMillis < musicStopTime) {
+                // Sigue sonando, no hacer nada.
+            } else { // Si el tiempo se acabó pero el ambiente sigue estresante
+                 myDFPlayer.stop(); // Detener para reiniciar el loop
+                 myDFPlayer.loop(1);
                  musicStopTime = currentMillis + musicPlayDuration;
                  Serial.println("-> DFPlayer: Ambiente aún estresante. Renovando música.");
             }

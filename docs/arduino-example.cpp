@@ -388,25 +388,19 @@ void loop() {
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
 
         // --- Lógica de DFPlayer con Temporizador ---
-        if (currentLedStatus >= 2) {
-            if (!isPlayingMusic) {
-                myDFPlayer.loop(1);
-                isPlayingMusic = true;
-                musicStopTime = currentMillis + musicPlayDuration;
-                Serial.println("-> DFPlayer: Iniciando reproducción por 3 minutos.");
-            } else if (currentMillis >= musicStopTime) {
-                 myDFPlayer.stop(); // Detener para reiniciar el loop
-                 myDFPlayer.loop(1);
-                 musicStopTime = currentMillis + musicPlayDuration;
-                 Serial.println("-> DFPlayer: Ambiente aún estresante. Renovando música.");
-            }
-        } else {
-            if (isPlayingMusic) {
-                myDFPlayer.stop();
-                isPlayingMusic = false;
-                musicStopTime = 0;
-                Serial.println("-> DFPlayer: Ambiente en calma. Deteniendo reproducción.");
-            }
+        if (currentLedStatus >= 2 && !isPlayingMusic) {
+            myDFPlayer.loop(1); // Inicia la reproducción en bucle de la primera pista
+            isPlayingMusic = true;
+            musicStopTime = currentMillis + musicPlayDuration;
+            Serial.println("-> DFPlayer: Estado de estrés detectado. Iniciando música por 3 minutos.");
+        }
+
+        // Verifica si el tiempo de reproducción ha terminado
+        if (isPlayingMusic && currentMillis >= musicStopTime) {
+            myDFPlayer.stop();
+            isPlayingMusic = false;
+            musicStopTime = 0; // Resetea el temporizador
+            Serial.println("-> DFPlayer: 3 minutos completados. Deteniendo música.");
         }
 
         if (myDFPlayer.available()) {

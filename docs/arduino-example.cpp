@@ -276,24 +276,26 @@ void fetchMusicCommands() {
 
             if (json.get(result, "command/stringValue")) {
                 String command = result.stringValue;
-                Serial.printf("-> Comando Remoto Recibido: %s\n", command.c_str());
-                if (command == "play") {
-                    myDFPlayer.start();
-                    isPlayingMusic = true;
-                } else if (command == "pause") {
-                    myDFPlayer.pause();
-                    isPlayingMusic = false;
-                } else if (command == "next") {
-                    myDFPlayer.next();
-                } else if (command == "prev") {
-                    myDFPlayer.previous();
+                if (command != "") {
+                    Serial.printf("-> Comando Remoto Recibido: %s\n", command.c_str());
+                    if (command == "play") {
+                        myDFPlayer.start();
+                        isPlayingMusic = true;
+                    } else if (command == "pause") {
+                        myDFPlayer.pause();
+                        isPlayingMusic = false;
+                    } else if (command == "next") {
+                        myDFPlayer.next();
+                    } else if (command == "prev") {
+                        myDFPlayer.previous();
+                    }
+                    
+                    // Limpiar el comando después de ejecutarlo para no volver a ejecutarlo
+                    String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
+                    Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
+                    reportPlayerStatus(); // Reportar estado inmediatamente después de ejecutar un comando
                 }
-                
-                // Limpiar el comando después de ejecutarlo para no volver a ejecutarlo
-                String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
-                Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
             }
-            reportPlayerStatus(); // Reportar estado después de ejecutar un comando
         }
     } else {
         // Silencio en caso de error para no llenar el log
@@ -392,6 +394,10 @@ void reportPlayerStatus() {
 
 void loop() {
     unsigned long currentMillis = millis();
+
+    if (myDFPlayer.available()) {
+        // ... procesar mensajes del DFPlayer si fuera necesario ...
+    }
     
     if (Firebase.ready() && currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {
         fetchCommandsPrevMillis = currentMillis;

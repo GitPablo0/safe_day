@@ -28,8 +28,8 @@
 // ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
-#define WIFI_SSID "Telecentro-416b"
-#define WIFI_PASSWORD "ATNMFMY2MM5Q"
+#define WIFI_SSID "Malery25celu"
+#define WIFI_PASSWORD "25109626Ro"
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
@@ -146,7 +146,7 @@ void setup() {
     pinMode(LED_NARANJA_PIN, OUTPUT);
     pinMode(LED_ROJO_PIN, OUTPUT);
     digitalWrite(LED_VERDE_PIN, LOW);
-    digitalWrite(LED_NARANJA_PIN, LOW);
+    digitalWrite(LED_NARANja_PIN, LOW);
     digitalWrite(LED_ROJO_PIN, LOW);
 
     for (int i = 0; i < MAX_SOUND_EVENTS; i++) {

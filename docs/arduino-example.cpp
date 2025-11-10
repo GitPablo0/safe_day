@@ -124,6 +124,7 @@ unsigned long redLightLedBlockedUntil = 0;
 
 int currentLedStatus = 1;
 bool isPlayingMusic = false;
+bool manualPause = false; // NUEVA VARIABLE para la pausa manual
 unsigned long musicStopTime = 0;
 
 // Declaraciones anticipadas
@@ -281,9 +282,11 @@ void fetchMusicCommands() {
                     if (command == "play") {
                         myDFPlayer.start();
                         isPlayingMusic = true;
+                        manualPause = false; // Reanuda la lógica automática si se presiona play
                     } else if (command == "pause") {
                         myDFPlayer.pause();
                         isPlayingMusic = false;
+                        manualPause = true; // Activa la pausa manual
                     } else if (command == "next") {
                         myDFPlayer.next();
                     } else if (command == "prev") {
@@ -480,7 +483,7 @@ void loop() {
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
 
         // --- Lógica de DFPlayer con Temporizador ---
-        if (currentLedStatus >= 2 && !isPlayingMusic) {
+        if (currentLedStatus >= 2 && !isPlayingMusic && !manualPause) {
             myDFPlayer.start(); 
             isPlayingMusic = true;
             musicStopTime = currentMillis + musicPlayDuration;
@@ -491,6 +494,7 @@ void loop() {
         if (isPlayingMusic && currentMillis >= musicStopTime) {
             myDFPlayer.stop();
             isPlayingMusic = false;
+            manualPause = false; // Resetea la pausa manual al terminar el temporizador
             musicStopTime = 0; // Resetea el temporizador
             Serial.println("-> DFPlayer: 3 minutos completados. Deteniendo música.");
             reportPlayerStatus();

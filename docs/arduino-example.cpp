@@ -126,8 +126,6 @@ int currentLedStatus = 1;
 bool isPlayingMusic = false;
 unsigned long musicStopTime = 0;
 
-unsigned long lastCommandTimestamp = 0; // Para evitar comandos repetidos
-
 // Declaraciones anticipadas
 void fetchThresholdsFromFirebase();
 void reportPlayerStatus();
@@ -261,20 +259,12 @@ void fetchMusicCommands() {
     if (!Firebase.ready()) return;
 
     String docPath = "users/" + String(USER_UID) + "/musicControl/state";
-    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str())) {
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), "command,volume")) {
         if (fbdo.httpCode() == 200) {
             String payload = fbdo.payload();
             FirebaseJson json;
             json.setJsonData(getJsonString(payload, "fields"));
             FirebaseJsonData result;
-
-            if (json.get(result, "lastCommandTimestamp/integerValue")) {
-                unsigned long newTimestamp = atol(result.stringValue.c_str());
-                if (newTimestamp > 0 && newTimestamp <= lastCommandTimestamp) {
-                    return; // Comando ya procesado o es antiguo.
-                }
-                lastCommandTimestamp = newTimestamp;
-            }
 
             if (json.get(result, "volume/integerValue")) {
                 int newVolume = result.intValue;
@@ -286,9 +276,9 @@ void fetchMusicCommands() {
 
             if (json.get(result, "command/stringValue")) {
                 String command = result.stringValue;
-                Serial.printf("-> Comando Remoto: %s\n", command.c_str());
+                Serial.printf("-> Comando Remoto Recibido: %s\n", command.c_str());
                 if (command == "play") {
-                    myDFPlayer.play(1); // Siempre empieza por la pista 1 al darle play
+                    myDFPlayer.start();
                     isPlayingMusic = true;
                 } else if (command == "pause") {
                     myDFPlayer.pause();
@@ -298,6 +288,10 @@ void fetchMusicCommands() {
                 } else if (command == "prev") {
                     myDFPlayer.previous();
                 }
+                
+                // Limpiar el comando después de ejecutarlo para no volver a ejecutarlo
+                String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
+                Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
             }
             reportPlayerStatus(); // Reportar estado después de ejecutar un comando
         }
@@ -442,7 +436,6 @@ void loop() {
             redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
             if (!redSoundStateActive && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-                // Reiniciar contadores para evitar re-activación inmediata
                 for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; redEventTimestamps[i] = 0; }
                 orangeEventIndex = 0;
                 redEventIndex = 0;
@@ -465,7 +458,6 @@ void loop() {
             redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             if (!redLightStateActive && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
                 redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-                // Reiniciar contadores para evitar re-activación inmediata
                 for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; redLightEventTimestamps[i] = 0; }
                 orangeLightEventIndex = 0;
                 redLightEventIndex = 0;
@@ -487,7 +479,7 @@ void loop() {
 
         // --- Lógica de DFPlayer con Temporizador ---
         if (currentLedStatus >= 2 && !isPlayingMusic) {
-            myDFPlayer.play(1); // Inicia la reproducción de la primera pista
+            myDFPlayer.start(); 
             isPlayingMusic = true;
             musicStopTime = currentMillis + musicPlayDuration;
             Serial.println("-> DFPlayer: Estado de estrés detectado. Iniciando música por 3 minutos.");

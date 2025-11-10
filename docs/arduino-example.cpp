@@ -144,9 +144,9 @@ void setup() {
 
     pinMode(LED_VERDE_PIN, OUTPUT);
     pinMode(LED_NARANJA_PIN, OUTPUT);
-    pinMode(LED_ROJO_PIN, OUTPUT);
+    pinMode(LED_ROJO_PIN, LOW);
     digitalWrite(LED_VERDE_PIN, LOW);
-    digitalWrite(LED_NARANja_PIN, LOW);
+    digitalWrite(LED_NARANJA_PIN, LOW);
     digitalWrite(LED_ROJO_PIN, LOW);
 
     for (int i = 0; i < MAX_SOUND_EVENTS; i++) {
@@ -288,7 +288,7 @@ void fetchMusicCommands() {
                 String command = result.stringValue;
                 Serial.printf("-> Comando Remoto: %s\n", command.c_str());
                 if (command == "play") {
-                    myDFPlayer.start();
+                    myDFPlayer.play(1); // Siempre empieza por la pista 1 al darle play
                     isPlayingMusic = true;
                 } else if (command == "pause") {
                     myDFPlayer.pause();
@@ -302,7 +302,7 @@ void fetchMusicCommands() {
             reportPlayerStatus(); // Reportar estado después de ejecutar un comando
         }
     } else {
-        // Silencio
+        // Silencio en caso de error para no llenar el log
     }
 }
 
@@ -382,21 +382,10 @@ int countRecentEvents(long timestamps[], long windowMillis, int maxEvents) {
 void reportPlayerStatus() {
     if (!Firebase.ready()) return;
 
-    String status = "stopped";
-    int deviceState = myDFPlayer.readState();
-
-    if (isPlayingMusic && deviceState != 514) { 
-        status = "playing";
-    } else if (deviceState == 514) { 
-        status = "paused";
-        isPlayingMusic = false; 
-    } else {
-        status = "stopped";
-        isPlayingMusic = false;
-    }
+    String status = isPlayingMusic ? "playing" : "paused";
     
     int currentTrack = myDFPlayer.readCurrentFileNumber();
-    if (currentTrack < 0) currentTrack = 0;
+    if (currentTrack < 0) currentTrack = 1;
     int trackCount = myDFPlayer.readFileCounts();
     if (trackCount < 0) trackCount = 0;
 

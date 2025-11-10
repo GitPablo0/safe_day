@@ -394,7 +394,7 @@ void loop() {
     unsigned long currentMillis = millis();
 
     if (myDFPlayer.available()) {
-      // No necesitamos hacer nada aquí, solo llamar a la función
+      // No necesitamos hacer nada aquí, solo llamar a la función para procesar mensajes.
     }
     
     if (Firebase.ready() && currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {

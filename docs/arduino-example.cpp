@@ -28,7 +28,7 @@
 // ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
-#define WIFI_SSID "Telecentro416-b"
+#define WIFI_SSID "Telecentro-416b"
 #define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // ===============================================================
@@ -518,5 +518,4 @@ void loop() {
         }
     }
 }
-
     

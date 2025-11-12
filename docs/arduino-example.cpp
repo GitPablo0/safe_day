@@ -281,7 +281,7 @@ void fetchMusicCommands() {
                     bool commandExecuted = false;
 
                     if (command == "play") {
-                        manualPause = false; // Desactiva la pausa manual
+                        manualPause = false;
                         if (!isPlayingMusic) {
                            myDFPlayer.start();
                            isPlayingMusic = true;
@@ -289,7 +289,7 @@ void fetchMusicCommands() {
                         }
                         commandExecuted = true;
                     } else if (command == "pause") {
-                        manualPause = true; // Activa la pausa manual
+                        manualPause = true;
                         if (isPlayingMusic) {
                            myDFPlayer.pause();
                            isPlayingMusic = false;
@@ -476,10 +476,9 @@ void loop() {
         
         // --- Lógica de Eventos de Sonido (Corregida) ---
         if (soundLevel > 0) {
-            // Siempre registrar eventos para ambos niveles
             if (soundLevel >= soundThresholdLow) {
                 orangeEventTimestamps[orangeEventIndex] = currentMillis;
-                orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_events;
+                orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
             }
             if (soundLevel >= soundThresholdMedium) {
                 redEventTimestamps[redEventIndex] = currentMillis;
@@ -488,20 +487,18 @@ void loop() {
         }
 
         // Comprobar si se debe activar un bloqueo
-        if (!redLedBlockedUntil > currentMillis && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
+        if (! (redLedBlockedUntil > currentMillis) && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
             redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-            // Limpiar contadores para evitar reactivación inmediata y dar prioridad al rojo
             for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; redEventTimestamps[i] = 0; }
             orangeEventIndex = 0;
             redEventIndex = 0;
-        } else if (!orangeLedBlockedUntil > currentMillis && countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
+        } else if (! (orangeLedBlockedUntil > currentMillis) && countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
             orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
         }
 
         
         // --- Lógica de Eventos de Luz (Corregida) ---
         if (lightLevel > 0) {
-            // Siempre registrar eventos para ambos niveles
             if (lightLevel <= lightThresholdLow) {
                 orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
                 orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
@@ -513,13 +510,12 @@ void loop() {
         }
         
         // Comprobar si se debe activar un bloqueo
-        if (!redLightLedBlockedUntil > currentMillis && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
+        if (! (redLightLedBlockedUntil > currentMillis) && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
             redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-            // Limpiar contadores para dar prioridad al rojo
             for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; redLightEventTimestamps[i] = 0; }
             orangeLightEventIndex = 0;
             redLightEventIndex = 0;
-        } else if (!orangeLightLedBlockedUntil > currentMillis && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
+        } else if (! (orangeLightLedBlockedUntil > currentMillis) && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
             orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
         }
         
@@ -562,5 +558,7 @@ void loop() {
         }
     }
 }
+
+    
 
     

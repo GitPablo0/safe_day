@@ -283,7 +283,7 @@ void fetchMusicCommands() {
                     bool commandExecuted = false;
 
                     if (command == "play") {
-                        manualPause = false;
+                        manualPause = false; // Desactiva la pausa manual
                         if (!isPlayingMusic) {
                            myDFPlayer.start();
                            isPlayingMusic = true;
@@ -292,10 +292,12 @@ void fetchMusicCommands() {
                         }
                         commandExecuted = true;
                     } else if (command == "pause") {
-                        manualPause = true;
+                        manualPause = true; // Activa la pausa manual
                         if (isPlayingMusic) {
                            myDFPlayer.pause();
                            isPlayingMusic = false;
+                           musicStopTime = 0; // Detiene el contador de 3 minutos
+                           Serial.println("-> Lógica: Pause manual. Contador detenido.");
                         }
                         commandExecuted = true;
                     } else if (command == "next" && isPlayingMusic) {
@@ -409,7 +411,7 @@ void reportPlayerStatus() {
 void updateMusicState() {
     unsigned long currentMillis = millis();
     
-    // Si hay una pausa manual, no hacemos nada más. El control es del usuario.
+    // 1. Lógica de pausa manual del usuario: si está activa, no hacemos nada más.
     if (manualPause) {
         if(isPlayingMusic) {
             myDFPlayer.pause();
@@ -420,7 +422,7 @@ void updateMusicState() {
         return;
     }
 
-    // Lógica de activación automática por estrés
+    // 2. Lógica de activación automática por estrés
     if (currentLedStatus >= 2 && !isPlayingMusic) {
         myDFPlayer.start();
         isPlayingMusic = true;
@@ -428,11 +430,11 @@ void updateMusicState() {
         reportPlayerStatus();
         Serial.println("-> Lógica: Estrés detectado. Iniciando música y temporizador.");
     } 
-    // Lógica de pausa automática por tiempo (solo si está sonando)
+    // 3. Lógica de pausa automática por tiempo (solo si está sonando)
     else if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
         myDFPlayer.pause();
         isPlayingMusic = false;
-        musicStopTime = 0; // Resetea el temporizador
+        musicStopTime = 0; // Resetea el temporizador para poder reactivar
         reportPlayerStatus();
         Serial.println("-> Lógica: 3 minutos completados. Pausando música.");
     }

@@ -124,7 +124,7 @@ unsigned long redLightLedBlockedUntil = 0;
 
 int currentLedStatus = 1;
 bool isPlayingMusic = false;
-bool manualPause = false; // NUEVA VARIABLE para la pausa manual
+bool manualPause = false;
 unsigned long musicStopTime = 0;
 
 // Declaraciones anticipadas
@@ -267,7 +267,7 @@ void fetchMusicCommands() {
             json.setJsonData(getJsonString(payload, "fields"));
             FirebaseJsonData result;
 
-            if (json.get(result, "volume/integerValue")) {
+            if (json.get(result, "volume/integerValue") && isPlayingMusic) {
                 int newVolume = result.intValue;
                 if(newVolume >= 0 && newVolume <= 30) {
                     myDFPlayer.volume(newVolume);
@@ -300,9 +300,7 @@ void fetchMusicCommands() {
                     }
                     
                     if (commandExecuted) {
-                        // Primero reportar el estado actualizado...
                         reportPlayerStatus();
-                        // ...y LUEGO limpiar el comando para no volver a ejecutarlo.
                         String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
                         Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
                     }
@@ -407,8 +405,19 @@ void reportPlayerStatus() {
 void loop() {
     unsigned long currentMillis = millis();
 
+    // Comprueba si el DFPlayer está ocupado o si hay mensajes de él
     if (myDFPlayer.available()) {
-        // ... procesar mensajes del DFPlayer si fuera necesario ...
+        uint8_t type = myDFPlayer.readType();
+        switch (type) {
+            case DFPlayerPlayFinished:
+                // La canción terminó, el DFPlayer pasa a la siguiente automáticamente.
+                // Actualizamos el estado para la UI.
+                Serial.println(F("-> DFPlayer: Pista finalizada, reportando nuevo estado."));
+                reportPlayerStatus();
+                break;
+            default:
+                break;
+        }
     }
     
     if (Firebase.ready() && currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {
@@ -500,12 +509,12 @@ void loop() {
             reportPlayerStatus();
         }
 
-        if (isPlayingMusic && currentMillis >= musicStopTime && musicStopTime != 0) {
-            myDFPlayer.stop();
+        if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
+            myDFPlayer.pause();
             isPlayingMusic = false;
-            manualPause = false; // Resetea la pausa manual al terminar el temporizador
-            musicStopTime = 0; // Resetea el temporizador
-            Serial.println("-> DFPlayer: 3 minutos completados. Deteniendo música.");
+            manualPause = false; 
+            musicStopTime = 0; 
+            Serial.println("-> DFPlayer: 3 minutos completados. Pausando música.");
             reportPlayerStatus();
         }
 
@@ -527,4 +536,6 @@ void loop() {
         }
     }
 }
+    
+
     

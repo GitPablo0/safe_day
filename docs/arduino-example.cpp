@@ -521,11 +521,16 @@ void loop() {
         // --- Lógica de Determinación de Estado del LED ---
         int estadoSonidoBloqueado = (redLedBlockedUntil > currentMillis) ? 3 : ((orangeLedBlockedUntil > currentMillis) ? 2 : 1);
         int estadoLuzBloqueado = (redLightLedBlockedUntil > currentMillis) ? 3 : ((orangeLightLedBlockedUntil > currentMillis) ? 2 : 1);
+        
         int estadoSonidoInstantaneo = (soundLevel >= soundThresholdMedium) ? 3 : ((soundLevel >= soundThresholdLow) ? 2 : 1);
         int estadoLuzInstantaneo = (lightLevel <= lightThresholdMedium) ? 3 : ((lightLevel <= lightThresholdLow) ? 2 : 1);
         int estadoTemp = (temperature >= tempThresholdNaranja) ? 3 : ((temperature >= tempThresholdVerde) ? 2 : 1);
 
-        currentLedStatus = max({estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo, estadoSonidoBloqueado, estadoLuzBloqueado});
+        int estadoBloqueado = max(estadoSonidoBloqueado, estadoLuzBloqueado);
+        int estadoInstantaneo = max({estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo});
+
+        currentLedStatus = max(estadoBloqueado, estadoInstantaneo);
+
 
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);

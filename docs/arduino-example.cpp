@@ -281,11 +281,22 @@ void fetchMusicCommands() {
                 if (command != "") {
                     Serial.printf("-> Comando Remoto Recibido: %s\n", command.c_str());
                     bool commandExecuted = false;
+
                     if (command == "play") {
                         manualPause = false;
+                        if (!isPlayingMusic) {
+                           myDFPlayer.start();
+                           isPlayingMusic = true;
+                           musicStopTime = millis() + musicPlayDuration;
+                           Serial.println("-> Lógica: Play manual. Iniciando música y temporizador.");
+                        }
                         commandExecuted = true;
                     } else if (command == "pause") {
                         manualPause = true;
+                        if (isPlayingMusic) {
+                           myDFPlayer.pause();
+                           isPlayingMusic = false;
+                        }
                         commandExecuted = true;
                     } else if (command == "next" && isPlayingMusic) {
                         myDFPlayer.next();
@@ -296,7 +307,6 @@ void fetchMusicCommands() {
                     }
                     
                     if (commandExecuted) {
-                        updateMusicState();
                         reportPlayerStatus();
                         String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
                         Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
@@ -398,45 +408,33 @@ void reportPlayerStatus() {
 
 void updateMusicState() {
     unsigned long currentMillis = millis();
-    bool shouldPlay = false;
-
-    // Lógica principal de decisión
+    
+    // Si hay una pausa manual, no hacemos nada más. El control es del usuario.
     if (manualPause) {
-        // 1. Si el usuario pausó manualmente, la música no debe sonar.
-        shouldPlay = false;
-    } else if (currentLedStatus >= 2) {
-        // 2. Si hay estrés, la música debe sonar.
-        shouldPlay = true;
-        // Si la música NO estaba sonando, significa que el estrés acaba de empezar.
-        // Iniciamos el temporizador de 3 minutos.
-        if (!isPlayingMusic) {
-             musicStopTime = currentMillis + musicPlayDuration;
-             Serial.println("-> Lógica: Estrés detectado. Iniciando música y temporizador.");
+        if(isPlayingMusic) {
+            myDFPlayer.pause();
+            isPlayingMusic = false;
+            reportPlayerStatus();
+            Serial.println("-> DFPlayer: PAUSE (manual)");
         }
-    } else if (isPlayingMusic) {
-        // 3. Si no hay estrés (led verde) Y la música está sonando:
-        //    Revisamos si el temporizador se ha agotado.
-        if (musicStopTime > 0 && currentMillis >= musicStopTime) {
-            shouldPlay = false;
-            musicStopTime = 0; // Resetea el temporizador
-            Serial.println("-> Lógica: 3 minutos completados. Pausando música.");
-        } else {
-            // Si el temporizador no ha terminado, la música debe seguir sonando.
-            shouldPlay = true;
-        }
+        return;
     }
 
-    // Aplicar el estado final al reproductor
-    if (shouldPlay && !isPlayingMusic) {
+    // Lógica de activación automática por estrés
+    if (currentLedStatus >= 2 && !isPlayingMusic) {
         myDFPlayer.start();
         isPlayingMusic = true;
+        musicStopTime = currentMillis + musicPlayDuration;
         reportPlayerStatus();
-        Serial.println("-> DFPlayer: START");
-    } else if (!shouldPlay && isPlayingMusic) {
+        Serial.println("-> Lógica: Estrés detectado. Iniciando música y temporizador.");
+    } 
+    // Lógica de pausa automática por tiempo (solo si está sonando)
+    else if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
         myDFPlayer.pause();
         isPlayingMusic = false;
+        musicStopTime = 0; // Resetea el temporizador
         reportPlayerStatus();
-        Serial.println("-> DFPlayer: PAUSE");
+        Serial.println("-> Lógica: 3 minutos completados. Pausando música.");
     }
 }
 
@@ -451,6 +449,7 @@ void loop() {
             case DFPlayerPlayFinished:
                 Serial.println(F("-> DFPlayer: Pista finalizada, reportando nuevo estado."));
                 reportPlayerStatus();
+                // isPlayingMusic se mantendrá true y la librería pasará a la siguiente pista.
                 break;
             default:
                 break;
@@ -462,9 +461,9 @@ void loop() {
         fetchMusicCommands();
     }
 
-    if (Firebase.ready() && currentMillis - playerStatusPrevMillis >= playerStatusInterval) {
+    if (currentMillis - playerStatusPrevMillis >= playerStatusInterval) {
         playerStatusPrevMillis = currentMillis;
-        // No reportar aquí, se hace después de cambiar de estado.
+        // Solo reportamos el estado cuando hay un cambio para no saturar.
     }
 
     if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {

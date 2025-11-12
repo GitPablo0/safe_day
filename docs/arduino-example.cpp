@@ -296,7 +296,7 @@ void fetchMusicCommands() {
                     }
                     
                     if (commandExecuted) {
-                        updateMusicState(); // Llama a la lógica central
+                        updateMusicState();
                         reportPlayerStatus();
                         String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
                         Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
@@ -400,36 +400,33 @@ void updateMusicState() {
     unsigned long currentMillis = millis();
     bool shouldPlay = false;
 
-    // Condición 1: El usuario quiere pausar manualmente.
+    // Lógica principal de decisión
     if (manualPause) {
+        // 1. Si el usuario pausó manualmente, la música no debe sonar.
         shouldPlay = false;
-    } 
-    // Condición 2: El ambiente está en estrés y el usuario no ha pausado manualmente.
-    else if (currentLedStatus >= 2) {
+    } else if (currentLedStatus >= 2) {
+        // 2. Si hay estrés, la música debe sonar.
         shouldPlay = true;
-        // Si la música se activa por estrés, reiniciamos el temporizador.
+        // Si la música NO estaba sonando, significa que el estrés acaba de empezar.
+        // Iniciamos el temporizador de 3 minutos.
         if (!isPlayingMusic) {
              musicStopTime = currentMillis + musicPlayDuration;
-             Serial.println("-> Lógica: Estrés detectado. Iniciando música y temporizador de 3 min.");
+             Serial.println("-> Lógica: Estrés detectado. Iniciando música y temporizador.");
+        }
+    } else if (isPlayingMusic) {
+        // 3. Si no hay estrés (led verde) Y la música está sonando:
+        //    Revisamos si el temporizador se ha agotado.
+        if (musicStopTime > 0 && currentMillis >= musicStopTime) {
+            shouldPlay = false;
+            musicStopTime = 0; // Resetea el temporizador
+            Serial.println("-> Lógica: 3 minutos completados. Pausando música.");
+        } else {
+            // Si el temporizador no ha terminado, la música debe seguir sonando.
+            shouldPlay = true;
         }
     }
-    // Condición 3: El temporizador de estrés se agotó.
-    else if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
-        shouldPlay = false;
-        musicStopTime = 0; // Resetea el temporizador
-        Serial.println("-> Lógica: 3 minutos completados. Pausando música.");
-    }
-    // Condición 4: El ambiente está en calma.
-    else if (currentLedStatus == 1) {
-        shouldPlay = false;
-    }
-    // Condición 5: El usuario quiere reproducir y no hay estrés (caso manual)
-    else if (isPlayingMusic) {
-        shouldPlay = true;
-    }
 
-
-    // Aplicar el estado final
+    // Aplicar el estado final al reproductor
     if (shouldPlay && !isPlayingMusic) {
         myDFPlayer.start();
         isPlayingMusic = true;

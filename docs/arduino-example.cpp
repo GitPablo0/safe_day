@@ -277,26 +277,35 @@ void fetchMusicCommands() {
 
             if (json.get(result, "command/stringValue")) {
                 String command = result.stringValue;
+                bool commandExecuted = false;
+
                 if (command != "") {
                     Serial.printf("-> Comando Remoto Recibido: %s\n", command.c_str());
                     if (command == "play") {
                         myDFPlayer.start();
                         isPlayingMusic = true;
-                        manualPause = false; // Reanuda la lógica automática si se presiona play
+                        manualPause = false;
+                        commandExecuted = true;
                     } else if (command == "pause") {
                         myDFPlayer.pause();
                         isPlayingMusic = false;
-                        manualPause = true; // Activa la pausa manual
+                        manualPause = true;
+                        commandExecuted = true;
                     } else if (command == "next") {
                         myDFPlayer.next();
+                        commandExecuted = true;
                     } else if (command == "prev") {
                         myDFPlayer.previous();
+                        commandExecuted = true;
                     }
                     
-                    // Limpiar el comando después de ejecutarlo para no volver a ejecutarlo
-                    String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
-                    Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
-                    reportPlayerStatus(); // Reportar estado inmediatamente después de ejecutar un comando
+                    if (commandExecuted) {
+                        // Primero reportar el estado actualizado...
+                        reportPlayerStatus();
+                        // ...y LUEGO limpiar el comando para no volver a ejecutarlo.
+                        String clearContent = "{\"fields\":{\"command\":{\"stringValue\":\"\"}}}";
+                        Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", docPath.c_str(), clearContent.c_str(), "command");
+                    }
                 }
             }
         }

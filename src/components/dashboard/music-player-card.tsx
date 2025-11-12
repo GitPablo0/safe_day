@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -21,7 +21,7 @@ type MusicControlState = {
 // Debounce function
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   let timeout: NodeJS.Timeout;
-  return (...args: F extends (...args: infer A) => any ? A : never): void => {
+  return (...args: Parameters<F>): void => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), waitFor);
   };
@@ -33,26 +33,35 @@ export default function MusicPlayerCard() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  // Local state for the slider to feel responsive
-  const [desiredVolume, setDesiredVolume] = useState(15);
+  // This state is for the slider to provide instant UI feedback.
+  const [localVolume, setLocalVolume] = useState(15);
+  // This state reflects the playing status from Firestore, but can be changed optimistically.
+  const [optimisticIsPlaying, setOptimisticIsPlaying] = useState<boolean | null>(null);
 
   const controlRef = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return doc(firestore, `users/${user.uid}/musicControl/state`);
   }, [firestore, user?.uid]);
 
-  const { data: playerState, isLoading } = useDoc<MusicControlState>(controlRef);
+  const { data: playerState, isLoading: isStateLoading } = useDoc<MusicControlState>(controlRef);
 
-  // Update local slider when Firestore data changes
+  // Synchronize local UI state with data from Firestore when it changes.
   useEffect(() => {
-    if (playerState?.volume !== undefined) {
-      setDesiredVolume(playerState.volume);
+    if (playerState?.volume !== undefined && !isStateLoading) {
+      setLocalVolume(playerState.volume);
     }
-  }, [playerState?.volume]);
+    if (playerState?.status !== undefined && !isStateLoading) {
+        setOptimisticIsPlaying(playerState.status === 'playing');
+    }
+  }, [playerState, isStateLoading]);
 
 
   const sendCommand = (command: MusicControlState['command']) => {
     if (controlRef) {
+      // Optimistic UI update
+      if (command === 'play') setOptimisticIsPlaying(true);
+      if (command === 'pause') setOptimisticIsPlaying(false);
+      
       const payload = { 
         command, 
         lastCommandTimestamp: Date.now() 
@@ -63,26 +72,27 @@ export default function MusicPlayerCard() {
     }
   };
 
-  // Debounced function to send volume updates to Firebase
-  const debouncedSetVolume = useCallback(
-    debounce((volume: number) => {
-      if (controlRef) {
-        setDocumentNonBlocking(controlRef, { volume }, { merge: true });
-      }
-    }, 100), // Send update max every 100ms
+  // Memoized debounced function to send volume updates to Firebase
+  const debouncedSetVolume = useMemo(
+    () =>
+      debounce((volume: number) => {
+        if (controlRef) {
+          setDocumentNonBlocking(controlRef, { volume }, { merge: true });
+        }
+      }, 100),
     [controlRef]
   );
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
-    setDesiredVolume(newVolume);
-    debouncedSetVolume(newVolume);
+    setLocalVolume(newVolume); // Update UI instantly
+    debouncedSetVolume(newVolume); // Send to Firebase after a delay
   };
   
-  const isPlaying = playerState?.status === 'playing';
+  const isActuallyPlaying = optimisticIsPlaying ?? playerState?.status === 'playing';
   const trackInfo = (playerState?.trackCount ?? 0) > 0
     ? `Pista ${playerState?.currentTrack ?? '?'} de ${playerState?.trackCount ?? '?'}`
-    : (isLoading ? 'Cargando...' : 'Sin pistas');
+    : (isStateLoading ? 'Cargando...' : 'Sin pistas');
 
 
   return (
@@ -100,19 +110,19 @@ export default function MusicPlayerCard() {
         </div>
 
         <div className="flex items-center justify-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => sendCommand('prev')} disabled={isLoading}>
+          <Button variant="ghost" size="icon" onClick={() => sendCommand('prev')} disabled={isStateLoading && optimisticIsPlaying === null}>
             <Rewind className="h-6 w-6" />
           </Button>
           <Button 
             variant="default" 
             size="icon" 
-            onClick={() => sendCommand(isPlaying ? 'pause' : 'play')} 
+            onClick={() => sendCommand(isActuallyPlaying ? 'pause' : 'play')} 
             className="h-14 w-14" 
-            disabled={isLoading}
+            disabled={isStateLoading && optimisticIsPlaying === null}
           >
-            {isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : (isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />)}
+            {isStateLoading && optimisticIsPlaying === null ? <Loader2 className="h-6 w-6 animate-spin"/> : (isActuallyPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />)}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => sendCommand('next')} disabled={isLoading}>
+          <Button variant="ghost" size="icon" onClick={() => sendCommand('next')} disabled={isStateLoading && optimisticIsPlaying === null}>
             <FastForward className="h-6 w-6" />
           </Button>
         </div>
@@ -123,9 +133,9 @@ export default function MusicPlayerCard() {
             min={0}
             max={30}
             step={1}
-            value={[desiredVolume]}
+            value={[localVolume]}
             onValueChange={handleVolumeChange}
-            disabled={isLoading}
+            disabled={isStateLoading && optimisticIsPlaying === null}
           />
         </div>
       </CardContent>

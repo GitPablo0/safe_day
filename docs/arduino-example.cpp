@@ -28,8 +28,8 @@
 // ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
-#define WIFI_SSID "Malery25celu"
-#define WIFI_PASSWORD "25109626Ro"
+#define WIFI_SSID "Telecentro416-b"
+#define WIFI_PASSWORD "ATNMFMY2MM5Q"
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
@@ -491,7 +491,7 @@ void loop() {
             reportPlayerStatus();
         }
 
-        if (isPlayingMusic && currentMillis >= musicStopTime) {
+        if (isPlayingMusic && currentMillis >= musicStopTime && musicStopTime != 0) {
             myDFPlayer.stop();
             isPlayingMusic = false;
             manualPause = false; // Resetea la pausa manual al terminar el temporizador
@@ -518,3 +518,5 @@ void loop() {
         }
     }
 }
+
+    

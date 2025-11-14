@@ -62,31 +62,40 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   auth,
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
-    user: null,
-    isUserLoading: true, // Start loading until first auth event
+    user: auth.currentUser, // Initialize with the current user, if available
+    isUserLoading: true,    // Set to true initially, will be false after first check
     userError: null,
   });
 
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
-    if (!auth) { // If no Auth service instance, cannot determine user state
-      setUserAuthState({ user: null, isUserLoading: false, userError: new Error("Auth service not provided.") });
-      return;
-    }
-
-    setUserAuthState({ user: null, isUserLoading: true, userError: null }); // Reset on auth instance change
+    // isMounted flag to prevent state updates on unmounted component
+    let isMounted = true; 
 
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => { // Auth state determined
-        setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
+        if (isMounted) {
+            setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
+        }
       },
       (error) => { // Auth listener error
         console.error("FirebaseProvider: onAuthStateChanged error:", error);
-        setUserAuthState({ user: null, isUserLoading: false, userError: error });
+        if (isMounted) {
+            setUserAuthState({ user: null, isUserLoading: false, userError: error });
+        }
       }
     );
-    return () => unsubscribe(); // Cleanup
+    
+    // Set loading to false if there's no initial user and the listener is ready.
+    if (auth.currentUser === null) {
+        setUserAuthState(prev => ({...prev, isUserLoading: false}));
+    }
+
+    return () => {
+        isMounted = false;
+        unsubscribe(); // Cleanup
+    }; 
   }, [auth]); // Depends on the auth instance
 
   // Memoize the context value

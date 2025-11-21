@@ -8,7 +8,7 @@
  * 2. Copia el "Device UID" que aparece en la tarjeta "Device Sync".
  * 3. Pega ese UID en la línea de abajo, reemplazando "PASTE_YOUR_USER_UID_HERE".
  *
- * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
+ * --- ¡IMPORTANTE! VERSIÓN DE BIBLIoteca ---
  * Este código está diseñado para la versión 4.x.x de la biblioteca
  * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
  * ==================================================================================
@@ -28,8 +28,21 @@
 // ¡¡¡ PEGA TU UID AQUÍ !!!
 #define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
-#define WIFI_SSID "Telecentro-416b"
-#define WIFI_PASSWORD "ATNMFMY2MM5Q"
+// Estructura para almacenar credenciales WiFi
+struct WiFiNetwork {
+  const char* ssid;
+  const char* password;
+};
+
+// Lista de redes WiFi conocidas. Añade las tuyas aquí.
+WiFiNetwork knownNetworks[] = {
+  {"Telecentro-416b", "ATNMFMY2MM5Q"},
+  {"SSID_CASA_NOVIA", "PASSWORD_CASA_NOVIA"},
+  {"SSID_COLEGIO", "PASSWORD_COLEGIO"}
+  // Puedes añadir más redes si lo necesitas
+};
+
+const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE
@@ -133,6 +146,7 @@ void reportPlayerStatus();
 void fetchMusicCommands();
 void tokenStatusCallback(TokenInfo info);
 void updateMusicState();
+void connectToWiFi();
 
 void setup() {
     Serial.begin(115200);
@@ -167,15 +181,7 @@ void setup() {
        myDFPlayer.volume(15);
     }
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    Serial.print("Conectando a Wi-Fi");
-    while (WiFi.status() != WL_CONNECTED) {
-        Serial.print(".");
-        delay(300);
-    }
-    Serial.println();
-    Serial.print("Conectado con IP: ");
-    Serial.println(WiFi.localIP());
+    connectToWiFi();
 
     Serial.println("Sincronizando hora...");
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -195,6 +201,41 @@ void setup() {
     config.signer.test_mode = true;
     Firebase.reconnectWiFi(true);
     Firebase.begin(&config, &auth);
+}
+
+void connectToWiFi() {
+  WiFi.mode(WIFI_STA);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Buscando redes WiFi conocidas...");
+    for (int i = 0; i < numKnownNetworks; i++) {
+      Serial.print("Intentando conectar a: ");
+      Serial.println(knownNetworks[i].ssid);
+      
+      WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
+      
+      unsigned long startAttemptTime = millis();
+      // Esperar hasta 15 segundos por cada red
+      while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
+        Serial.print(".");
+        delay(500);
+      }
+      
+      // Si se conecta, salir del bucle
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n¡Conectado a WiFi!");
+        Serial.print("Red: ");
+        Serial.println(WiFi.SSID());
+        Serial.print("Dirección IP: ");
+        Serial.println(WiFi.localIP());
+        return; // Salir de la función
+      } else {
+        Serial.println("\nFallo al conectar. Probando siguiente red...");
+        WiFi.disconnect();
+      }
+    }
+    Serial.println("No se encontró ninguna red conocida. Reintentando en 10 segundos...");
+    delay(10000);
+  }
 }
 
 // Función de callback para el estado del token
@@ -279,22 +320,18 @@ void fetchMusicCommands() {
                 String command = result.stringValue;
                 if (command != "") {
                     bool commandExecuted = false;
-
+                    
                     if (command == "play") {
                         manualPause = false;
-                        if (!isPlayingMusic) {
-                           myDFPlayer.start();
-                           isPlayingMusic = true;
-                           musicStopTime = millis() + musicPlayDuration;
-                        }
+                        isPlayingMusic = true;
+                        myDFPlayer.start(); 
+                        musicStopTime = millis() + musicPlayDuration;
                         commandExecuted = true;
                     } else if (command == "pause") {
                         manualPause = true;
-                        if (isPlayingMusic) {
-                           myDFPlayer.pause();
-                           isPlayingMusic = false;
-                           musicStopTime = 0; // Detiene el contador de 3 minutos
-                        }
+                        isPlayingMusic = false;
+                        myDFPlayer.pause();
+                        musicStopTime = 0;
                         commandExecuted = true;
                     } else if (command == "next" && isPlayingMusic) {
                         myDFPlayer.next();
@@ -407,22 +444,22 @@ void reportPlayerStatus() {
 void updateMusicState() {
     unsigned long currentMillis = millis();
 
-    // 1. Si hay estrés, la pausa manual se anula y la música se activa/continúa.
+    // 1. Si hay un evento de estrés, la pausa manual se anula y la música se activa/continúa.
     if (currentLedStatus >= 2) {
         manualPause = false; // Un nuevo evento de estrés anula la pausa manual.
         if (!isPlayingMusic) {
-            myDFPlayer.start();
             isPlayingMusic = true;
+            myDFPlayer.start();
             musicStopTime = currentMillis + musicPlayDuration;
             reportPlayerStatus();
         }
     }
 
-    // 2. Si la pausa manual está activada por el usuario, se pausa la música.
+    // 2. Si la pausa manual está activada por el usuario (y no hay estrés nuevo), se pausa la música.
     if (manualPause) {
         if (isPlayingMusic) {
-            myDFPlayer.pause();
             isPlayingMusic = false;
+            myDFPlayer.pause();
             reportPlayerStatus();
         }
         return; // Salimos para que no se ejecute la lógica del temporizador.
@@ -430,8 +467,8 @@ void updateMusicState() {
     
     // 3. Lógica de pausa automática por tiempo (solo si está sonando y no hay pausa manual)
     if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
-        myDFPlayer.pause();
         isPlayingMusic = false;
+        myDFPlayer.pause();
         musicStopTime = 0; // Resetea el temporizador para poder reactivar
         reportPlayerStatus();
     }
@@ -476,6 +513,7 @@ void loop() {
         
         // --- Lógica de Eventos de Sonido ---
         if (soundLevel > 0) {
+            // Siempre registrar eventos si superan el umbral, sin importar el estado de bloqueo
             if (soundLevel >= soundThresholdLow) {
                 orangeEventTimestamps[orangeEventIndex] = currentMillis;
                 orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
@@ -485,8 +523,9 @@ void loop() {
                 redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
             }
         }
-
-        // Comprobar si se debe activar un bloqueo
+        
+        // Comprobar si se debe activar un bloqueo (solo si no está ya activo)
+        // El chequeo se hace con paréntesis para asegurar el orden de operaciones
         if (! (redLedBlockedUntil > currentMillis)) {
             if (countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
                 redLedBlockedUntil = currentMillis + redBlockDurationMillis;
@@ -495,8 +534,10 @@ void loop() {
                 orangeEventIndex = 0;
                 redEventIndex = 0;
             }
-        } else if (! (orangeLedBlockedUntil > currentMillis)) {
-            if (countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
+        }
+        
+        if (! (orangeLedBlockedUntil > currentMillis)) {
+             if (countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
                 orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
                  // Limpiar solo los contadores naranjas para permitir que el rojo siga contando
                 for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
@@ -504,7 +545,6 @@ void loop() {
             }
         }
 
-        
         // --- Lógica de Eventos de Luz ---
         if (lightLevel > 0) {
             if (lightLevel <= lightThresholdLow) {
@@ -525,7 +565,9 @@ void loop() {
                 orangeLightEventIndex = 0;
                 redLightEventIndex = 0;
             }
-        } else if (! (orangeLightLedBlockedUntil > currentMillis)) {
+        }
+        
+        if (! (orangeLightLedBlockedUntil > currentMillis)) {
             if(countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
                 orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
                 for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }

@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { doc } from 'firebase/firestore';
 import MusicPlayerCard from './music-player-card';
+import EventCountCard from './event-count-card';
 
 type SensorData = {
     temperature: number;
@@ -19,6 +20,17 @@ type SensorData = {
     soundLevel: number;
     lightLevel: number;
     ledStatus: 1 | 2 | 3;
+    orangeSoundEvents: number;
+    redSoundEvents: number;
+    orangeLightEvents: number;
+    redLightEvents: number;
+};
+
+type ThresholdConfiguration = {
+    orangeSoundEventCount: number;
+    redSoundEventCount: number;
+    orangeLightEventCount: number;
+    redLightEventCount: number;
 };
 
 function UserInfoCard({ uid }: { uid: string }) {
@@ -68,7 +80,13 @@ export default function Dashboard() {
     return doc(firestore, `users/${userId}/sensorData/latest`);
   }, [firestore, userId]);
 
+  const thresholdConfigRef = useMemoFirebase(() => {
+    if (!firestore || !userId) return null;
+    return doc(firestore, `users/${userId}/thresholdConfigurations/main`);
+  }, [firestore, userId]);
+
   const { data: sensorData, isLoading: isSensorDataLoading } = useDoc<SensorData>(sensorDataRef);
+  const { data: thresholdConfig, isLoading: isConfigLoading } = useDoc<ThresholdConfiguration>(thresholdConfigRef);
 
   const temperature = sensorData?.temperature ?? 0;
   const humidity = sensorData?.humidity ?? 0;
@@ -93,12 +111,10 @@ export default function Dashboard() {
     }
   };
 
-  if (isUserLoading || !userId) {
-    return <div className="flex items-center justify-center min-h-screen">Cargando Datos de Usuario...</div>
-  }
-  
-  if (isSensorDataLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Cargando Datos del Sensor...</div>
+  const isLoading = isUserLoading || !userId || isSensorDataLoading || isConfigLoading;
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">Cargando Datos...</div>
   }
 
   return (
@@ -131,9 +147,10 @@ export default function Dashboard() {
               unit="bruto"
             />
           </div>
-           <div className="mt-6">
-            <MusicPlayerCard />
-          </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mt-6">
+             <MusicPlayerCard />
+             <EventCountCard sensorData={sensorData} thresholdConfig={thresholdConfig}/>
+           </div>
         </div>
         <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
            <LedStatus level={ledStatus} />

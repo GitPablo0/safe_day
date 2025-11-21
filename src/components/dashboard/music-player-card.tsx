@@ -90,7 +90,7 @@ export default function MusicPlayerCard() {
 
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle>Control de Música</CardTitle>
         <CardDescription>

@@ -193,9 +193,31 @@
         "ledStatus": {
           "type": "number",
           "description": "The calculated LED status from the device (1:Green, 2:Orange, 3:Red)."
+        },
+        "orangeSoundEvents": {
+          "type": "number",
+          "description": "The current count of sound events toward the orange threshold."
+        },
+        "redSoundEvents": {
+          "type": "number",
+          "description": "The current count of sound events toward the red threshold."
+        },
+        "orangeLightEvents": {
+          "type": "number",
+          "description": "The current count of light events toward the orange threshold."
+        },
+        "redLightEvents": {
+          "type": "number",
+          "description": "The current count of light events toward the red threshold."
         }
       },
-      "required": ["temperature", "humidity", "soundLevel", "lightLevel", "ledStatus"]
+      "required": [
+        "temperature",
+        "humidity",
+        "soundLevel",
+        "lightLevel",
+        "ledStatus"
+      ]
     }
   },
   "auth": {

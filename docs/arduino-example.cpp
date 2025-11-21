@@ -523,14 +523,17 @@ void loop() {
             }
         }
         
-        if (!(redLedBlockedUntil > currentMillis) && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
+        int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
+        int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
+
+        if (!(redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
             redLedBlockedUntil = currentMillis + redBlockDurationMillis;
             for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; redEventTimestamps[i] = 0; }
             orangeEventIndex = 0;
             redEventIndex = 0;
         }
         
-        if (!(orangeLedBlockedUntil > currentMillis) && countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
+        if (!(orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
             orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
             for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
             orangeEventIndex = 0;
@@ -547,15 +550,18 @@ void loop() {
                 redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             }
         }
+
+        int currentOrangeLightEvents = countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
+        int currentRedLightEvents = countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
         
-        if (!(redLightLedBlockedUntil > currentMillis) && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
+        if (!(redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
             redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
             for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; redLightEventTimestamps[i] = 0; }
             orangeLightEventIndex = 0;
             redLightEventIndex = 0;
         }
         
-        if (!(orangeLightLedBlockedUntil > currentMillis) && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
+        if (!(orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
             orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
             for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
             orangeLightEventIndex = 0;
@@ -591,7 +597,18 @@ void loop() {
         }
         
         String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
-        String content = "{\"fields\":{\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},\"lightLevel\":{\"integerValue\":" + String(lightLevel) + "},\"ledStatus\":{\"integerValue\":" + String(currentLedStatus) + "},\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}}}";
+        String content = "{\"fields\":{"
+                     "\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},"
+                     "\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},"
+                     "\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},"
+                     "\"lightLevel\":{\"integerValue\":" + String(lightLevel) + "},"
+                     "\"ledStatus\":{\"integerValue\":" + String(currentLedStatus) + "},"
+                     "\"orangeSoundEvents\":{\"integerValue\":" + String(currentOrangeSoundEvents) + "},"
+                     "\"redSoundEvents\":{\"integerValue\":" + String(currentRedSoundEvents) + "},"
+                     "\"orangeLightEvents\":{\"integerValue\":" + String(currentOrangeLightEvents) + "},"
+                     "\"redLightEvents\":{\"integerValue\":" + String(currentRedLightEvents) + "},"
+                     "\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}"
+                     "}}";
 
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" )) {
              // Silencio en éxito

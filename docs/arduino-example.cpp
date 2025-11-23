@@ -513,27 +513,25 @@ void loop() {
         
         // --- Lógica de Eventos de Sonido (Corregida) ---
         if (soundLevel > 0) {
-            if (soundLevel >= soundThresholdLow) {
-                orangeEventTimestamps[orangeEventIndex] = currentMillis;
-                orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
-            }
             if (soundLevel >= soundThresholdMedium) {
                 redEventTimestamps[redEventIndex] = currentMillis;
                 redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
+            }
+            if (soundLevel >= soundThresholdLow) {
+                orangeEventTimestamps[orangeEventIndex] = currentMillis;
+                orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
             }
         }
         
         int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
         int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
 
-        if (!(redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
+        if (! (redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
             redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-            for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; redEventTimestamps[i] = 0; }
-            orangeEventIndex = 0;
+            for(int i=0; i<MAX_SOUND_EVENTS; i++) { redEventTimestamps[i] = 0; orangeEventTimestamps[i] = 0; }
             redEventIndex = 0;
-        }
-        
-        if (!(orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
+            orangeEventIndex = 0;
+        } else if (! (orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
             orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
             for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
             orangeEventIndex = 0;
@@ -541,27 +539,25 @@ void loop() {
 
         // --- Lógica de Eventos de Luz (Corregida) ---
         if (lightLevel > 0) {
-            if (lightLevel <= lightThresholdLow) {
-                orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
-                orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
-            }
             if (lightLevel <= lightThresholdMedium) {
                 redLightEventTimestamps[redLightEventIndex] = currentMillis;
                 redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
+            }
+            if (lightLevel <= lightThresholdLow) {
+                orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
+                orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             }
         }
 
         int currentOrangeLightEvents = countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
         int currentRedLightEvents = countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
         
-        if (!(redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
+        if (! (redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
             redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; redLightEventTimestamps[i] = 0; }
-            orangeLightEventIndex = 0;
+            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { redLightEventTimestamps[i] = 0; orangeLightEventTimestamps[i] = 0; }
             redLightEventIndex = 0;
-        }
-        
-        if (!(orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
+            orangeLightEventIndex = 0;
+        } else if (! (orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
             orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
             for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
             orangeLightEventIndex = 0;

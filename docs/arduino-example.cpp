@@ -37,8 +37,8 @@ struct WiFiNetwork {
 // Lista de redes WiFi conocidas. Añade las tuyas aquí.
 WiFiNetwork knownNetworks[] = {
   {"Telecentro-416b", "ATNMFMY2MM5Q"},
-  {"SSID_CASA_NOVIA", "PASSWORD_CASA_NOVIA"},
-  {"SSID_COLEGIO", "PASSWORD_COLEGIO"}
+  {"Pablooo13", "brenda123"},
+  {"Estudiantes", "Escuelas_2025"}
   // Puedes añadir más redes si lo necesitas
 };
 

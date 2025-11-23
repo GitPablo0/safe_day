@@ -24,6 +24,7 @@ type SensorData = {
     redSoundEvents: number;
     orangeLightEvents: number;
     redLightEvents: number;
+    blockTimeRemaining: number;
 };
 
 type ThresholdConfiguration = {
@@ -93,6 +94,7 @@ export default function Dashboard() {
   const soundLevel = sensorData?.soundLevel ?? 0;
   const lightLevel = sensorData?.lightLevel ?? 0;
   const ledStatus = sensorData?.ledStatus ?? 1;
+  const blockTimeRemaining = sensorData?.blockTimeRemaining ?? 0;
 
   
   const handleSendSampleData = (data: { temperature: number; humidity: number; soundLevel: number; lightLevel: number }) => {
@@ -153,7 +155,7 @@ export default function Dashboard() {
            </div>
         </div>
         <div className="lg:col-span-4 xl:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-1 gap-6 md:gap-8">
-           <LedStatus level={ledStatus} />
+           <LedStatus level={ledStatus} timeRemaining={blockTimeRemaining} />
            <UserInfoCard uid={userId} />
            <SensorSimulator onSendSampleData={handleSendSampleData} />
         </div>

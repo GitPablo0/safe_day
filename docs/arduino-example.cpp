@@ -580,6 +580,14 @@ void loop() {
 
         currentLedStatus = max(estadoBloqueado, estadoInstantaneo);
 
+        // --- Cálculo del tiempo de bloqueo restante ---
+        unsigned long maxSoundBlockTime = max(orangeLedBlockedUntil, redLedBlockedUntil);
+        unsigned long maxLightBlockTime = max(orangeLightLedBlockedUntil, redLightLedBlockedUntil);
+        unsigned long maxBlockEndTime = max(maxSoundBlockTime, maxLightBlockTime);
+        long blockTimeRemaining = 0;
+        if (maxBlockEndTime > currentMillis) {
+          blockTimeRemaining = maxBlockEndTime - currentMillis;
+        }
 
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
@@ -607,6 +615,7 @@ void loop() {
                      "\"redSoundEvents\":{\"integerValue\":" + String(currentRedSoundEvents) + "},"
                      "\"orangeLightEvents\":{\"integerValue\":" + String(currentOrangeLightEvents) + "},"
                      "\"redLightEvents\":{\"integerValue\":" + String(currentRedLightEvents) + "},"
+                     "\"blockTimeRemaining\":{\"integerValue\":" + String(blockTimeRemaining) + "},"
                      "\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}"
                      "}}";
 

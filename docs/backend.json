@@ -209,6 +209,10 @@
         "redLightEvents": {
           "type": "number",
           "description": "The current count of light events toward the red threshold."
+        },
+        "blockTimeRemaining": {
+          "type": "number",
+          "description": "The remaining time in milliseconds for the current system state block."
         }
       },
       "required": [

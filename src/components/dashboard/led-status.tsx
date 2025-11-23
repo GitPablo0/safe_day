@@ -1,10 +1,12 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface LedStatusProps {
   level: 1 | 2 | 3;
+  timeRemaining: number;
 }
 
 const statusConfig = {
@@ -18,18 +20,38 @@ const statusConfig = {
     label: "Elevado",
     color: "bg-orange-400",
     textColor: "text-orange-400",
-    description: "Se detectaron estímulos ambientales moderados."
+    description: "Se detectaron estímulos moderados."
   },
   3: {
     label: "Estrés Alto",
     color: "bg-red-500",
     textColor: "text-red-500",
-    description: "Se detectaron estímulos ambientales altos."
+    description: "Se detectaron estímulos altos."
   },
 };
 
-export default function LedStatus({ level }: LedStatusProps) {
+export default function LedStatus({ level, timeRemaining }: LedStatusProps) {
+  const [countdown, setCountdown] = useState(Math.ceil(timeRemaining / 1000));
   const currentStatus = statusConfig[level];
+
+  useEffect(() => {
+    setCountdown(Math.ceil(timeRemaining / 1000));
+
+    if (timeRemaining > 0) {
+      const interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [timeRemaining]);
+
 
   return (
     <Card className="flex flex-col h-full">
@@ -61,6 +83,12 @@ export default function LedStatus({ level }: LedStatusProps) {
         <p className={cn("text-2xl font-bold mt-4", currentStatus.textColor)}>
           {currentStatus.label}
         </p>
+        {countdown > 0 && level > 1 && (
+            <div className="text-center mt-2">
+                <p className="text-xs text-muted-foreground">Volviendo a tiempo real en</p>
+                <p className="text-lg font-semibold">{countdown}s</p>
+            </div>
+        )}
       </CardContent>
     </Card>
   );

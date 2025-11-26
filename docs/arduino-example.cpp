@@ -26,7 +26,7 @@
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
 // ¡¡¡ PEGA TU UID AQUÍ !!!
-#define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
+#define USER_UID "PASTE_YOUR_USER_UID_HERE"
 
 // Estructura para almacenar credenciales WiFi
 struct WiFiNetwork {
@@ -478,40 +478,36 @@ void updateMusicState() {
 void loop() {
     unsigned long currentMillis = millis();
 
+    // --- MANEJO DE COMANDOS Y ESTADOS ASÍNCRONOS ---
     if (myDFPlayer.available()) {
         uint8_t type = myDFPlayer.readType();
-        switch (type) {
-            case DFPlayerPlayFinished:
-                reportPlayerStatus();
-                break;
-            default:
-                break;
+        if (type == DFPlayerPlayFinished) {
+            reportPlayerStatus();
         }
     }
     
-    if (Firebase.ready() && currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {
-        fetchCommandsPrevMillis = currentMillis;
-        fetchMusicCommands();
+    if (Firebase.ready()) {
+        if (currentMillis - fetchCommandsPrevMillis >= fetchCommandsInterval) {
+            fetchCommandsPrevMillis = currentMillis;
+            fetchMusicCommands();
+        }
+        if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
+            fetchConfigPrevMillis = currentMillis;
+            fetchThresholdsFromFirebase();
+        }
     }
 
-    if (currentMillis - playerStatusPrevMillis >= playerStatusInterval) {
-        playerStatusPrevMillis = currentMillis;
-    }
-
-    if (currentMillis - fetchConfigPrevMillis >= fetchConfigInterval) {
-        fetchConfigPrevMillis = currentMillis;
-        fetchThresholdsFromFirebase();
-    }
-
+    // --- CICLO PRINCIPAL DE LECTURA Y PROCESAMIENTO ---
     if (currentMillis - sendDataPrevMillis >= sendDataInterval) {
         sendDataPrevMillis = currentMillis;
 
+        // --- 1. LECTURA Y REGISTRO DE EVENTOS ---
         float temperature = readTemperature();
         float humidity = readHumidity();
         int soundLevel = readSoundLevel();
         int lightLevel = readLightLevel();
         
-        // --- Lógica de Eventos de Sonido (Corregida) ---
+        // Registrar eventos de sonido si el nivel es significativo
         if (soundLevel > 0) {
             if (soundLevel >= soundThresholdMedium) {
                 redEventTimestamps[redEventIndex] = currentMillis;
@@ -523,21 +519,7 @@ void loop() {
             }
         }
         
-        int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
-        int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
-
-        if (! (redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
-            redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-            for(int i=0; i<MAX_SOUND_EVENTS; i++) { redEventTimestamps[i] = 0; orangeEventTimestamps[i] = 0; }
-            redEventIndex = 0;
-            orangeEventIndex = 0;
-        } else if (! (orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
-            orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
-            for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
-            orangeEventIndex = 0;
-        }
-
-        // --- Lógica de Eventos de Luz (Corregida) ---
+        // Registrar eventos de luz si el nivel es significativo
         if (lightLevel > 0) {
             if (lightLevel <= lightThresholdMedium) {
                 redLightEventTimestamps[redLightEventIndex] = currentMillis;
@@ -548,22 +530,13 @@ void loop() {
                 orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             }
         }
-
+        
+        // --- 2. CÁLCULO DE VALORES ACTUALES (ANTES DE MODIFICAR NADA) ---
+        int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
+        int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
         int currentOrangeLightEvents = countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
         int currentRedLightEvents = countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
-        
-        if (! (redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
-            redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { redLightEventTimestamps[i] = 0; orangeLightEventTimestamps[i] = 0; }
-            redLightEventIndex = 0;
-            orangeLightEventIndex = 0;
-        } else if (! (orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
-            orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
-            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
-            orangeLightEventIndex = 0;
-        }
-        
-        // --- Lógica de Determinación de Estado del LED ---
+
         int estadoSonidoBloqueado = (redLedBlockedUntil > currentMillis) ? 3 : ((orangeLedBlockedUntil > currentMillis) ? 2 : 1);
         int estadoLuzBloqueado = (redLightLedBlockedUntil > currentMillis) ? 3 : ((orangeLightLedBlockedUntil > currentMillis) ? 2 : 1);
         
@@ -575,50 +548,60 @@ void loop() {
         int estadoInstantaneo = max({estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo});
 
         currentLedStatus = max(estadoBloqueado, estadoInstantaneo);
-
-        // --- Cálculo del tiempo de bloqueo restante ---
+        
         unsigned long maxSoundBlockTime = max(orangeLedBlockedUntil, redLedBlockedUntil);
         unsigned long maxLightBlockTime = max(orangeLightLedBlockedUntil, redLightLedBlockedUntil);
         unsigned long maxBlockEndTime = max(maxSoundBlockTime, maxLightBlockTime);
         long blockTimeRemaining = 0;
         if (maxBlockEndTime > currentMillis) {
-          blockTimeRemaining = maxBlockEndTime - currentMillis;
+          blockTimeRemaining = (maxBlockEndTime - currentMillis);
         }
 
+        // --- 3. ENVÍO DE DATOS A FIREBASE ---
+        if (Firebase.ready() && (strnlen(USER_UID, 30) > 2 && strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") != 0)) {
+            String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
+            String content = "{\"fields\":{"
+                         "\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},"
+                         "\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},"
+                         "\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},"
+                         "\"lightLevel\":{\"integerValue\":" + String(lightLevel) + "},"
+                         "\"ledStatus\":{\"integerValue\":" + String(currentLedStatus) + "},"
+                         "\"orangeSoundEvents\":{\"integerValue\":" + String(currentOrangeSoundEvents) + "},"
+                         "\"redSoundEvents\":{\"integerValue\":" + String(currentRedSoundEvents) + "},"
+                         "\"orangeLightEvents\":{\"integerValue\":" + String(currentOrangeLightEvents) + "},"
+                         "\"redLightEvents\":{\"integerValue\":" + String(currentRedLightEvents) + "},"
+                         "\"blockTimeRemaining\":{\"integerValue\":" + String(blockTimeRemaining) + "},"
+                         "\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}"
+                         "}}";
+
+            if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" )) {
+                Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.errorReason().c_str());
+            }
+        }
+
+        // --- 4. LÓGICA DE DECISIÓN Y ACTUALIZACIÓN DE ESTADO ---
+        // Activar bloqueos si se cumplen las condiciones
+        if (! (redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
+            redLedBlockedUntil = currentMillis + redBlockDurationMillis;
+            for(int i=0; i<MAX_SOUND_EVENTS; i++) { redEventTimestamps[i] = 0; orangeEventTimestamps[i] = 0; }
+        } else if (! (orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
+            orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
+            for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
+        }
+        
+        if (! (redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
+            redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
+            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { redLightEventTimestamps[i] = 0; orangeLightEventTimestamps[i] = 0; }
+        } else if (! (orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
+            orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
+            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
+        }
+        
+        // --- 5. CONTROL DE HARDWARE ---
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
 
-        // --- Lógica de DFPlayer ---
         updateMusicState();
-
-        if (strnlen(USER_UID, 30) < 2 || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
-            return;
-        }
-
-        if (!Firebase.ready()) {
-            return;
-        }
-        
-        String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
-        String content = "{\"fields\":{"
-                     "\"temperature\":{\"doubleValue\":" + String(temperature, 1) + "},"
-                     "\"humidity\":{\"doubleValue\":" + String(humidity, 1) + "},"
-                     "\"soundLevel\":{\"integerValue\":" + String(soundLevel) + "},"
-                     "\"lightLevel\":{\"integerValue\":" + String(lightLevel) + "},"
-                     "\"ledStatus\":{\"integerValue\":" + String(currentLedStatus) + "},"
-                     "\"orangeSoundEvents\":{\"integerValue\":" + String(currentOrangeSoundEvents) + "},"
-                     "\"redSoundEvents\":{\"integerValue\":" + String(currentRedSoundEvents) + "},"
-                     "\"orangeLightEvents\":{\"integerValue\":" + String(currentOrangeLightEvents) + "},"
-                     "\"redLightEvents\":{\"integerValue\":" + String(currentRedLightEvents) + "},"
-                     "\"blockTimeRemaining\":{\"integerValue\":" + String(blockTimeRemaining) + "},"
-                     "\"timestamp\":{\"timestampValue\":\"" + getTimestamp() + "\"}"
-                     "}}";
-
-        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "" )) {
-             // Silencio en éxito
-        } else {
-            Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.errorReason().c_str());
-        }
     }
 }

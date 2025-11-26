@@ -145,7 +145,6 @@ void fetchThresholdsFromFirebase();
 void reportPlayerStatus();
 void fetchMusicCommands();
 void tokenStatusCallback(TokenInfo info);
-void updateMusicState();
 void connectToWiFi();
 
 void setup() {
@@ -441,40 +440,6 @@ void reportPlayerStatus() {
     Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "status,currentTrack,trackCount");
 }
 
-void updateMusicState() {
-    unsigned long currentMillis = millis();
-
-    // 1. Si hay un evento de estrés, la pausa manual se anula y la música se activa/continúa.
-    if (currentLedStatus >= 2) {
-        manualPause = false; // Un nuevo evento de estrés anula la pausa manual.
-        if (!isPlayingMusic) {
-            isPlayingMusic = true;
-            myDFPlayer.start();
-            musicStopTime = currentMillis + musicPlayDuration;
-            reportPlayerStatus();
-        }
-    }
-
-    // 2. Si la pausa manual está activada por el usuario (y no hay estrés nuevo), se pausa la música.
-    if (manualPause) {
-        if (isPlayingMusic) {
-            isPlayingMusic = false;
-            myDFPlayer.pause();
-            reportPlayerStatus();
-        }
-        return; // Salimos para que no se ejecute la lógica del temporizador.
-    }
-    
-    // 3. Lógica de pausa automática por tiempo (solo si está sonando y no hay pausa manual)
-    if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
-        isPlayingMusic = false;
-        myDFPlayer.pause();
-        musicStopTime = 0; // Resetea el temporizador para poder reactivar
-        reportPlayerStatus();
-    }
-}
-
-
 void loop() {
     unsigned long currentMillis = millis();
 
@@ -501,63 +466,74 @@ void loop() {
     if (currentMillis - sendDataPrevMillis >= sendDataInterval) {
         sendDataPrevMillis = currentMillis;
 
-        // --- 1. LECTURA Y REGISTRO DE EVENTOS ---
+        // --- 1. LECTURA DE SENSORES Y REGISTRO DE EVENTOS ---
         float temperature = readTemperature();
         float humidity = readHumidity();
         int soundLevel = readSoundLevel();
         int lightLevel = readLightLevel();
         
-        // Registrar eventos de sonido si el nivel es significativo
         if (soundLevel > 0) {
-            if (soundLevel >= soundThresholdMedium) {
-                redEventTimestamps[redEventIndex] = currentMillis;
-                redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
-            }
             if (soundLevel >= soundThresholdLow) {
                 orangeEventTimestamps[orangeEventIndex] = currentMillis;
                 orangeEventIndex = (orangeEventIndex + 1) % MAX_SOUND_EVENTS;
             }
+            if (soundLevel >= soundThresholdMedium) {
+                redEventTimestamps[redEventIndex] = currentMillis;
+                redEventIndex = (redEventIndex + 1) % MAX_SOUND_EVENTS;
+            }
         }
         
-        // Registrar eventos de luz si el nivel es significativo
         if (lightLevel > 0) {
-            if (lightLevel <= lightThresholdMedium) {
-                redLightEventTimestamps[redLightEventIndex] = currentMillis;
-                redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
-            }
             if (lightLevel <= lightThresholdLow) {
                 orangeLightEventTimestamps[orangeLightEventIndex] = currentMillis;
                 orangeLightEventIndex = (orangeLightEventIndex + 1) % MAX_LIGHT_EVENTS;
             }
+            if (lightLevel <= lightThresholdMedium) {
+                redLightEventTimestamps[redLightEventIndex] = currentMillis;
+                redLightEventIndex = (redLightEventIndex + 1) % MAX_LIGHT_EVENTS;
+            }
+        }
+
+        // --- 2. LÓGICA DE DECISIÓN Y BLOQUEO ---
+        // Activar bloqueos si se cumplen las condiciones y no están ya activos
+        if (! (redLedBlockedUntil > currentMillis) && countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= redSoundEventCountThreshold) {
+            redLedBlockedUntil = currentMillis + redBlockDurationMillis;
+            for(int i=0; i<MAX_SOUND_EVENTS; i++) { redEventTimestamps[i] = 0; orangeEventTimestamps[i] = 0; }
+        } else if (! (orangeLedBlockedUntil > currentMillis) && countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS) >= orangeSoundEventCountThreshold) {
+            orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
+            for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
         }
         
-        // --- 2. CÁLCULO DE VALORES ACTUALES (ANTES DE MODIFICAR NADA) ---
-        int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
-        int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
-        int currentOrangeLightEvents = countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
-        int currentRedLightEvents = countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
+        if (! (redLightLedBlockedUntil > currentMillis) && countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= redLightEventCountThreshold) {
+            redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
+            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { redLightEventTimestamps[i] = 0; orangeLightEventTimestamps[i] = 0; }
+        } else if (! (orangeLightLedBlockedUntil > currentMillis) && countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS) >= orangeLightEventCountThreshold) {
+            orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
+            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
+        }
 
+        // --- 3. CÁLCULO DEL ESTADO FINAL DEL LED ---
         int estadoSonidoBloqueado = (redLedBlockedUntil > currentMillis) ? 3 : ((orangeLedBlockedUntil > currentMillis) ? 2 : 1);
         int estadoLuzBloqueado = (redLightLedBlockedUntil > currentMillis) ? 3 : ((orangeLightLedBlockedUntil > currentMillis) ? 2 : 1);
-        
+        int estadoTemp = (temperature >= tempThresholdNaranja) ? 3 : ((temperature >= tempThresholdVerde) ? 2 : 1);
         int estadoSonidoInstantaneo = (soundLevel >= soundThresholdMedium) ? 3 : ((soundLevel >= soundThresholdLow) ? 2 : 1);
         int estadoLuzInstantaneo = (lightLevel <= lightThresholdMedium) ? 3 : ((lightLevel <= lightThresholdLow) ? 2 : 1);
-        int estadoTemp = (temperature >= tempThresholdNaranja) ? 3 : ((temperature >= tempThresholdVerde) ? 2 : 1);
 
         int estadoBloqueado = max(estadoSonidoBloqueado, estadoLuzBloqueado);
         int estadoInstantaneo = max({estadoTemp, estadoSonidoInstantaneo, estadoLuzInstantaneo});
 
         currentLedStatus = max(estadoBloqueado, estadoInstantaneo);
-        
-        unsigned long maxSoundBlockTime = max(orangeLedBlockedUntil, redLedBlockedUntil);
-        unsigned long maxLightBlockTime = max(orangeLightLedBlockedUntil, redLightLedBlockedUntil);
-        unsigned long maxBlockEndTime = max(maxSoundBlockTime, maxLightBlockTime);
-        long blockTimeRemaining = 0;
-        if (maxBlockEndTime > currentMillis) {
-          blockTimeRemaining = (maxBlockEndTime - currentMillis);
-        }
 
-        // --- 3. ENVÍO DE DATOS A FIREBASE ---
+        // --- 4. CÁLCULO DE VALORES PARA ENVIAR A FIREBASE ---
+        int currentOrangeSoundEvents = countRecentEvents(orangeEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
+        int currentRedSoundEvents = countRecentEvents(redEventTimestamps, timeBetweenEventsMillis, MAX_SOUND_EVENTS);
+        int currentOrangeLightEvents = countRecentEvents(orangeLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
+        int currentRedLightEvents = countRecentEvents(redLightEventTimestamps, timeBetweenLightEventsMillis, MAX_LIGHT_EVENTS);
+        
+        unsigned long maxBlockEndTime = max({orangeLedBlockedUntil, redLedBlockedUntil, orangeLightLedBlockedUntil, redLightLedBlockedUntil});
+        long blockTimeRemaining = (maxBlockEndTime > currentMillis) ? (maxBlockEndTime - currentMillis) : 0;
+
+        // --- 5. ENVÍO DE DATOS A FIREBASE ---
         if (Firebase.ready() && (strnlen(USER_UID, 30) > 2 && strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") != 0)) {
             String documentPath = "users/" + String(USER_UID) + "/sensorData/latest";
             String content = "{\"fields\":{"
@@ -578,30 +554,33 @@ void loop() {
                 Serial.printf("Fallo en la llamada a patchDocument: %s\n", fbdo.errorReason().c_str());
             }
         }
+        
+        // --- 6. CONTROL DE HARDWARE (MÚSICA Y LEDS) ---
+        // Lógica de música
+        if (currentLedStatus >= 2) {
+            manualPause = false; // Un evento de estrés anula la pausa manual
+            if (!isPlayingMusic) {
+                isPlayingMusic = true;
+                myDFPlayer.start();
+                musicStopTime = currentMillis + musicPlayDuration;
+                reportPlayerStatus();
+            }
+        } else if (manualPause) {
+            if (isPlayingMusic) {
+                isPlayingMusic = false;
+                myDFPlayer.pause();
+                reportPlayerStatus();
+            }
+        } else if (isPlayingMusic && musicStopTime > 0 && currentMillis >= musicStopTime) {
+            isPlayingMusic = false;
+            myDFPlayer.pause();
+            musicStopTime = 0; // Resetea para poder reactivar
+            reportPlayerStatus();
+        }
 
-        // --- 4. LÓGICA DE DECISIÓN Y ACTUALIZACIÓN DE ESTADO ---
-        // Activar bloqueos si se cumplen las condiciones
-        if (! (redLedBlockedUntil > currentMillis) && currentRedSoundEvents >= redSoundEventCountThreshold) {
-            redLedBlockedUntil = currentMillis + redBlockDurationMillis;
-            for(int i=0; i<MAX_SOUND_EVENTS; i++) { redEventTimestamps[i] = 0; orangeEventTimestamps[i] = 0; }
-        } else if (! (orangeLedBlockedUntil > currentMillis) && currentOrangeSoundEvents >= orangeSoundEventCountThreshold) {
-            orangeLedBlockedUntil = currentMillis + orangeBlockDurationMillis;
-            for(int i=0; i<MAX_SOUND_EVENTS; i++) { orangeEventTimestamps[i] = 0; }
-        }
-        
-        if (! (redLightLedBlockedUntil > currentMillis) && currentRedLightEvents >= redLightEventCountThreshold) {
-            redLightLedBlockedUntil = currentMillis + redLightBlockDurationMillis;
-            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { redLightEventTimestamps[i] = 0; orangeLightEventTimestamps[i] = 0; }
-        } else if (! (orangeLightLedBlockedUntil > currentMillis) && currentOrangeLightEvents >= orangeLightEventCountThreshold) {
-            orangeLightLedBlockedUntil = currentMillis + orangeLightBlockDurationMillis;
-            for(int i=0; i<MAX_LIGHT_EVENTS; i++) { orangeLightEventTimestamps[i] = 0; }
-        }
-        
-        // --- 5. CONTROL DE HARDWARE ---
+        // Lógica de LEDs
         digitalWrite(LED_VERDE_PIN, currentLedStatus == 1);
         digitalWrite(LED_NARANJA_PIN, currentLedStatus == 2);
         digitalWrite(LED_ROJO_PIN, currentLedStatus == 3);
-
-        updateMusicState();
     }
 }

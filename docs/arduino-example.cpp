@@ -26,7 +26,7 @@
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
 // ¡¡¡ PEGA TU UID AQUÍ !!!
-#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+#define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
 
 // Estructura para almacenar credenciales WiFi
 struct WiFiNetwork {

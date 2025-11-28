@@ -1,5 +1,6 @@
 {
   "rules": {
+    // Permite el acceso a los datos de la alarma solo al usuario autenticado dueño de los datos.
     "alarm": {
       "state": {
         ".read": "auth != null",
@@ -8,5 +9,3 @@
     }
   }
 }
-
-    

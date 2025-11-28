@@ -13,6 +13,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
+#include "time.h"
 
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI Y USUARIO
@@ -37,10 +38,11 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
 
 // ===============================================================
-// 2. CONFIGURACIÓN DE FIREBASE
+// 2. CONFIGURACIÓN DE FIREBASE (CORREGIDA)
 // ===============================================================
-#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
-#define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define API_KEY "AIzaSyD26vBFuUd45oUiio76gLNAz6Mh3062Muw"
+#define FIREBASE_PROJECT_ID "sistemaalarma-11019109-94c6b"
+#define DATABASE_URL "sistemaalarma-11019109-94c6b-default-rtdb.firebaseio.com"
 
 // Objetos de Firebase
 FirebaseData fbdo;
@@ -91,6 +93,18 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
 
   connectToWiFi();
+
+  // Sincronizar la hora (crucial para la conexión SSL/TLS con Firebase)
+  Serial.println("Sincronizando hora con servidor NTP...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  while (now < 8 * 3600 * 2) {
+      delay(500);
+      Serial.print(".");
+      now = time(nullptr);
+  }
+  Serial.println("\nHora sincronizada.");
+
 
   // Configuración de Firebase (replicando el método funcional)
   Serial.println("Configurando Firebase...");
@@ -164,6 +178,7 @@ void loop() {
     // ----> AÑADIDO PARA DIAGNÓSTICO <----
     // Si Firebase no está listo, imprime un punto para saber que el loop sigue corriendo.
     Serial.print(".");
+    delay(100);
   }
 
 

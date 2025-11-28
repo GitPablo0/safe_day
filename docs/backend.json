@@ -29,12 +29,10 @@
   "auth": {
     "providers": ["email-and-password"]
   },
-  "rtdb": {
-    "paths": {
-      "/alarm/state": {
-        "schema": { "$ref": "#/entities/AlarmState" },
-        "description": "Singleton location to hold the current state and configuration of the alarm."
-      }
+  "firestore": {
+    "/alarm/state": {
+      "schema": { "$ref": "#/entities/AlarmState" },
+      "description": "Singleton document to hold the current state and configuration of the alarm."
     }
   }
 }

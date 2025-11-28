@@ -4,7 +4,6 @@ import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getDatabase } from 'firebase/database';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -38,13 +37,10 @@ export function initializeFirebase() {
 
 export function getSdks(firebaseApp: FirebaseApp) {
   const firestore = getFirestore(firebaseApp);
-  // Pass the databaseURL from the config to getDatabase
-  const rtdb = getDatabase(firebaseApp, firebaseConfig.databaseURL);
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: firestore,
-    rtdb: rtdb,
   };
 }
 
@@ -54,5 +50,3 @@ export * from './firestore/use-collection';
 export * from './firestore/use-doc';
 export * from './errors';
 export * from './error-emitter';
-export * from './hooks';
-export * from './rtdb/use-rtdb-value';

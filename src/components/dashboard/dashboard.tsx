@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useRtdb } from '@/firebase';
-import { useRtdbValue } from '@/firebase/rtdb/use-rtdb-value';
-import { ref } from 'firebase/database';
+import { useUser, useFirestore, useDoc, getSdks } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 import { AlarmStatusCard } from './alarm-status-card';
 import { AlarmControlsCard } from './alarm-controls-card';
 import { UserUidCard } from './user-uid-card';
 import { Skeleton } from '../ui/skeleton';
+import { initializeFirebase } from '@/firebase';
 
 export interface AlarmState {
   isArmed: boolean;
@@ -18,7 +18,7 @@ export interface AlarmState {
 }
 
 export function Dashboard() {
-  const rtdb = useRtdb();
+  const { firestore } = getSdks(initializeFirebase().firebaseApp);
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
@@ -30,15 +30,15 @@ export function Dashboard() {
   }, [isUserLoading, user, router]);
 
   const alarmStateRef = useMemo(
-    () => (rtdb ? ref(rtdb, 'alarm/state') : null),
-    [rtdb]
+    () => (firestore ? doc(firestore, 'alarm/state') : null),
+    [firestore]
   );
 
   const {
     data: alarmState,
     isLoading: isAlarmStateLoading,
     error,
-  } = useRtdbValue<AlarmState>(alarmStateRef);
+  } = useDoc<AlarmState>(alarmStateRef);
 
   // While checking auth state or loading data, show a skeleton
   if (isUserLoading || isAlarmStateLoading) {
@@ -105,7 +105,7 @@ function DashboardSkeleton() {
         <Skeleton className="h-56 w-full" />
         <Skeleton className="h-56 w-full" />
       </div>
-      <div className="md:col-span-1">
+      <div className="md-col-span-1">
         <Skeleton className="h-40 w-full" />
       </div>
     </div>

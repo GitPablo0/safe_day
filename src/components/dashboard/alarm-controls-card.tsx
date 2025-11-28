@@ -11,8 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Settings } from 'lucide-react';
-import { updateAlarmState } from '@/firebase/rtdb/mutations';
-import { useRtdb } from '@/firebase';
+import { updateAlarmState } from '@/firebase/firestore/mutations';
+import { useFirestore } from '@/firebase';
 
 interface AlarmControlsCardProps {
   isArmed: boolean;
@@ -25,17 +25,17 @@ export function AlarmControlsCard({
   alarmDuration,
   isDeviceConnected,
 }: AlarmControlsCardProps) {
-  const rtdb = useRtdb();
+  const firestore = useFirestore();
 
   const handleArmChange = (armed: boolean) => {
-    if (!rtdb) return;
+    if (!firestore) return;
     // When arming/disarming from the dashboard, always reset presence detection.
-    updateAlarmState(rtdb, { isArmed: armed, presenceDetected: false });
+    updateAlarmState(firestore, { isArmed: armed, presenceDetected: false });
   };
 
   const handleDurationChange = (value: number[]) => {
-    if (!rtdb) return;
-    updateAlarmState(rtdb, { alarmDuration: value[0] });
+    if (!firestore) return;
+    updateAlarmState(firestore, { alarmDuration: value[0] });
   };
 
   return (

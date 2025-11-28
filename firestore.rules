@@ -98,6 +98,15 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
 
     /**
+     * @description Singleton document to hold the current state and configuration of the alarm.
+     * @path /alarm/state
+     * @allow (read, write): Any authenticated user can read or write to this document.
+     */
+    match /alarm/state {
+      allow read, write: if isSignedIn();
+    }
+
+    /**
      * @description Manages user profile documents.
      * @path /users/{userId}
      * @allow (create): A new user with UID 'user_abc' can create their own profile at `/users/user_abc`.

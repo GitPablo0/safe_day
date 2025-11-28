@@ -16,6 +16,11 @@
         "alarmDuration": {
           "type": "number",
           "description": "Duration in seconds for the buzzer to sound when triggered."
+        },
+        "lastStatusUpdate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp of the last update from the device."
         }
       },
       "required": ["isArmed", "presenceDetected", "alarmDuration"]

@@ -33,6 +33,7 @@ export function Dashboard() {
     () => (rtdb ? ref(rtdb, '/alarm/state') : null),
     [rtdb]
   );
+
   const {
     data: alarmState,
     isLoading: isAlarmStateLoading,

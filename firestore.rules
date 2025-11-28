@@ -1,12 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Reglas simplificadas para depuración.
-    // PERMITE A CUALQUIERA LEER Y ESCRIBIR EN TODA LA BASE DE DATOS.
-    // Esto es inseguro para producción, pero útil para verificar la conexión del dispositivo.
+    // Por defecto, se deniega el acceso. Las reglas se añadirán según sea necesario.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

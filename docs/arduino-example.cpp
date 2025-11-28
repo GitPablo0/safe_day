@@ -106,17 +106,14 @@ void setup() {
   Serial.println("\nHora sincronizada.");
 
 
-  // Configuración de Firebase (replicando el método funcional)
+  // Configuración de Firebase
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL; // <-- LA LÍNEA CLAVE QUE FALTABA
+  config.database_url = DATABASE_URL;
 
   // Usar un email y password de placeholder como en el ejemplo funcional
   auth.user.email = "esp32@alumnosuade.com";
   auth.user.password = "password";
-
-  // Asignar el UID que se usará para la autenticación de prueba
-  config.signer.test_mode = true;
   
   config.token_status_callback = tokenStatusCallback;
 
@@ -176,7 +173,6 @@ void loop() {
         }
     }
   } else {
-    // ----> AÑADIDO PARA DIAGNÓSTICO <----
     // Si Firebase no está listo, imprime un punto para saber que el loop sigue corriendo.
     Serial.print(".");
     delay(100);

@@ -3,7 +3,7 @@
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { Auth, User, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -66,7 +66,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     userError: null,
   });
 
-  // Effect to subscribe to Firebase auth state changes
+  // Effect to subscribe to Firebase auth state changes and sign in anonymously
   useEffect(() => {
     // isMounted flag to prevent state updates on unmounted component
     let isMounted = true; 
@@ -75,7 +75,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth,
       (firebaseUser) => { // Auth state determined
         if (isMounted) {
-            setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
+            if (firebaseUser) {
+                setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
+            } else {
+                // If no user, sign in anonymously
+                signInAnonymously(auth).catch((error) => {
+                    console.error("FirebaseProvider: signInAnonymously error:", error);
+                    setUserAuthState({ user: null, isUserLoading: false, userError: error });
+                });
+            }
         }
       },
       (error) => { // Auth listener error
@@ -87,7 +95,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     );
     
     // Set loading to false if there's no initial user and the listener is ready.
-    if (auth.currentUser === null) {
+    if (auth.currentUser === null && isMounted) {
         setUserAuthState(prev => ({...prev, isUserLoading: false}));
     }
 

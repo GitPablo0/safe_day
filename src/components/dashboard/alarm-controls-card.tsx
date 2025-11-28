@@ -14,7 +14,7 @@ import { Settings } from 'lucide-react';
 import { updateAlarmState } from '@/firebase/firestore/mutations';
 import type { Firestore } from 'firebase/firestore';
 import type { Database } from 'firebase/database';
-import { useRtdb } from '@/firebase';
+import { useAuth, useRtdb } from '@/firebase';
 
 interface AlarmControlsCardProps {
   isArmed: boolean;

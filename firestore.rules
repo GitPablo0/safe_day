@@ -2,11 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Permite la lectura y escritura en el documento de estado de la alarma.
-    // NOTA: Esta regla es abierta para facilitar la conexión inicial del dispositivo.
-    // Se recomienda ajustarla a reglas más seguras una vez que la conexión funcione.
+    // Permite la lectura y escritura en el documento de estado de la alarma
+    // solo si el usuario está autenticado.
     match /alarm/state {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     
     // Regla de denegación por defecto para cualquier otro documento

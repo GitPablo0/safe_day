@@ -3,10 +3,9 @@
  * Código de control para un sistema de alarma PIR conectado a Firebase.
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
- * 1. Ve a tu proyecto de Firebase -> Build -> Realtime Database.
- * 2. Si no tienes una, crea una base de datos (no importa la región).
- * 3. Haz clic en los tres puntos (⋮) -> "Secretos de la base de datos".
- * 4. Copia el secreto y pégalo en la línea de FIREBASE_AUTH_TOKEN.
+ * 1. Abre la aplicación web del dashboard.
+ * 2. Inicia sesión y copia el "Device UID" que aparece en la tarjeta.
+ * 3. Pega ese UID en la constante USER_UID de abajo.
  *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
  * Este código está diseñado para la versión 4.x.x de la biblioteca
@@ -19,21 +18,25 @@
 #include <Firebase_ESP_Client.h>
 
 // ===============================================================
-// 1. CONFIGURACIÓN DE WIFI Y FIREBASE
+// 1. CONFIGURACIÓN DE WIFI Y USUARIO
 // ===============================================================
 const char* WIFI_SSID = "Telecentro-416b";
 const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 
+// --- ¡¡¡ PEGA EL UID DE TU APP AQUÍ !!! ---
+#define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
+
+
+// ===============================================================
+// 2. CONFIGURACIÓN DE FIREBASE
+// ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
 #define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
-// --- ¡¡¡ PEGA TU SECRETO DE BASE DE DATOS AQUÍ !!! ---
-#define FIREBASE_AUTH_TOKEN "PEGA_AQUI_TU_SECRETO_DE_BASE_DE_DATOS"
-
 
 // ===============================================
-// 2. PINES Y SENSORES
+// 3. PINES Y SENSORES
 // ===============================================
 #define PIR_PIN 23       // Pin para el sensor de movimiento PIR
 #define LED_ROJO_PIN 16  // Pin para el LED rojo (detección de presencia)
@@ -42,7 +45,7 @@ const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 
 
 // ===============================================
-// 3. OBJETOS Y VARIABLES DE ESTADO
+// 4. OBJETOS Y VARIABLES DE ESTADO
 // ===============================================
 
 // Objetos de Firebase
@@ -64,6 +67,7 @@ bool isAlarmSounding = false;
 void streamCallback(FirebaseStream data);
 void streamTimeoutCallback(bool timeout);
 void connectToWiFi();
+void tokenStatusCallback(TokenInfo info);
 
 void setup() {
   Serial.begin(115200);
@@ -83,19 +87,20 @@ void setup() {
   connectToWiFi();
 
   // Configuración de Firebase
+  Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-  auth.user.token = FIREBASE_AUTH_TOKEN; // Usamos el token de BD
+  
+  // Autenticación con UID personalizado en modo de prueba
+  auth.user.uid = USER_UID;
+  config.signer.test_mode = true;
+  
+  config.token_status_callback = tokenStatusCallback;
 
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
 
-  // Suscribirse a cambios en el documento de estado
-  if (!Firebase.Firestore.addDocumentStream(&stream, FIREBASE_PROJECT_ID, "", "/alarm/state", streamCallback, streamTimeoutCallback)) {
-    Serial.printf("Error al iniciar el stream: %s\n", stream.errorReason().c_str());
-  }
-
-  Serial.println("Sistema de Alarma Inicializado. Esperando datos de Firebase...");
+  Serial.println("Sistema de Alarma Inicializado. Esperando conexión a Firebase...");
 }
 
 void loop() {
@@ -116,9 +121,11 @@ void loop() {
       alarmTriggeredTimestamp = currentMillis;
 
       // Actualizar estado en Firestore
-      String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
-      if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
-          Serial.printf("Error al actualizar presenceDetected: %s\n", fbdo.errorReason().c_str());
+      if(Firebase.ready()){
+        String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
+        if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
+            Serial.printf("Error al actualizar presenceDetected: %s\n", fbdo.errorReason().c_str());
+        }
       }
   }
 
@@ -129,10 +136,12 @@ void loop() {
         isAlarmSounding = false;
         presenceDetected = false; // Resetear la detección
 
-        // Actualizar estado en Firestore para reflejar que la presencia ya no está activa
-        String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}";
-        if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
-            Serial.printf("Error al resetear presenceDetected: %s\n", fbdo.errorReason().c_str());
+        if(Firebase.ready()){
+          // Actualizar estado en Firestore para reflejar que la presencia ya no está activa
+          String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}";
+          if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
+              Serial.printf("Error al resetear presenceDetected: %s\n", fbdo.errorReason().c_str());
+          }
         }
         Serial.println("Alarma finalizada.");
     }
@@ -176,6 +185,18 @@ void streamCallback(FirebaseStream data) {
 void streamTimeoutCallback(bool timeout) {
   if (timeout) {
     Serial.println("Stream de Firebase ha expirado. Intentando reconectar...");
+  }
+}
+
+void tokenStatusCallback(TokenInfo info) {
+  if (info.status == token_status_ready) {
+    Serial.println("Token de Firebase listo. Conectando al stream...");
+    // Suscribirse a cambios en el documento de estado una vez que el token está listo
+    if (!Firebase.Firestore.addDocumentStream(&stream, FIREBASE_PROJECT_ID, "", "/alarm/state", streamCallback, streamTimeoutCallback)) {
+      Serial.printf("Error al iniciar el stream: %s\n", stream.errorReason().c_str());
+    }
+  } else {
+    Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
   }
 }
 

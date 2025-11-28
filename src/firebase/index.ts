@@ -35,6 +35,7 @@ export function initializeFirebase() {
 
 export function getSdks(firebaseApp: FirebaseApp) {
   const firestore = getFirestore(firebaseApp);
+  // Pass the databaseURL from the config to getDatabase
   const rtdb = getDatabase(firebaseApp, firebaseConfig.databaseURL);
   return {
     firebaseApp,
@@ -50,3 +51,5 @@ export * from './firestore/use-collection';
 export * from './firestore/use-doc';
 export * from './errors';
 export * from './error-emitter';
+export * from './hooks';
+export { useRtdbValue } from './rtdb/use-rtdb-value';

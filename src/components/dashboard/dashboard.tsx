@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, Firestore } from 'firebase/firestore';
-import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
+import { useUser, useRtdb } from '@/firebase';
+import { useRtdbValue } from '@/firebase/rtdb/use-rtdb-value';
+import { ref } from 'firebase/database';
+
 import { AlarmStatusCard } from './alarm-status-card';
 import { AlarmControlsCard } from './alarm-controls-card';
 import { UserUidCard } from './user-uid-card';
@@ -16,7 +18,7 @@ export interface AlarmState {
 }
 
 export function Dashboard() {
-  const firestore = useFirestore();
+  const rtdb = useRtdb();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
@@ -27,17 +29,8 @@ export function Dashboard() {
     }
   }, [isUserLoading, user, router]);
 
-
-  const alarmStateRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return doc(firestore, '/alarm/state');
-  }, [firestore]);
-
-  const {
-    data: alarmState,
-    isLoading: isAlarmStateLoading,
-    error,
-  } = useDoc<AlarmState>(alarmStateRef);
+  const alarmStateRef = rtdb ? ref(rtdb, '/alarm/state') : null;
+  const { data: alarmState, isLoading: isAlarmStateLoading, error } = useRtdbValue<AlarmState>(alarmStateRef);
 
   // While checking auth state or loading data, show a skeleton
   if (isUserLoading || isAlarmStateLoading) {
@@ -48,7 +41,6 @@ export function Dashboard() {
   if (!user) {
     return <DashboardSkeleton />;
   }
-
 
   if (error) {
     return (
@@ -75,7 +67,6 @@ export function Dashboard() {
         <AlarmControlsCard
             isArmed={alarmState?.isArmed ?? false}
             alarmDuration={alarmState?.alarmDuration ?? 10}
-            firestore={firestore}
             isDeviceConnected={!!alarmState}
         />
       </div>
@@ -86,7 +77,7 @@ export function Dashboard() {
              <div className="text-center text-muted-foreground border rounded-lg p-4 flex flex-col items-center justify-center h-full">
                 <p className="font-bold">Esperando datos del dispositivo...</p>
                 <p className="text-xs mt-2">
-                    Asegúrate de que el ESP32 esté conectado a internet y tenga el UID correcto.
+                    Asegúrate de que el ESP32 esté conectado a internet y configurado.
                 </p>
             </div>
          )}

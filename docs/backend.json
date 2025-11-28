@@ -16,11 +16,6 @@
         "alarmDuration": {
           "type": "number",
           "description": "Duration in seconds for the buzzer to sound when triggered."
-        },
-        "lastStatusUpdate": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The timestamp of the last update from the device."
         }
       },
       "required": ["isArmed", "presenceDetected", "alarmDuration"]
@@ -29,10 +24,16 @@
   "auth": {
     "providers": ["email-and-password"]
   },
-  "firestore": {
-    "/alarm/state": {
-      "schema": { "$ref": "#/entities/AlarmState" },
-      "description": "Singleton document to hold the current state and configuration of the alarm."
+  "rtdb": {
+    "rules": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "paths": {
+      "/alarm/state": {
+        "schema": { "$ref": "#/entities/AlarmState" },
+        "description": "Singleton location to hold the current state and configuration of the alarm."
+      }
     }
   }
 }

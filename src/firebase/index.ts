@@ -34,11 +34,13 @@ export function initializeFirebase() {
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  const firestore = getFirestore(firebaseApp);
+  const rtdb = getDatabase(firebaseApp, firebaseConfig.databaseURL);
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
-    rtdb: getDatabase(firebaseApp)
+    firestore: firestore,
+    rtdb: rtdb
   };
 }
 

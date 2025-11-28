@@ -50,8 +50,8 @@ const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 // ===============================================
 
 // Objetos de Firebase
-FirebaseData fbdo; // Se usa para operaciones de patch/get
-FirebaseData stream; // Se usa para el listener
+FirebaseData fbdo;
+FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -65,7 +65,7 @@ unsigned long alarmTriggeredTimestamp = 0;
 bool isAlarmSounding = false;
 
 // Declaración de funciones
-void streamCallback(MultiPathStreamData stream);
+void streamCallback(FirebaseStream data);
 void streamTimeoutCallback(bool timeout);
 void connectToWiFi();
 void tokenStatusCallback(TokenInfo info);
@@ -92,13 +92,10 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // Asignar el UID personalizado para la autenticación en modo de prueba
-  // Esta es la sintaxis correcta para la v4.x.x
-  config.signer.custom_token.uid = USER_UID;
-  
-  // Habilitar el modo de prueba para firmar tokens con el UID
-  config.signer.test_mode = true;
-  
+  // Usar un email y password de placeholder como en el ejemplo funcional
+  auth.user.email = "esp32@alumnosuade.com";
+  auth.user.password = "password";
+
   config.token_status_callback = tokenStatusCallback;
 
   Firebase.reconnectWiFi(true);
@@ -165,21 +162,30 @@ void loop() {
   delay(500); // Pausa para no saturar el loop
 }
 
-void streamCallback(MultiPathStreamData stream) {
+void streamCallback(FirebaseStream data) {
     Serial.println("¡Cambio detectado en Firebase!");
     
-    if (stream.get("/isArmed")) {
-        isArmed = stream.boolVal();
-        Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-        // Si se desarma, se apaga cualquier alarma activa
-        if (!isArmed) {
-            isAlarmSounding = false;
+    // El stream de RTDB devuelve los datos en un formato diferente (JSON)
+    if (data.dataType() == "json") {
+      FirebaseJson &json = data.to<FirebaseJson>();
+      FirebaseJsonData result;
+
+      if (json.get(result, "isArmed")) {
+        if(result.type == "boolean") {
+            isArmed = result.boolValue;
+            Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
+            // Si se desarma, se apaga cualquier alarma activa
+            if (!isArmed) {
+                isAlarmSounding = false;
+            }
         }
-    }
-    
-    if (stream.get("/alarmDuration")) {
-        alarmDuration = stream.intVal();
-        Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
+      }
+      if (json.get(result, "alarmDuration")) {
+         if(result.type == "int") {
+            alarmDuration = result.intValue;
+            Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
+         }
+      }
     }
 }
 
@@ -191,12 +197,14 @@ void streamTimeoutCallback(bool timeout) {
 
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.println("Token de Firebase listo. Conectando al stream...");
-    // Suscribirse a cambios en el documento de estado una vez que el token está listo
-    // Esta es la sintaxis correcta para la v4.x.x
-    if (!Firebase.Firestore.listenToDocument(&stream, FIREBASE_PROJECT_ID, "", "/alarm/state", streamCallback, streamTimeoutCallback)) {
-      Serial.printf("Error al iniciar el stream: %s\n", stream.errorReason().c_str());
+    Serial.printf("Token de Firebase listo. UID: %s\n", Firebase.getUID().c_str());
+    Serial.println("Conectando al stream de Realtime Database...");
+    
+    // Para Realtime Database, el stream se inicia de esta forma
+    if (!Firebase.RTDB.setStreamCallback(&stream, "/alarm/state", streamCallback, streamTimeoutCallback)) {
+      Serial.printf("Error al iniciar el stream de RTDB: %s\n", stream.errorReason().c_str());
     }
+
   } else {
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
   }

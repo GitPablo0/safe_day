@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { doc, Firestore } from 'firebase/firestore';
 import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
 import { AlarmStatusCard } from './alarm-status-card';
@@ -16,6 +18,15 @@ export interface AlarmState {
 export function Dashboard() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    // If loading is finished and there's no user, redirect to login
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [isUserLoading, user, router]);
+
 
   const alarmStateRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -28,9 +39,16 @@ export function Dashboard() {
     error,
   } = useDoc<AlarmState>(alarmStateRef);
 
-  if (isAlarmStateLoading) {
+  // While checking auth state or loading data, show a skeleton
+  if (isUserLoading || isAlarmStateLoading) {
     return <DashboardSkeleton />;
   }
+  
+  // If there's no user, don't render the dashboard content, the redirect will handle it
+  if (!user) {
+    return <DashboardSkeleton />;
+  }
+
 
   if (error) {
     return (

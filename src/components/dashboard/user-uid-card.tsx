@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { User } from 'firebase/auth';
+import { User, signOut } from 'firebase/auth';
 import {
   Card,
   CardContent,
@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { KeyRound, Copy, Check } from 'lucide-react';
+import { KeyRound, Copy, Check, LogOut } from 'lucide-react';
+import { useAuth } from '@/firebase';
 
 interface UserUidCardProps {
   user: User | null;
@@ -20,6 +21,7 @@ interface UserUidCardProps {
 
 export function UserUidCard({ user, isLoading }: UserUidCardProps) {
   const [copied, setCopied] = useState(false);
+  const auth = useAuth();
 
   const handleCopy = () => {
     if (user?.uid) {
@@ -29,16 +31,34 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
     }
   };
 
+  const handleSignOut = async () => {
+    await signOut(auth);
+    // The redirect will be handled by the dashboard component
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="size-5" />
-          <span>Device UID</span>
-        </CardTitle>
-        <CardDescription>
-          Usa este UID para conectar tu dispositivo ESP32.
-        </CardDescription>
+        <div className="flex justify-between items-start">
+            <div>
+                <CardTitle className="flex items-center gap-2">
+                <KeyRound className="size-5" />
+                <span>Device UID</span>
+                </CardTitle>
+                <CardDescription>
+                Usa este UID para tu ESP32.
+                </CardDescription>
+            </div>
+             <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSignOut}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <LogOut className="size-5" />
+            </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (

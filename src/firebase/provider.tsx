@@ -3,7 +3,7 @@
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -66,7 +66,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     userError: null,
   });
 
-  // Effect to subscribe to Firebase auth state changes and sign in anonymously
+  // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
     // isMounted flag to prevent state updates on unmounted component
     let isMounted = true; 
@@ -91,22 +91,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
         unsubscribe(); // Cleanup
     }; 
   }, [auth]); // Depends on the auth instance
-
-  // Effect to sign in anonymously if no user is found after the initial check.
-  useEffect(() => {
-    const signIn = async () => {
-        // Only sign in if loading is finished and there's no user.
-        if (!userAuthState.isUserLoading && !userAuthState.user) {
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("FirebaseProvider: signInAnonymously error:", error);
-                // The onAuthStateChanged listener will handle the error state update
-            }
-        }
-    };
-    signIn();
-  }, [auth, userAuthState.isUserLoading, userAuthState.user]);
 
 
   // Memoize the context value

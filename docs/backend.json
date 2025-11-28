@@ -1,128 +1,38 @@
 {
   "entities": {
-    "ThresholdConfiguration": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ThresholdConfiguration",
+    "AlarmState": {
+      "title": "Alarm State",
+      "description": "Represents the state and configuration of the PIR alarm system.",
       "type": "object",
-      "description": "Represents the configuration settings for the sensor thresholds, allowing users to customize the sensitivity of the LED alerts.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the threshold configuration."
+        "isArmed": {
+          "type": "boolean",
+          "description": "Indicates if the alarm system is currently armed."
         },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N ThresholdConfiguration) Unique identifier of the user who owns this configuration."
+        "presenceDetected": {
+          "type": "boolean",
+          "description": "True if the PIR sensor has detected presence."
         },
-        "soundThresholdLow": {
+        "alarmDuration": {
           "type": "number",
-          "description": "Lower threshold for sound level, below which the green LED is activated.",
-          "format": "number"
+          "description": "Duration in seconds for the buzzer to sound when triggered."
         },
-        "soundThresholdMedium": {
-          "type": "number",
-          "description": "Medium threshold for sound level, above which the orange LED is activated.",
-          "format": "number"
-        },
-        "temperatureThresholdGreen": {
-          "type": "number",
-          "description": "Temperature threshold (°C) below which the green LED is activated.",
-          "format": "number"
-        },
-        "temperatureThresholdOrange": {
-          "type": "number",
-          "description": "Temperature threshold (°C) above which the orange LED is activated.",
-          "format": "number"
-        },
-        "redSoundEventCount": {
-          "type": "number",
-          "description": "The number of sound events, in a period of time, that triggers the activation of the red LED.",
-          "format": "number"
-        },
-        "orangeSoundEventCount": {
-          "type": "number",
-          "description": "The number of sound events, in a period of time, that triggers the activation of the orange LED.",
-          "format": "number"
+        "lastStatusUpdate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp of the last update from the device."
         }
       },
-      "required": [
-        "id",
-        "userId",
-        "soundThresholdLow",
-        "soundThresholdMedium",
-        "temperatureThresholdGreen",
-        "temperatureThresholdOrange",
-        "redSoundEventCount",
-        "orangeSoundEventCount"
-      ]
-    },
-    "User": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "User",
-      "type": "object",
-      "description": "Represents a user of the NeuroSense Dashboard application. Note: This entity does not store authentication credentials.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user."
-        },
-        "email": {
-          "type": "string",
-          "description": "Email address of the user.",
-          "format": "email"
-        }
-      },
-      "required": [
-        "id",
-        "email"
-      ]
+      "required": ["isArmed", "presenceDetected", "alarmDuration"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["email-and-password", "anonymous"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles. The 'userId' MUST match the Firebase Auth UID. Enables path-based ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user, matching the Firebase Auth UID."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}",
-        "definition": {
-          "entityName": "ThresholdConfiguration",
-          "schema": {
-            "$ref": "#/backend/entities/ThresholdConfiguration"
-          },
-          "description": "Stores threshold configurations associated with a specific user. Includes denormalized 'userId' for authorization independence. Path-based ownership ensures only the authenticated user can access their configurations.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user, matching the Firebase Auth UID."
-            },
-            {
-              "name": "thresholdConfigurationId",
-              "description": "The unique identifier for the threshold configuration."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "Based on the provided information, the primary entities are `User` and `ThresholdConfiguration`. The application allows users to adjust and store threshold configurations for sensor data, implying a 1:N relationship between `User` and `ThresholdConfiguration`. The error message from the user report hints at an issue in the sign-up process, so the data structure design will account for secure user creation and data association. The structure prioritizes authorization independence, enabling robust security rules without `get()` calls.\n\nThe recommended Firestore structure is:\n\n1.  `/users/{userId}`: Stores user profiles (`User` entity). Path-based ownership is used to manage user-specific data.  `userId` matches `request.auth.uid`. No `get()` calls needed.\n2.  `/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}`: Stores threshold configurations (`ThresholdConfiguration` entity) associated with a specific user. Denormalizes the `userId` into each `ThresholdConfiguration` document for authorization independence. Path-based ownership ensures that only the authenticated user can access configurations under their `userId`. This removes any need for `get()` calls to a parent document to determine ownership.\n\nThis structure ensures Authorization Independence (CRITICAL), as access to `thresholdConfigurations` is determined solely by the `userId` within the path and the document itself, eliminating reliance on parent document attributes. It also facilitates QAPs (Rules are not Filters) because listing configurations is always scoped to a specific user's ID. DBAC is used since roles are not required with the current design, and ownership is derived from the path. The structure also provides clarity of intent (Debuggability) since ownership is explicit in the path. Denormalization makes security rules very simple since we do not need to check any data outside of the current document or request."
+    "/alarm/state": {
+      "schema": { "$ref": "#/entities/AlarmState" },
+      "description": "Singleton document to hold the current state and configuration of the alarm."
+    }
   }
 }

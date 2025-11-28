@@ -24,8 +24,8 @@
 // --- PINES ---
 // Define aquí los pines que estás utilizando en tu ESP32
 #define PIR_PIN 23       // Pin para el sensor de movimiento PIR
-#define LED_ROJO_PIN 19  // Pin para el LED rojo (detección de presencia)
-#define LED_AZUL_PIN 21  // Pin para el LED azul (sistema armado)
+#define LED_ROJO_PIN 16  // Pin para el LED rojo (detección de presencia)
+#define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado)
 #define BUZZER_PIN 22    // Pin para el buzzer
 
 // --- CONFIGURACIÓN DE WIFI Y FIREBASE ---

@@ -12,6 +12,7 @@ interface AlarmStateUpdate {
 
 /**
  * Updates the alarm state in Firestore for a specific user.
+ * Creates the document if it doesn't exist, thanks to { merge: true }.
  * @param firestore The Firestore instance.
  * @param userId The UID of the user whose alarm state is being updated.
  * @param data The partial data to update.
@@ -19,7 +20,7 @@ interface AlarmStateUpdate {
 export function updateAlarmState(firestore: Firestore, userId: string, data: AlarmStateUpdate) {
   const docRef = doc(firestore, `users/${userId}/alarm/state`);
 
-  // Use setDoc with merge: true to update the document without overwriting it.
+  // Use setDoc with merge: true to create the document or update it if it exists.
   // This is a non-blocking operation.
   setDoc(docRef, data, { merge: true }).catch((error) => {
     // Construct a rich, contextual error and emit it globally.

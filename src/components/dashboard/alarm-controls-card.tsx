@@ -66,7 +66,6 @@ export function AlarmControlsCard({
             checked={isArmed}
             onCheckedChange={handleArmChange}
             aria-label="Armar alarma"
-            disabled={!isDeviceConnected}
           />
         </div>
 
@@ -85,7 +84,7 @@ export function AlarmControlsCard({
               step={5}
               value={[alarmDuration]}
               onValueChange={handleDurationChange}
-              disabled={isArmed || !isDeviceConnected}
+              disabled={isArmed}
               aria-label="Duración de la sirena"
             />
             <span className="w-12 text-center font-mono text-lg">

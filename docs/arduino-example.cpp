@@ -20,11 +20,20 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI Y USUARIO
 // ===============================================================
-const char* WIFI_SSID = "Telecentro-416b";
-const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
+// Estructura para almacenar credenciales WiFi
+struct WiFiNetwork {
+  const char* ssid;
+  const char* password;
+};
 
-// --- ¡¡¡ PEGA EL UID DE TU APP AQUÍ !!! ---
-#define USER_UID "eOp4B72C0wdVqf6PZDOOQGGYRdP2"
+// Lista de redes WiFi conocidas. Añade las tuyas aquí.
+WiFiNetwork knownNetworks[] = {
+  {"Telecentro-416b", "ATNMFMY2MM5Q"},
+  {"Pablooo13", "brenda123"},
+  {"Estudiantes", "Escuelas_2025"}
+  // Puedes añadir más redes si lo necesitas
+};
+const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
 
 // ===============================================================
@@ -57,7 +66,8 @@ FirebaseConfig config;
 // Variables de estado del sistema
 bool isArmed = false;
 bool presenceDetected = false;
-int alarmDuration = 10; // Duración por defecto, se actualiza desde la App
+unsigned long lastBuzzerToggleTime = 0;
+const long buzzerToggleInterval = 250; // Intervalo para el parpadeo del buzzer
 
 // Declaración de funciones
 void streamCallback(FirebaseStream data);
@@ -86,7 +96,6 @@ void setup() {
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-  config.signer.test_mode = true; // Usar modo de prueba para autenticación simplificada
   
   // Usar un email y password de placeholder como en el ejemplo funcional
   auth.user.email = "esp32@alumnosuade.com";
@@ -101,76 +110,120 @@ void setup() {
 }
 
 void loop() {
+  // 1. Lectura del sensor PIR
   bool currentPresence = digitalRead(PIR_PIN) == HIGH;
 
-  // 1. Lógica del Sensor PIR
+  // Si el sistema está armado y se detecta presencia por primera vez
   if (isArmed && currentPresence && !presenceDetected) {
       Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
       
-      FirebaseJson json;
-      json.set("presenceDetected", true);
-      Firebase.RTDB.setJSON(&fbdo, "/alarm/state", &json);
+      // Enviar el estado a Firebase Realtime Database
+      if (Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", true)) {
+        Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
+      } else {
+        Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
+      }
   }
 
-  // 2. Control de Actuadores (LEDs y Buzzer)
-  digitalWrite(LED_AZUL_PIN, isArmed);
+  // 2. Control de actuadores
+  digitalWrite(LED_AZUL_PIN, isArmed); // LED azul encendido si el sistema está armado
 
   if (presenceDetected) {
+    // Si hay presencia, el LED rojo se enciende fijo
     digitalWrite(LED_ROJO_PIN, HIGH);
-    tone(BUZZER_PIN, 1000); // Emite un tono de 1kHz
+    // Y el buzzer emite un sonido intermitente
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastBuzzerToggleTime > buzzerToggleInterval) {
+      lastBuzzerToggleTime = currentMillis;
+      digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN)); // Alterna el estado del buzzer
+    }
   } else {
+    // Si no hay presencia, apagar LED rojo y buzzer
     digitalWrite(LED_ROJO_PIN, LOW);
-    noTone(BUZZER_PIN); // Apaga el buzzer
+    digitalWrite(BUZZER_PIN, LOW);
   }
   
-  delay(500); // Pausa para no saturar el loop
+  // 3. Leer datos del stream de Firebase si está listo
+  if (Firebase.ready() && stream.httpConnected()) {
+      if (Firebase.RTDB.readStream(&stream)) {
+          streamCallback(stream);
+      }
+  }
+
+  delay(100); // Pequeña pausa para estabilizar el loop
 }
 
+
+// Esta función se llama cuando llegan datos del stream de Firebase
 void streamCallback(FirebaseStream data) {
-    Serial.println("¡Cambio detectado en Firebase RTDB!");
-    
-    if (data.dataTypeEnum() == fb_esp_data_type_json) {
+    Serial.printf("Stream de datos recibido: %s, %s, %s\n", data.streamPath().c_str(), data.dataPath().c_str(), data.dataType().c_str());
+
+    if (data.dataTypeEnum() == fb_esp_rtdb_data_type_json) {
         FirebaseJson *json = data.to<FirebaseJson *>();
         FirebaseJsonData result;
 
+        // Buscar el campo "isArmed"
         if (json->get(result, "isArmed")) {
             if (result.typeNum == FirebaseJson::JSON_BOOL) {
                 isArmed = result.to<bool>();
                 Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-                if (!isArmed) {
-                    // Si se desarma el sistema, reseteamos la detección de presencia
+                
+                // Si se desarma el sistema, reseteamos la detección de presencia
+                if (!isArmed && presenceDetected) {
                     presenceDetected = false;
-                    FirebaseJson resetJson;
-                    resetJson.set("presenceDetected", false);
-                    Firebase.RTDB.setJSON(&fbdo, "/alarm/state", &resetJson);
+                    Serial.println("  - Sistema desarmado, reseteando presencia.");
+                    Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", false);
                 }
             }
         }
+
+         // Escuchar también por si la app resetea la presencia manualmente
         if (json->get(result, "presenceDetected")) {
-            if(result.typeNum == FirebaseJson::JSON_BOOL) {
-                presenceDetected = result.to<bool>();
-                Serial.printf("  - Estado 'presenceDetected' actualizado a: %s\n", presenceDetected ? "TRUE" : "FALSE");
+             if(result.typeNum == FirebaseJson::JSON_BOOL) {
+                bool newPresenceState = result.to<bool>();
+                if (presenceDetected != newPresenceState) {
+                    presenceDetected = newPresenceState;
+                    Serial.printf("  - Estado 'presenceDetected' actualizado remotamente a: %s\n", presenceDetected ? "TRUE" : "FALSE");
+                }
+            }
+        }
+    } else if (data.dataTypeEnum() == fb_esp_rtdb_data_type_boolean) {
+        // Manejar el caso en que solo cambia un booleano (ej. /alarm/state/isArmed)
+        if (data.dataPath() == "/isArmed") {
+            isArmed = data.to<bool>();
+            Serial.printf("  - Estado 'isArmed' (booleano) actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
+
+            if (!isArmed && presenceDetected) {
+                presenceDetected = false;
+                Serial.println("  - Sistema desarmado, reseteando presencia.");
+                Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", false);
             }
         }
     }
 }
 
+
+// Esta función se llama si el stream de Firebase expira
 void streamTimeoutCallback(bool timeout) {
   if (timeout) {
     Serial.println("Stream de Firebase ha expirado. Intentando reconectar...");
   }
 }
 
+// Esta función se llama para informar sobre el estado del token de autenticación
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.printf("Token de Firebase listo. UID de Auth: %s\n", Firebase.getUID().c_str());
+    Serial.printf("Token de Firebase listo. UID de Auth: %s\n", Firebase.auth().getUID().c_str());
     Serial.println("Conectando al stream de Realtime Database...");
     
-    // Escuchar cambios en el documento /alarm/state
-    if (!Firebase.RTDB.setStreamCallback(&stream, "/alarm/state", streamCallback, streamTimeoutCallback)) {
+    // Iniciar el stream para escuchar cambios en el documento /alarm/state
+    if (!Firebase.RTDB.beginStream(&stream, "/alarm/state")) {
       Serial.printf("Error al iniciar el stream de RTDB: %s\n", stream.errorReason().c_str());
     }
+
+    // Asignar los callbacks después de iniciar el stream
+    Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
 
   } else {
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
@@ -179,15 +232,35 @@ void tokenStatusCallback(TokenInfo info) {
 
 void connectToWiFi() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("Conectando a WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
+    Serial.println("Buscando redes WiFi conocidas...");
+    for (int i = 0; i < numKnownNetworks; i++) {
+      Serial.print("Intentando conectar a: ");
+      Serial.println(knownNetworks[i].ssid);
+      
+      WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
+      
+      unsigned long startAttemptTime = millis();
+      // Esperar hasta 15 segundos por cada red
+      while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
+        Serial.print(".");
+        delay(500);
+      }
+      
+      // Si se conecta, salir del bucle
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n¡Conectado a WiFi!");
+        Serial.print("Red: ");
+        Serial.println(WiFi.SSID());
+        Serial.print("Dirección IP: ");
+        Serial.println(WiFi.localIP());
+        return; // Salir de la función
+      } else {
+        Serial.println("\nFallo al conectar. Probando siguiente red...");
+        WiFi.disconnect();
+      }
+    }
+    Serial.println("No se encontró ninguna red conocida. Reintentando en 10 segundos...");
+    delay(10000);
   }
-  Serial.println("\n¡Conectado a WiFi!");
-  Serial.print("Dirección IP: ");
-  Serial.println(WiFi.localIP());
 }
-
-    

@@ -26,27 +26,30 @@ export async function signUpWithEmail(
 
   if (user) {
     try {
+      // It's crucial to get the Firestore instance associated with the same app
       const db = getFirestore(auth.app);
       const alarmStateRef = doc(db, `users/${user.uid}/alarm/state`);
 
+      // Create the complete initial document
       const initialAlarmState = {
         isArmed: false,
         presenceDetected: false,
-        alarmDuration: 10, // Default duration
+        alarmDuration: 10, // A sensible default
       };
 
-      // Set the initial document for the new user.
+      // Use setDoc to create the document. Since it's a new user, no merge is needed,
+      // but using it doesn't hurt and makes the pattern consistent.
       await setDoc(alarmStateRef, initialAlarmState);
     } catch (dbError) {
-      // If creating the doc fails, we might want to handle this.
-      // For now, we log the error but let the user creation succeed.
+      // If creating the doc fails, we must handle this.
+      // For now, log the error but let the user creation succeed.
+      // In a production app, you might want to delete the user.
       console.error(
         'User created, but failed to create initial alarm state:',
         dbError
       );
-      // Depending on requirements, you might want to delete the user here
-      // await user.delete();
-      // and re-throw the error to be caught by the UI.
+      // Re-throwing the error will make it visible in the UI's catch block
+      throw new Error('User created, but failed to initialize database state.');
     }
   }
 

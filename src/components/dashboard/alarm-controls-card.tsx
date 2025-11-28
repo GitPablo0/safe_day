@@ -13,11 +13,12 @@ import { Slider } from '@/components/ui/slider';
 import { Settings } from 'lucide-react';
 import { updateAlarmState } from '@/firebase/firestore/mutations';
 import { useFirestore, useUser } from '@/firebase';
+import { cn } from '@/lib/utils';
 
 interface AlarmControlsCardProps {
   isArmed: boolean;
   alarmDuration: number;
-  isDeviceConnected: boolean;
+  isDeviceConnected: boolean; // This prop now correctly reflects if the doc exists
 }
 
 export function AlarmControlsCard({
@@ -28,22 +29,22 @@ export function AlarmControlsCard({
   const firestore = useFirestore();
   const { user } = useUser();
 
-  // This function now also serves to initialize the document if it doesn't exist.
   const handleArmChange = (armed: boolean) => {
     if (!firestore || !user) return;
-    // When arming/disarming, we ensure presence is reset and the armed state is set.
-    // { merge: true } in the mutation will create the document if it's missing.
+    // This will now CREATE the document if it's missing, or update it.
+    // When arming, we also ensure presence is reset to false.
     updateAlarmState(firestore, user.uid, { isArmed: armed, presenceDetected: false });
   };
 
   const handleDurationChange = (value: number[]) => {
     if (!firestore || !user) return;
-    // Similar to arming, changing the duration will also create the doc if missing.
+    // This will also CREATE the document if it's missing.
     updateAlarmState(firestore, user.uid, { alarmDuration: value[0] });
   };
 
   return (
-    <Card className={!isDeviceConnected ? 'bg-muted/30' : ''}>
+    // The card is visually muted if the document doesn't exist yet.
+    <Card className={cn(!isDeviceConnected && 'border-dashed bg-muted/20')}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Settings className="size-5" />
@@ -51,6 +52,11 @@ export function AlarmControlsCard({
         </CardTitle>
         <CardDescription>
           Ajusta la configuración de tu sistema de alarma.
+          {!isDeviceConnected && (
+            <span className="mt-1 block text-xs text-primary">
+              Usa un control para inicializar el estado.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8 pt-2">
@@ -84,7 +90,7 @@ export function AlarmControlsCard({
               step={5}
               value={[alarmDuration]}
               onValueChange={handleDurationChange}
-              disabled={isArmed}
+              disabled={isArmed} // Still disabled when armed for safety
               aria-label="Duración de la sirena"
             />
             <span className="w-12 text-center font-mono text-lg">

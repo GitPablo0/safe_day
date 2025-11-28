@@ -30,8 +30,8 @@
 
 // --- CONFIGURACIÓN DE WIFI Y FIREBASE ---
 // Reemplaza con tus credenciales
-const char* WIFI_SSID = "PON_TU_WIFI_SSID_AQUI";
-const char* WIFI_PASSWORD = "PON_TU_WIFI_PASSWORD_AQUI";
+const char* WIFI_SSID = "Telecentro-416b";
+const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 const char* FIREBASE_UID = "eOp4B72C0wdVqf6PZDOOQGGYRdP2";
 
 // --- VARIABLES GLOBALES DE ESTADO ---

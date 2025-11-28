@@ -1,7 +1,7 @@
 /**
  * ==================================================================================
- * Código de control para un sistema de alarma PIR conectado a Firebase RTDB.
- * Versión corregida para la biblioteca Firebase-ESP-Client v4.4.17.
+ * Código de control para un sistema de alarma PIR conectado a Firebase.
+ * Versión para la biblioteca Firebase-ESP-Client v4.4.17.
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
  * 1. Abre la aplicación web del dashboard.
@@ -96,7 +96,7 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // Usar un email y password de placeholder. El UID se usa en la ruta, no aquí.
+  // Credenciales para el dispositivo. ¡Este usuario debe existir en Firebase Auth!
   auth.user.email = "esp32@alumnosuade.com";
   auth.user.password = "password";
 
@@ -213,7 +213,9 @@ void tokenStatusCallback(TokenInfo info) {
     Firebase.RTDB.setStreamCallback(&stream, streamTimeoutCallback);
 
   } else {
+    Serial.printf("------------------------------------\n");
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
+    Serial.printf("------------------------------------\n");
   }
 }
 

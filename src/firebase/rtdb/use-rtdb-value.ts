@@ -1,7 +1,7 @@
 'use client';
-    
+
 import { useState, useEffect } from 'react';
-import { ref, onValue, off, DatabaseReference } from 'firebase/database';
+import { onValue, off, DatabaseReference } from 'firebase/database';
 
 export interface UseRtdbValueResult<T> {
   data: T | null;
@@ -16,7 +16,9 @@ export interface UseRtdbValueResult<T> {
  * @param {DatabaseReference | null} dbRef - The Firebase Realtime Database reference to listen to. If null, the hook will not fetch data.
  * @returns {UseRtdbValueResult<T>} An object containing the data, loading state, and error.
  */
-export function useRtdbValue<T = any>(dbRef: DatabaseReference | null): UseRtdbValueResult<T> {
+export function useRtdbValue<T = any>(
+  dbRef: DatabaseReference | null
+): UseRtdbValueResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -38,7 +40,10 @@ export function useRtdbValue<T = any>(dbRef: DatabaseReference | null): UseRtdbV
         setError(null);
       },
       (err) => {
-        console.error(`Error fetching RTDB value from path: ${dbRef.toString()}`, err);
+        console.error(
+          `Error fetching RTDB value from path: ${dbRef.toString()}`,
+          err
+        );
         setError(err);
         setIsLoading(false);
         setData(null);

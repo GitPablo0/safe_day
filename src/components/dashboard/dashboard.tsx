@@ -30,7 +30,7 @@ export function Dashboard() {
   }, [isUserLoading, user, router]);
 
   const alarmStateRef = useMemo(
-    () => (rtdb ? ref(rtdb, '/alarm/state') : null),
+    () => (rtdb ? ref(rtdb, 'alarm/state') : null),
     [rtdb]
   );
 

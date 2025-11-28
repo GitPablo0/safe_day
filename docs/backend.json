@@ -25,10 +25,6 @@
     "providers": ["email-and-password"]
   },
   "rtdb": {
-    "rules": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
     "paths": {
       "/alarm/state": {
         "schema": { "$ref": "#/entities/AlarmState" },

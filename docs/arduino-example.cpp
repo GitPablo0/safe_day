@@ -1,7 +1,7 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma PIR conectado a Firebase RTDB.
- * Versión para la biblioteca Firebase-ESP-Client v4.4.17.
+ * Versión corregida para la biblioteca Firebase-ESP-Client v4.4.17.
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
  * 1. Abre la aplicación web del dashboard.
@@ -108,8 +108,11 @@ void setup() {
 
 void loop() {
   // 1. Leer datos del stream de Firebase si está listo
-  if (!Firebase.ready()) {
-    return;
+  if (Firebase.ready()) {
+    if (!Firebase.RTDB.readStream(&stream)) {
+        // Handle stream read error
+        Serial.printf("Error al leer stream: %s\n", stream.errorReason().c_str());
+    }
   }
   
   // Si el sistema está armado y se detecta presencia por primera vez

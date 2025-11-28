@@ -1,18 +1,130 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict user-ownership model. All user-
+ * specific data is stored within a document tree that is keyed by the user's
+ * unique ID (UID). This ensures that users can only access their own information,
+ * preventing any unauthorized access to other users' data.
+ *
+ * Data Structure: The data is organized hierarchically. A top-level 'users'
+ * collection contains documents for each user, identified by their Firebase Auth
+ * UID. All related data, such as 'thresholdConfigurations', is stored in
+ * subcollections under the corresponding user document.
+ *
+ * Key Security Decisions:
+ * - Default Deny: All paths not explicitly defined in these rules are inaccessible.
+ * - No User Listing: The structure `/users/{userId}` prevents clients from
+ *   querying and listing all users in the database, enhancing privacy.
+ * - Path-Based Security: All security decisions are made based on the user's
+ *   authenticated UID and the path of the requested document, which creates a
+ *   fast, secure, and scalable model.
+ *
+ * Denormalization for Authorization: To ensure performant and simple rules,
+ * ownership information (e.g., `userId`) is denormalized directly onto documents
+ * like `ThresholdConfiguration`. This avoids the need for slow and costly `get()`
+ * calls to parent documents during rule evaluation. For example, a rule on a
+ * threshold document can check `resource.data.userId` directly instead of
+ * reading its parent user document.
+ *
+ * Structural Segregation: The design uses separate collections for each data
+ * type (e.g., `users`, `thresholdConfigurations`), which is a secure and
+ * performant pattern. User-specific data is naturally segregated by nesting it
+ * within a user's document path.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Permite la lectura y escritura en el documento de estado de la alarma
-    // solo si el usuario está autenticado.
-    match /alarm/state {
-      allow read, write: if request.auth != null;
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Regla de denegación por defecto para cualquier otro documento
-    match /{document=**} {
-      allow read, write: if false;
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the primary function for enforcing data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks for ownership on an existing document. Used for update/delete
+     * operations to prevent acting on non-existent data.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates the integrity of a new User document on creation.
+     * Ensures the internal 'id' field matches the user's auth UID.
+     */
+    function isNewUserDocValid(userId) {
+      return request.resource.data.id == userId;
+    }
+
+    /**
+     * Validates the integrity of a User document on update.
+     * Enforces the immutability of the document's 'id' field.
+     */
+    function isUpdatedUserDocValid() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * Validates a new ThresholdConfiguration document on creation.
+     * Ensures the internal 'userId' field correctly references the parent user.
+     */
+    function isNewConfigDocValid(userId) {
+      return request.resource.data.userId == userId;
+    }
+
+    /**
+     * Validates a ThresholdConfiguration document on update.
+     * Enforces the immutability of the 'userId' field.
+     */
+    function isUpdatedConfigDocValid() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Manages user profile documents.
+     * @path /users/{userId}
+     * @allow (create): A new user with UID 'user_abc' can create their own profile at `/users/user_abc`.
+     * @deny (get): A user with UID 'user_xyz' is blocked from reading the profile at `/users/user_abc`.
+     * @principle Restricts access to a user's own data tree and allows self-creation of a profile.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Disallow listing of user documents.
+      allow create: if isOwner(userId) && isNewUserDocValid(userId);
+      allow update: if isExistingOwner(userId) && isUpdatedUserDocValid();
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Manages a user's sensor threshold configurations.
+       * @path /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}
+       * @allow (create): User 'user_abc' can create a new configuration document in their own subcollection.
+       * @deny (list): User 'user_xyz' cannot list configurations belonging to 'user_abc'.
+       * @principle Enforces strict document ownership within a user-specific subcollection.
+       */
+      match /thresholdConfigurations/{thresholdConfigurationId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isNewConfigDocValid(userId);
+        allow update: if isExistingOwner(userId) && isUpdatedConfigDocValid();
+        allow delete: if isExistingOwner(userId);
+      }
     }
   }
 }
-
-    

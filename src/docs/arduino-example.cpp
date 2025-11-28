@@ -20,6 +20,9 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI Y USUARIO
 // ===============================================================
+// ¡¡¡ PEGA TU UID DE USUARIO AQUÍ !!!
+#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+
 // Estructura para almacenar credenciales WiFi
 struct WiFiNetwork {
   const char* ssid;
@@ -41,7 +44,7 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
+#define DATABASE_URL "https://studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
 
 // ===============================================
@@ -145,12 +148,6 @@ void loop() {
   }
   
   // 3. Leer datos del stream de Firebase si está listo
-  if (Firebase.ready() && !stream.httpConnected()) {
-      Serial.println("Error de conexión con el stream de Firebase, reconectando...");
-      Firebase.RTDB.endStream(&stream);
-      Firebase.RTDB.beginStream(&stream, "/alarm/state");
-  }
-
   if (Firebase.ready() && stream.httpConnected()) {
       if (Firebase.RTDB.readStream(&stream)) {
           streamCallback(stream);

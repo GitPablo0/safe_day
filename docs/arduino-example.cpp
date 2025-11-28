@@ -9,7 +9,7 @@
  *
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
  * Este código está diseñado para la versión 4.x.x de la biblioteca
- * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
+ * "Firebase Arduino Client Library for ESP32" by Mobizt.
  * ==================================================================================
  */
 
@@ -32,7 +32,7 @@ const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
+#define DATABASE_URL "https://studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
 
 
 // ===============================================
@@ -58,10 +58,6 @@ FirebaseConfig config;
 bool isArmed = false;
 bool presenceDetected = false;
 int alarmDuration = 10; // Duración por defecto, se actualiza desde la App
-
-// Variables para controlar la alarma
-unsigned long alarmTriggeredTimestamp = 0;
-bool isAlarmSounding = false;
 
 // Declaración de funciones
 void streamCallback(FirebaseStream data);
@@ -90,6 +86,7 @@ void setup() {
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
+  config.signer.test_mode = true; // Usar modo de prueba para autenticación simplificada
   
   // Usar un email y password de placeholder como en el ejemplo funcional
   auth.user.email = "esp32@alumnosuade.com";
@@ -104,53 +101,22 @@ void setup() {
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
   bool currentPresence = digitalRead(PIR_PIN) == HIGH;
 
-  // Imprimir lecturas en tiempo real
-  Serial.print("Estado: ");
-  Serial.print(isArmed ? "Armado" : "Desarmado");
-  Serial.print(" | Lectura PIR: ");
-  Serial.println(currentPresence ? "1 (Presencia)" : "0 (Sin presencia)");
-
-  // 1. Lógica del Sensor PIR (solo si el sistema está armado y no hay una alarma sonando)
-  if (isArmed && currentPresence && !isAlarmSounding) {
+  // 1. Lógica del Sensor PIR
+  if (isArmed && currentPresence && !presenceDetected) {
       Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
-      isAlarmSounding = true;
-      alarmTriggeredTimestamp = currentMillis;
-
-      // Actualizar estado en Firebase RTDB
-      if(Firebase.ready()){
-        String path = "/alarm/state";
-        if (!Firebase.RTDB.setBool(&fbdo, path + "/presenceDetected", true)) {
-            Serial.printf("Error al actualizar presenceDetected en RTDB: %s\n", fbdo.errorReason().c_str());
-        }
-      }
+      
+      FirebaseJson json;
+      json.set("presenceDetected", true);
+      Firebase.RTDB.setJSON(&fbdo, "/alarm/state", &json);
   }
 
-  // 2. Lógica de la Alarma (Buzzer y LED Rojo)
-  if (isAlarmSounding) {
-    // Si el tiempo de alarma ha pasado o el sistema se desarma, la apagamos
-    if (!isArmed || (currentMillis - alarmTriggeredTimestamp > (unsigned long)alarmDuration * 1000)) {
-        isAlarmSounding = false;
-        presenceDetected = false; // Resetear la detección
+  // 2. Control de Actuadores (LEDs y Buzzer)
+  digitalWrite(LED_AZUL_PIN, isArmed);
 
-        if(Firebase.ready()){
-          // Actualizar estado en Firebase RTDB para reflejar que la presencia ya no está activa
-          String path = "/alarm/state";
-          if (!Firebase.RTDB.setBool(&fbdo, path + "/presenceDetected", false)) {
-              Serial.printf("Error al resetear presenceDetected en RTDB: %s\n", fbdo.errorReason().c_str());
-          }
-        }
-        Serial.println("Alarma finalizada.");
-    }
-  }
-
-  // 3. Control de Actuadores (LEDs y Buzzer)
-  digitalWrite(LED_AZUL_PIN, isArmed); // El LED azul siempre refleja el estado 'isArmed'
-
-  if (isAlarmSounding) {
+  if (presenceDetected) {
     digitalWrite(LED_ROJO_PIN, HIGH);
     tone(BUZZER_PIN, 1000); // Emite un tono de 1kHz
   } else {
@@ -173,14 +139,18 @@ void streamCallback(FirebaseStream data) {
                 isArmed = result.to<bool>();
                 Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
                 if (!isArmed) {
-                    isAlarmSounding = false;
+                    // Si se desarma el sistema, reseteamos la detección de presencia
+                    presenceDetected = false;
+                    FirebaseJson resetJson;
+                    resetJson.set("presenceDetected", false);
+                    Firebase.RTDB.setJSON(&fbdo, "/alarm/state", &resetJson);
                 }
             }
         }
-        if (json->get(result, "alarmDuration")) {
-            if (result.typeNum == FirebaseJson::JSON_INT) {
-                alarmDuration = result.to<int>();
-                Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
+        if (json->get(result, "presenceDetected")) {
+            if(result.typeNum == FirebaseJson::JSON_BOOL) {
+                presenceDetected = result.to<bool>();
+                Serial.printf("  - Estado 'presenceDetected' actualizado a: %s\n", presenceDetected ? "TRUE" : "FALSE");
             }
         }
     }
@@ -194,7 +164,7 @@ void streamTimeoutCallback(bool timeout) {
 
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.printf("Token de Firebase listo. UID: %s\n", Firebase.getUID().c_str());
+    Serial.printf("Token de Firebase listo. UID de Auth: %s\n", Firebase.getUID().c_str());
     Serial.println("Conectando al stream de Realtime Database...");
     
     // Escuchar cambios en el documento /alarm/state
@@ -219,3 +189,5 @@ void connectToWiFi() {
   Serial.print("Dirección IP: ");
   Serial.println(WiFi.localIP());
 }
+
+    

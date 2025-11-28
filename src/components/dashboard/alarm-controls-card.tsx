@@ -13,6 +13,8 @@ import { Slider } from '@/components/ui/slider';
 import { Settings } from 'lucide-react';
 import { updateAlarmState } from '@/firebase/firestore/mutations';
 import type { Firestore } from 'firebase/firestore';
+import type { Database } from 'firebase/database';
+import { useRtdb } from '@/firebase';
 
 interface AlarmControlsCardProps {
   isArmed: boolean;
@@ -27,13 +29,16 @@ export function AlarmControlsCard({
   firestore,
   isDeviceConnected,
 }: AlarmControlsCardProps) {
+  const rtdb = useRtdb();
 
   const handleArmChange = (armed: boolean) => {
-    updateAlarmState(firestore, { isArmed: armed, presenceDetected: false }); // Always reset presence on arm/disarm
+    if (!rtdb) return;
+    updateAlarmState(firestore, rtdb, { isArmed: armed, presenceDetected: false }); // Always reset presence on arm/disarm
   };
 
   const handleDurationChange = (value: number[]) => {
-    updateAlarmState(firestore, { alarmDuration: value[0] });
+    if (!rtdb) return;
+    updateAlarmState(firestore, rtdb, { alarmDuration: value[0] });
   };
 
   return (

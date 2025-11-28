@@ -97,6 +97,7 @@ void setup() {
   auth.user.password = "password";
 
   config.token_status_callback = tokenStatusCallback;
+  config.signer.test_mode = true; // Usar el modo de prueba para la firma de tokens
 
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
@@ -121,11 +122,11 @@ void loop() {
       isAlarmSounding = true;
       alarmTriggeredTimestamp = currentMillis;
 
-      // Actualizar estado en Firestore
+      // Actualizar estado en Firebase RTDB
       if(Firebase.ready()){
-        String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
-        if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
-            Serial.printf("Error al actualizar presenceDetected: %s\n", fbdo.errorReason().c_str());
+        String path = "/alarm/state";
+        if (!Firebase.RTDB.setBool(&fbdo, path + "/presenceDetected", true)) {
+            Serial.printf("Error al actualizar presenceDetected en RTDB: %s\n", fbdo.errorReason().c_str());
         }
       }
   }
@@ -138,10 +139,10 @@ void loop() {
         presenceDetected = false; // Resetear la detección
 
         if(Firebase.ready()){
-          // Actualizar estado en Firestore para reflejar que la presencia ya no está activa
-          String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}";
-          if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
-              Serial.printf("Error al resetear presenceDetected: %s\n", fbdo.errorReason().c_str());
+          // Actualizar estado en Firebase RTDB para reflejar que la presencia ya no está activa
+          String path = "/alarm/state";
+          if (!Firebase.RTDB.setBool(&fbdo, path + "/presenceDetected", false)) {
+              Serial.printf("Error al resetear presenceDetected en RTDB: %s\n", fbdo.errorReason().c_str());
           }
         }
         Serial.println("Alarma finalizada.");
@@ -163,29 +164,27 @@ void loop() {
 }
 
 void streamCallback(FirebaseStream data) {
-    Serial.println("¡Cambio detectado en Firebase!");
+    Serial.println("¡Cambio detectado en Firebase RTDB!");
     
-    // El stream de RTDB devuelve los datos en un formato diferente (JSON)
-    if (data.dataType() == "json") {
-      FirebaseJson &json = data.to<FirebaseJson>();
-      FirebaseJsonData result;
+    if (data.dataTypeEnum() == fb_esp_data_type_json) {
+        FirebaseJson *json = data.to<FirebaseJson *>();
+        FirebaseJsonData result;
 
-      if (json.get(result, "isArmed")) {
-        if(result.type == "boolean") {
-            isArmed = result.boolValue;
-            Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-            // Si se desarma, se apaga cualquier alarma activa
-            if (!isArmed) {
-                isAlarmSounding = false;
+        if (json->get(result, "isArmed")) {
+            if (result.typeNum == FirebaseJson::JSON_BOOL) {
+                isArmed = result.to<bool>();
+                Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
+                if (!isArmed) {
+                    isAlarmSounding = false;
+                }
             }
         }
-      }
-      if (json.get(result, "alarmDuration")) {
-         if(result.type == "int") {
-            alarmDuration = result.intValue;
-            Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
-         }
-      }
+        if (json->get(result, "alarmDuration")) {
+            if (result.typeNum == FirebaseJson::JSON_INT) {
+                alarmDuration = result.to<int>();
+                Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
+            }
+        }
     }
 }
 
@@ -200,7 +199,7 @@ void tokenStatusCallback(TokenInfo info) {
     Serial.printf("Token de Firebase listo. UID: %s\n", Firebase.getUID().c_str());
     Serial.println("Conectando al stream de Realtime Database...");
     
-    // Para Realtime Database, el stream se inicia de esta forma
+    // Escuchar cambios en el documento /alarm/state
     if (!Firebase.RTDB.setStreamCallback(&stream, "/alarm/state", streamCallback, streamTimeoutCallback)) {
       Serial.printf("Error al iniciar el stream de RTDB: %s\n", stream.errorReason().c_str());
     }

@@ -10,6 +10,7 @@
  * 3. Sincronización de Hora NTP: Crítico para la validación de tokens de Firebase.
  * 4. Autenticación por Email/Contraseña: El dispositivo se autentica como un usuario único.
  * 5. Loop no bloqueante: Usa millis() para operaciones temporizadas.
+ * 6. Calibración del Sensor PIR: Se añade un tiempo de espera para que el sensor se estabilice.
  * ==================================================================================
  */
 
@@ -49,7 +50,7 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================
 #define PIR_PIN 23       // Pin para el sensor de movimiento PIR
 #define LED_ROJO_PIN 16  // Pin para el LED rojo (detección de presencia)
-#define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado)
+#define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado/calibrando)
 #define BUZZER_PIN 22    // Pin para el buzzer
 
 // ===============================================
@@ -94,6 +95,17 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
 
   connectToWiFi();
+
+  // --- CALIBRACIÓN DEL SENSOR PIR ---
+  Serial.println("Calibrando sensor PIR... (20 segundos). Mantén el área despejada.");
+  for(int i = 0; i < 20; i++){
+    digitalWrite(LED_AZUL_PIN, HIGH);
+    delay(500);
+    digitalWrite(LED_AZUL_PIN, LOW);
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nSensor calibrado.");
 
   // --- SINCRONIZACIÓN DE HORA (NTP) ---
   Serial.println("Sincronizando hora con servidor NTP...");

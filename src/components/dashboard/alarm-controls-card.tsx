@@ -28,14 +28,17 @@ export function AlarmControlsCard({
   const firestore = useFirestore();
   const { user } = useUser();
 
+  // This function now also serves to initialize the document if it doesn't exist.
   const handleArmChange = (armed: boolean) => {
     if (!firestore || !user) return;
-    // When arming/disarming from the dashboard, always reset presence detection.
+    // When arming/disarming, we ensure presence is reset and the armed state is set.
+    // { merge: true } in the mutation will create the document if it's missing.
     updateAlarmState(firestore, user.uid, { isArmed: armed, presenceDetected: false });
   };
 
   const handleDurationChange = (value: number[]) => {
     if (!firestore || !user) return;
+    // Similar to arming, changing the duration will also create the doc if missing.
     updateAlarmState(firestore, user.uid, { alarmDuration: value[0] });
   };
 

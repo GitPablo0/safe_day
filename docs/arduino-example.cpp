@@ -1,52 +1,69 @@
-/*
-  Lógica de control para un sistema de alarma con sensor PIR conectado a Firebase.
+/**
+ * ==================================================================================
+ * Código de control para un sistema de alarma PIR conectado a Firebase.
+ *
+ * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
+ * 1. Ve a tu proyecto de Firebase -> Build -> Realtime Database.
+ * 2. Si no tienes una, crea una base de datos (no importa la región).
+ * 3. Haz clic en los tres puntos (⋮) -> "Secretos de la base de datos".
+ * 4. Copia el secreto y pégalo en la línea de FIREBASE_AUTH_TOKEN.
+ *
+ * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
+ * Este código está diseñado para la versión 4.x.x de la biblioteca
+ * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
+ * ==================================================================================
+ */
 
-  Componentes:
-  - ESP32
-  - Sensor PIR (Movimiento)
-  - LED Rojo (Indicador de Alarma/Presencia)
-  - LED Azul (Indicador de Sistema Armado)
-  - Buzzer (Sirena)
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
 
-  Funcionalidad:
-  - El dispositivo escucha en tiempo real el documento /alarm/state en Firestore.
-  - El estado 'isArmed' del documento determina si el sistema está activo.
-    - Si 'isArmed' es true, el LED Azul se enciende.
-    - Si 'isArmed' es false, todos los indicadores se apagan.
-  - Cuando el sistema está armado, el sensor PIR monitorea la presencia.
-  - Si se detecta presencia:
-    - El dispositivo actualiza 'presenceDetected' a true en Firestore.
-    - El LED Rojo se enciende y el buzzer suena durante 'alarmDuration' segundos.
-  - La app puede desarmar el sistema (poniendo 'isArmed' a false), lo que silencia
-    la alarma y apaga los LEDs.
-*/
+// ===============================================================
+// 1. CONFIGURACIÓN DE WIFI Y FIREBASE
+// ===============================================================
+const char* WIFI_SSID = "Telecentro-416b";
+const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 
-// --- PINES ---
-// Define aquí los pines que estás utilizando en tu ESP32
+#define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
+#define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
+#define DATABASE_URL "studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
+
+// --- ¡¡¡ PEGA TU SECRETO DE BASE DE DATOS AQUÍ !!! ---
+#define FIREBASE_AUTH_TOKEN "PEGA_AQUI_TU_SECRETO_DE_BASE_DE_DATOS"
+
+
+// ===============================================
+// 2. PINES Y SENSORES
+// ===============================================
 #define PIR_PIN 23       // Pin para el sensor de movimiento PIR
 #define LED_ROJO_PIN 16  // Pin para el LED rojo (detección de presencia)
 #define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado)
 #define BUZZER_PIN 22    // Pin para el buzzer
 
-// --- CONFIGURACIÓN DE WIFI ---
-// Reemplaza con tus credenciales
-const char* WIFI_SSID = "Telecentro-416b";
-const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
 
-// --- CONFIGURACIÓN DE FIREBASE ---
-// Reemplaza con los datos de tu proyecto
-const char* API_KEY = "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"; // De la configuración de tu App Web en Firebase
-const char* FIREBASE_PROJECT_ID = "studio-4253330981-dcdc9"; // El ID de tu proyecto
-const char* FIREBASE_AUTH_TOKEN = "PEGA_AQUI_TU_SECRETO_DE_BASE_DE_DATOS"; // IMPORTANTE: Obtener de Realtime Database -> Secretos
+// ===============================================
+// 3. OBJETOS Y VARIABLES DE ESTADO
+// ===============================================
 
+// Objetos de Firebase
+FirebaseData stream;
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
 
-// --- VARIABLES GLOBALES DE ESTADO ---
+// Variables de estado del sistema
 bool isArmed = false;
 bool presenceDetected = false;
-int alarmDuration = 10; // Duración por defecto de la alarma en segundos
+int alarmDuration = 10; // Duración por defecto, se actualiza desde la App
 
-unsigned long alarmTriggeredTimestamp = 0; // Momento en que se disparó la alarma
-bool isAlarmSounding = false;              // Indica si el buzzer está sonando
+// Variables para controlar la alarma
+unsigned long alarmTriggeredTimestamp = 0;
+bool isAlarmSounding = false;
+
+// Declaración de funciones
+void streamCallback(FirebaseStream data);
+void streamTimeoutCallback(bool timeout);
+void connectToWiFi();
 
 void setup() {
   Serial.begin(115200);
@@ -63,18 +80,22 @@ void setup() {
   digitalWrite(LED_AZUL_PIN, LOW);
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Conectar a WiFi y Firebase (pseudo-código, reemplaza con tu implementación real)
-  Serial.println("Conectando a WiFi...");
-  // connectToWiFi(WIFI_SSID, WIFI_PASSWORD);
-  Serial.println("Conectado a WiFi.");
-  Serial.println("Configurando y conectando a Firebase...");
-  // setupFirebase(API_KEY, FIREBASE_PROJECT_ID, FIREBASE_AUTH_TOKEN);
-  Serial.println("Conexión establecida. Suscribiéndose a cambios en Firestore.");
-  
-  // Suscribirse a cambios en el documento de estado de la alarma (pseudo-código)
-  // Firestore.subscribe("/alarm/state", handleAlarmStateChange);
+  connectToWiFi();
 
-  Serial.println("Sistema de Alarma Inicializado y listo.");
+  // Configuración de Firebase
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  auth.user.token = FIREBASE_AUTH_TOKEN; // Usamos el token de BD
+
+  Firebase.reconnectWiFi(true);
+  Firebase.begin(&config, &auth);
+
+  // Suscribirse a cambios en el documento de estado
+  if (!Firebase.Firestore.addDocumentStream(&stream, FIREBASE_PROJECT_ID, "", "/alarm/state", streamCallback, streamTimeoutCallback)) {
+    Serial.printf("Error al iniciar el stream: %s\n", stream.errorReason().c_str());
+  }
+
+  Serial.println("Sistema de Alarma Inicializado. Esperando datos de Firebase...");
 }
 
 void loop() {
@@ -87,70 +108,86 @@ void loop() {
   Serial.print(" | Lectura PIR: ");
   Serial.println(currentPresence ? "1 (Presencia)" : "0 (Sin presencia)");
 
-  // 1. Lógica del Sensor PIR (solo si el sistema está armado)
-  if (isArmed) {
-    if (currentPresence && !presenceDetected) {
-      // Se acaba de detectar presencia
+  // 1. Lógica del Sensor PIR (solo si el sistema está armado y no hay una alarma sonando)
+  if (isArmed && currentPresence && !isAlarmSounding) {
       Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
-      alarmTriggeredTimestamp = currentMillis;
       isAlarmSounding = true;
-      
-      // Actualizar estado en Firestore (pseudo-código)
-      // Firestore.update("/alarm/state", "{'presenceDetected': true}");
-    }
+      alarmTriggeredTimestamp = currentMillis;
+
+      // Actualizar estado en Firestore
+      String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
+      if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
+          Serial.printf("Error al actualizar presenceDetected: %s\n", fbdo.errorReason().c_str());
+      }
   }
 
   // 2. Lógica de la Alarma (Buzzer y LED Rojo)
   if (isAlarmSounding) {
-    // Si el tiempo de alarma ha pasado, la apagamos
-    if (currentMillis - alarmTriggeredTimestamp > (unsigned long)alarmDuration * 1000) {
-      isAlarmSounding = false;
-      presenceDetected = false; // Resetear la detección
-      
-      // Actualizar estado en Firestore (pseudo-código)
-      // Firestore.update("/alarm/state", "{'presenceDetected': false}");
-      Serial.println("Alarma finalizada por tiempo.");
+    // Si el tiempo de alarma ha pasado o el sistema se desarma, la apagamos
+    if (!isArmed || (currentMillis - alarmTriggeredTimestamp > (unsigned long)alarmDuration * 1000)) {
+        isAlarmSounding = false;
+        presenceDetected = false; // Resetear la detección
+
+        // Actualizar estado en Firestore para reflejar que la presencia ya no está activa
+        String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}";
+        if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", "/alarm/state", content.c_str(), "presenceDetected")) {
+            Serial.printf("Error al resetear presenceDetected: %s\n", fbdo.errorReason().c_str());
+        }
+        Serial.println("Alarma finalizada.");
     }
   }
 
   // 3. Control de Actuadores (LEDs y Buzzer)
-  // LED Azul: Siempre refleja el estado 'isArmed'
-  digitalWrite(LED_AZUL_PIN, isArmed ? HIGH : LOW);
-  
-  // LED Rojo y Buzzer: Solo se activan si la alarma está sonando
-  if (isArmed && isAlarmSounding) {
+  digitalWrite(LED_AZUL_PIN, isArmed); // El LED azul siempre refleja el estado 'isArmed'
+
+  if (isAlarmSounding) {
     digitalWrite(LED_ROJO_PIN, HIGH);
-    // Hacer sonar el buzzer (puedes usar tonos para un efecto más de alarma)
     tone(BUZZER_PIN, 1000); // Emite un tono de 1kHz
   } else {
     digitalWrite(LED_ROJO_PIN, LOW);
     noTone(BUZZER_PIN); // Apaga el buzzer
   }
   
-  // Pequeña pausa para no saturar el loop
-  delay(500); // Aumentamos un poco el delay para no llenar el monitor tan rápido
+  delay(500); // Pausa para no saturar el loop
 }
 
-// --- CALLBACK DE FIREBASE ---
-// Esta función se llamaría cada vez que haya un cambio en /alarm/state
-void handleAlarmStateChange(const char* jsonData) {
-  // Parsea el JSON que llega de Firestore (pseudo-código)
-  // JsonDocument doc;
-  // deserializeJson(doc, jsonData);
-  
-  // isArmed = doc["isArmed"];
-  // alarmDuration = doc["alarmDuration"];
+void streamCallback(FirebaseStream data) {
+    Serial.println("¡Cambio detectado en Firebase!");
+    FirebaseJson payload;
+    payload.setJsonData(data.payload());
+    FirebaseJsonData result;
 
-  Serial.print("Estado de Firebase recibido: isArmed -> ");
-  Serial.println(isArmed ? "TRUE" : "FALSE");
+    if(payload.get(result, "fields/isArmed/booleanValue")) {
+        isArmed = result.boolValue;
+        Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
+        // Si se desarma, se apaga cualquier alarma activa
+        if (!isArmed) {
+            isAlarmSounding = false;
+        }
+    }
+    
+    if(payload.get(result, "fields/alarmDuration/integerValue")) {
+        alarmDuration = result.intValue;
+        Serial.printf("  - 'alarmDuration' actualizada a: %d segundos\n", alarmDuration);
+    }
+}
 
-  // Si se recibe un 'isArmed' false, es una orden para apagar todo.
-  if (!isArmed) {
-    isAlarmSounding = false;
-    presenceDetected = false;
-    // Actualizar el estado en Firestore para confirmar el apagado
-    // Firestore.update("/alarm/state", "{'presenceDetected': false}");
-    Serial.println("Alarma desarmada remotamente desde la App.");
+void streamTimeoutCallback(bool timeout) {
+  if (timeout) {
+    Serial.println("Stream de Firebase ha expirado. Intentando reconectar...");
   }
+}
+
+void connectToWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Conectando a WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("\n¡Conectado a WiFi!");
+  Serial.print("Dirección IP: ");
+  Serial.println(WiFi.localIP());
 }

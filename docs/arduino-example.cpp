@@ -108,29 +108,21 @@ void setup() {
 
 void loop() {
   // 1. Leer datos del stream de Firebase si está listo
-  if (Firebase.ready() && !Firebase.RTDB.isStream()) {
-      Serial.println("Conectando al stream de RTDB...");
-      String path = "/alarm/state";
-      if (!Firebase.RTDB.beginStream(&stream, path.c_str())) {
-          Serial.printf("Error al iniciar stream: %s\n", stream.errorReason().c_str());
-      } else {
-        Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
-      }
+  if (!Firebase.ready()) {
+    return;
   }
-
+  
   // Si el sistema está armado y se detecta presencia por primera vez
   if (isArmed && digitalRead(PIR_PIN) == HIGH && !presenceDetected) {
       Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
       
       // Enviar el estado a Firebase Realtime Database
-      if (Firebase.ready()) {
-          String path = "/alarm/state/presenceDetected";
-          if (Firebase.RTDB.setBool(&fbdo, path.c_str(), true)) {
-            Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
-          } else {
-            Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
-          }
+      String path = "/alarm/state/presenceDetected";
+      if (Firebase.RTDB.setBool(&fbdo, path.c_str(), true)) {
+        Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
+      } else {
+        Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
       }
   }
 
@@ -183,10 +175,8 @@ void streamCallback(FirebaseStream data) {
         if (!isArmed && presenceDetected) {
             presenceDetected = false;
             Serial.println("  - Sistema desarmado, reseteando presencia en Firebase.");
-            if(Firebase.ready()){
-               String presencePath = "/alarm/state/presenceDetected";
-               Firebase.RTDB.setBool(&fbdo, presencePath.c_str(), false);
-            }
+            String presencePath = "/alarm/state/presenceDetected";
+            Firebase.RTDB.setBool(&fbdo, presencePath.c_str(), false);
         }
     }
 }
@@ -202,6 +192,13 @@ void streamTimeoutCallback(bool timeout) {
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
     Serial.printf("Token de Firebase listo. UID de Auth: %s\n", auth.token.uid.c_str());
+    Serial.println("Conectando al stream de Realtime Database...");
+    String path = "/alarm/state";
+    if (!Firebase.RTDB.beginStream(&stream, path.c_str())) {
+        Serial.printf("Error al iniciar stream: %s\n", stream.errorReason().c_str());
+    } else {
+      Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
+    }
   } else {
     Serial.printf("------------------------------------\n");
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());

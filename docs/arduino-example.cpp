@@ -32,7 +32,7 @@
 // Reemplaza con tus credenciales
 const char* WIFI_SSID = "PON_TU_WIFI_SSID_AQUI";
 const char* WIFI_PASSWORD = "PON_TU_WIFI_PASSWORD_AQUI";
-const char* FIREBASE_UID = "PON_TU_UID_AQUI"; // UID de autenticación anónima
+const char* FIREBASE_UID = "eOp4B72C0wdVqf6PZDOOQGGYRdP2";
 
 // --- VARIABLES GLOBALES DE ESTADO ---
 bool isArmed = false;
@@ -44,6 +44,7 @@ bool isAlarmSounding = false;              // Indica si el buzzer está sonando
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Inicializando sistema de alarma...");
 
   // Inicializar pines
   pinMode(PIR_PIN, INPUT);
@@ -57,25 +58,32 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
 
   // Conectar a WiFi y Firebase (pseudo-código, reemplaza con tu implementación real)
+  Serial.println("Conectando a WiFi y Firebase...");
   // connectToWiFi(WIFI_SSID, WIFI_PASSWORD);
   // setupFirebase(FIREBASE_UID);
+  Serial.println("Conexión establecida. Suscribiéndose a cambios en Firestore.");
   
   // Suscribirse a cambios en el documento de estado de la alarma (pseudo-código)
   // Firestore.subscribe("/alarm/state", handleAlarmStateChange);
 
-  Serial.println("Sistema de Alarma Inicializado.");
+  Serial.println("Sistema de Alarma Inicializado y listo.");
 }
 
 void loop() {
   unsigned long currentMillis = millis();
+  bool currentPresence = digitalRead(PIR_PIN) == HIGH;
+
+  // Imprimir lecturas en tiempo real
+  Serial.print("Estado: ");
+  Serial.print(isArmed ? "Armado" : "Desarmado");
+  Serial.print(" | Lectura PIR: ");
+  Serial.println(currentPresence ? "1 (Presencia)" : "0 (Sin presencia)");
 
   // 1. Lógica del Sensor PIR (solo si el sistema está armado)
   if (isArmed) {
-    bool currentPresence = digitalRead(PIR_PIN) == HIGH;
-    
     if (currentPresence && !presenceDetected) {
       // Se acaba de detectar presencia
-      Serial.println("¡Presencia Detectada!");
+      Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
       alarmTriggeredTimestamp = currentMillis;
       isAlarmSounding = true;
@@ -94,7 +102,7 @@ void loop() {
       
       // Actualizar estado en Firestore (pseudo-código)
       // Firestore.update("/alarm/state", "{'presenceDetected': false}");
-      Serial.println("Alarma finalizada.");
+      Serial.println("Alarma finalizada por tiempo.");
     }
   }
 
@@ -113,7 +121,7 @@ void loop() {
   }
   
   // Pequeña pausa para no saturar el loop
-  delay(100); 
+  delay(500); // Aumentamos un poco el delay para no llenar el monitor tan rápido
 }
 
 // --- CALLBACK DE FIREBASE ---
@@ -135,6 +143,6 @@ void handleAlarmStateChange(const char* jsonData) {
     presenceDetected = false;
     // Actualizar el estado en Firestore para confirmar el apagado
     // Firestore.update("/alarm/state", "{'presenceDetected': false}");
-    Serial.println("Alarma desarmada desde la App.");
+    Serial.println("Alarma desarmada remotamente desde la App.");
   }
 }

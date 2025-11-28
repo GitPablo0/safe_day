@@ -28,7 +28,7 @@
 #define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado)
 #define BUZZER_PIN 22    // Pin para el buzzer
 
-// --- CONFIGURACIÓN DE WIFI Y FIREBASE ---
+// --- CONFIGURACIÓN DE WIFI ---
 // Reemplaza con tus credenciales
 const char* WIFI_SSID = "Telecentro-416b";
 const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";

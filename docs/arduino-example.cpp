@@ -1,13 +1,15 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma PIR conectado a Firebase.
- * Versión corregida siguiendo la guía de conexión de ESP32 a Firebase.
+ * Versión corregida siguiendo la guía y las mejores prácticas del proyecto NeuroSense.
  *
  * Puntos Clave Implementados:
- * 1. Sincronización de Hora NTP: Crítico para la validación de tokens de Firebase.
- * 2. Autenticación por Email/Contraseña: El dispositivo se autentica como un usuario.
- * 3. Uso de Firestore: La comunicación se realiza vía Firestore (`patchDocument`).
- * 4. Loop no bloqueante: Usa millis() para operaciones temporizadas.
+ * 1. UID de Usuario Manual: El dispositivo se vincula a una cuenta de usuario específica.
+ *    --> ¡IMPORTANTE! Debes copiar el UID de la app y pegarlo en la variable USER_UID.
+ * 2. Estructura de datos por usuario: Todos los datos se guardan bajo /users/{UID}/...
+ * 3. Sincronización de Hora NTP: Crítico para la validación de tokens de Firebase.
+ * 4. Autenticación por Email/Contraseña: El dispositivo se autentica como un usuario único.
+ * 5. Loop no bloqueante: Usa millis() para operaciones temporizadas.
  * ==================================================================================
  */
 
@@ -17,8 +19,11 @@
 #include "time.h"
 
 // ===============================================================
-// 1. CONFIGURACIÓN DE WIFI
+// 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
+// ¡¡¡ PEGA EL UID DE TU USUARIO DE FIREBASE AQUÍ !!!
+#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+
 struct WiFiNetwork {
   const char* ssid;
   const char* password;
@@ -71,9 +76,9 @@ const long presenceSendInterval = 2000; // Enviar detección de presencia cada 2
 // ===============================================
 void connectToWiFi();
 void tokenStatusCallback(TokenInfo info);
-String getTimestamp();
 void readAlarmStateFromFirestore();
 void sendPresenceToFirestore(bool detected);
+String getJsonField(String& payload, const char* fieldName);
 
 void setup() {
   Serial.begin(115200);
@@ -90,7 +95,7 @@ void setup() {
 
   connectToWiFi();
 
-  // --- PASO 4 DE LA GUÍA: SINCRONIZACIÓN DE HORA (NTP) ---
+  // --- SINCRONIZACIÓN DE HORA (NTP) ---
   Serial.println("Sincronizando hora con servidor NTP...");
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   time_t now = time(nullptr);
@@ -101,12 +106,12 @@ void setup() {
   }
   Serial.println("\nHora sincronizada correctamente.");
 
-  // --- PASO 3 DE LA GUÍA: AUTENTICACIÓN ---
+  // --- AUTENTICACIÓN ---
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // ¡IMPORTANTE! Credenciales del dispositivo.
+  // ¡IMPORTANTE! Credenciales del dispositivo para autenticación.
   auth.user.email = "pabloportillo12345@gmail.com";
   auth.user.password = "admin123";
 
@@ -121,8 +126,17 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
+  // No hacer nada hasta que Firebase esté listo y tengamos un UID
+  if (!Firebase.ready() || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
+    if (strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
+        Serial.println("UID de usuario no configurado. Pegue el UID en el código.");
+        delay(5000);
+    }
+    return;
+  }
+
   // 1. Leer estado desde Firestore periódicamente
-  if (Firebase.ready() && (currentMillis - lastFirestoreRead > firestoreReadInterval)) {
+  if (currentMillis - lastFirestoreRead > firestoreReadInterval) {
     lastFirestoreRead = currentMillis;
     readAlarmStateFromFirestore();
   }
@@ -165,23 +179,44 @@ void loop() {
   }
 }
 
+String getJsonField(String& payload, const char* fieldName) {
+    String searchKey = "\"" + String(fieldName) + "\":";
+    int startIndex = payload.indexOf(searchKey);
+    if (startIndex == -1) return "{}";
+    startIndex = payload.indexOf("{", startIndex);
+    int braceCount = 1;
+    int endIndex = startIndex + 1;
+    while (endIndex < payload.length() && braceCount > 0) {
+        if (payload[endIndex] == '{') braceCount++;
+        if (payload[endIndex] == '}') braceCount--;
+        endIndex++;
+    }
+    if (endIndex > payload.length()) return "{}";
+    return payload.substring(startIndex, endIndex);
+}
+
 // Función para leer el estado de la alarma desde Firestore
 void readAlarmStateFromFirestore() {
-  String documentPath = "alarm/state";
-  Serial.println("Leyendo estado desde Firestore...");
+  String documentPath = "users/" + String(USER_UID) + "/alarm/state";
+  Serial.println("Leyendo estado desde Firestore: " + documentPath);
 
   if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
     if (fbdo.httpCode() == 200) {
+      String payload = fbdo.payload();
       FirebaseJson json;
-      json.setJsonData(fbdo.payload());
+      
+      // Extraemos el objeto 'fields' completo
+      String fieldsJson = getJsonField(payload, "fields");
+      json.setJsonData(fieldsJson);
+      
       FirebaseJsonData result;
 
-      if (json.get(result, "fields/isArmed/booleanValue")) {
+      if (json.get(result, "isArmed/booleanValue")) {
         isArmed = result.to<bool>();
         Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "ARMADO" : "DESARMADO");
       }
     } else {
-      Serial.println(fbdo.errorReason().c_str());
+      Serial.printf("Error al leer el documento. HTTP Code: %d, Razón: %s\n", fbdo.httpCode(), fbdo.errorReason().c_str());
     }
   } else {
     Serial.println(fbdo.errorReason().c_str());
@@ -190,9 +225,8 @@ void readAlarmStateFromFirestore() {
 
 // Función para enviar el estado de presencia a Firestore
 void sendPresenceToFirestore(bool detected) {
-  String documentPath = "alarm/state";
+  String documentPath = "users/" + String(USER_UID) + "/alarm/state";
   
-  // --- PASO 5 DE LA GUÍA: `patchDocument` ---
   // El payload debe especificar el tipo de dato para Firestore
   String content = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":" + String(detected ? "true" : "false") + "}}}";
   
@@ -250,5 +284,3 @@ void connectToWiFi() {
     delay(10000);
   }
 }
-
-    

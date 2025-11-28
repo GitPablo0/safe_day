@@ -2,7 +2,7 @@
   "entities": {
     "AlarmState": {
       "title": "Alarm State",
-      "description": "Represents the state and configuration of the PIR alarm system.",
+      "description": "Represents the state and configuration of the PIR alarm system for a specific user.",
       "type": "object",
       "properties": {
         "isArmed": {
@@ -18,9 +18,9 @@
           "description": "Duration in seconds for the buzzer to sound when triggered."
         },
         "lastStatusUpdate": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The timestamp of the last update from the device."
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the last update from the device."
         }
       },
       "required": ["isArmed", "presenceDetected", "alarmDuration"]
@@ -30,9 +30,9 @@
     "providers": ["email-and-password"]
   },
   "firestore": {
-    "/alarm/state": {
+    "/users/{userId}/alarm/state": {
       "schema": { "$ref": "#/entities/AlarmState" },
-      "description": "Singleton document to hold the current state and configuration of the alarm."
+      "description": "Singleton document per user to hold the current state and configuration of their alarm."
     }
   }
 }

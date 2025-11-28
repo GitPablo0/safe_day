@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useDoc, getSdks } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { useDoc } from '@/firebase/firestore/use-doc';
 
 import { AlarmStatusCard } from './alarm-status-card';
 import { AlarmControlsCard } from './alarm-controls-card';
 import { UserUidCard } from './user-uid-card';
 import { Skeleton } from '../ui/skeleton';
-import { initializeFirebase } from '@/firebase';
 
 export interface AlarmState {
   isArmed: boolean;
@@ -18,7 +18,7 @@ export interface AlarmState {
 }
 
 export function Dashboard() {
-  const { firestore } = getSdks(initializeFirebase().firebaseApp);
+  const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
@@ -30,8 +30,8 @@ export function Dashboard() {
   }, [isUserLoading, user, router]);
 
   const alarmStateRef = useMemo(
-    () => (firestore ? doc(firestore, 'alarm/state') : null),
-    [firestore]
+    () => (firestore && user ? doc(firestore, `users/${user.uid}/alarm/state`) : null),
+    [firestore, user]
   );
 
   const {
@@ -41,7 +41,7 @@ export function Dashboard() {
   } = useDoc<AlarmState>(alarmStateRef);
 
   // While checking auth state or loading data, show a skeleton
-  if (isUserLoading || isAlarmStateLoading) {
+  if (isUserLoading || (user && isAlarmStateLoading)) {
     return <DashboardSkeleton />;
   }
 
@@ -81,12 +81,12 @@ export function Dashboard() {
 
       <div className="md:col-span-1 flex flex-col gap-6">
         <UserUidCard user={user} isLoading={isUserLoading} />
-        {!alarmState && (
+        {user && !isAlarmStateLoading && !alarmState && (
           <div className="text-center text-muted-foreground border rounded-lg p-4 flex flex-col items-center justify-center h-full">
             <p className="font-bold">Esperando datos del dispositivo...</p>
             <p className="text-xs mt-2">
-              Asegúrate de que el ESP32 esté conectado a internet y
-              configurado.
+              Asegúrate de que el ESP32 esté conectado y configurado con tu
+              UID de usuario.
             </p>
           </div>
         )}

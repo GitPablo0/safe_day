@@ -11,12 +11,13 @@ interface AlarmStateUpdate {
 }
 
 /**
- * Updates the alarm state in Firestore.
+ * Updates the alarm state in Firestore for a specific user.
  * @param firestore The Firestore instance.
+ * @param userId The UID of the user whose alarm state is being updated.
  * @param data The partial data to update.
  */
-export function updateAlarmState(firestore: Firestore, data: AlarmStateUpdate) {
-  const docRef = doc(firestore, 'alarm', 'state');
+export function updateAlarmState(firestore: Firestore, userId: string, data: AlarmStateUpdate) {
+  const docRef = doc(firestore, `users/${userId}/alarm/state`);
 
   // Use setDoc with merge: true to update the document without overwriting it.
   // This is a non-blocking operation.

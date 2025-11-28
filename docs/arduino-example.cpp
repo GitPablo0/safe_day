@@ -1,7 +1,7 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma PIR conectado a Firebase RTDB.
- * Versión corregida para usar autenticación anónima.
+ * Versión corregida para la biblioteca Firebase-ESP-Client v4.4.17.
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
  * 1. Abre la aplicación web del dashboard.
@@ -96,15 +96,14 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  // Asignar la función de callback para el estado del token
+  // Usar un email y password de placeholder. El UID se usa en la ruta, no aquí.
+  auth.user.email = "esp32@alumnosuade.com";
+  auth.user.password = "password";
+
   config.token_status_callback = tokenStatusCallback;
 
   Firebase.reconnectWiFi(true);
-  
-  // Iniciar Firebase con autenticación anónima
   Firebase.begin(&config, &auth);
-  
-  Serial.println("Solicitando autenticación anónima...");
 
   Serial.println("Sistema de Alarma Inicializado. Esperando conexión a Firebase...");
 }
@@ -214,9 +213,7 @@ void tokenStatusCallback(TokenInfo info) {
     Firebase.RTDB.setStreamCallback(&stream, streamTimeoutCallback);
 
   } else {
-    Serial.println("------------------------------------");
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
-    Serial.println("------------------------------------");
   }
 }
 

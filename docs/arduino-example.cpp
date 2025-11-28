@@ -10,7 +10,6 @@
  * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
  * Este código está diseñado para la versión 4.x.x de la biblioteca
  * "Firebase Arduino Client Library for ESP32 and ESP8266" by Mobizt.
- * Este código se basa en la lógica de un ejemplo funcional proporcionado.
  * ==================================================================================
  */
 
@@ -87,7 +86,7 @@ void setup() {
 
   connectToWiFi();
 
-  // Configuración de Firebase (siguiendo el ejemplo funcional)
+  // Configuración de Firebase
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
@@ -97,7 +96,6 @@ void setup() {
   auth.user.password = "password";
 
   config.token_status_callback = tokenStatusCallback;
-  config.signer.test_mode = true; // Usar el modo de prueba para la firma de tokens
 
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);

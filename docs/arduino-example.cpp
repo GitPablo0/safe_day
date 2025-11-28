@@ -32,7 +32,13 @@
 // Reemplaza con tus credenciales
 const char* WIFI_SSID = "Telecentro-416b";
 const char* WIFI_PASSWORD = "ATNMFMY2MM5Q";
+
+// --- CONFIGURACIÓN DE FIREBASE ---
+// Reemplaza con los datos de tu proyecto
+const char* API_KEY = "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I";
+const char* FIREBASE_PROJECT_ID = "studio-4253330981-dcdc9";
 const char* FIREBASE_UID = "eOp4B72C0wdVqf6PZDOOQGGYRdP2";
+
 
 // --- VARIABLES GLOBALES DE ESTADO ---
 bool isArmed = false;
@@ -58,9 +64,11 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
 
   // Conectar a WiFi y Firebase (pseudo-código, reemplaza con tu implementación real)
-  Serial.println("Conectando a WiFi y Firebase...");
+  Serial.println("Conectando a WiFi...");
   // connectToWiFi(WIFI_SSID, WIFI_PASSWORD);
-  // setupFirebase(FIREBASE_UID);
+  Serial.println("Conectado a WiFi.");
+  Serial.println("Configurando y conectando a Firebase...");
+  // setupFirebase(API_KEY, FIREBASE_PROJECT_ID, FIREBASE_UID);
   Serial.println("Conexión establecida. Suscribiéndose a cambios en Firestore.");
   
   // Suscribirse a cambios en el documento de estado de la alarma (pseudo-código)

@@ -1,15 +1,12 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma PIR conectado a Firebase.
+ * Adaptado para funcionar con la aplicación web y la biblioteca Firebase-ESP-Client v4.x.x
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
  * 1. Abre la aplicación web del dashboard.
  * 2. Inicia sesión y copia el "Device UID" que aparece en la tarjeta.
  * 3. Pega ese UID en la constante USER_UID de abajo.
- *
- * --- ¡IMPORTANTE! VERSIÓN DE BIBLIOTECA ---
- * Este código está diseñado para la versión 4.x.x de la biblioteca
- * "Firebase Arduino Client Library for ESP32" by Mobizt.
  * ==================================================================================
  */
 
@@ -20,6 +17,9 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE WIFI Y USUARIO
 // ===============================================================
+// ¡¡¡ PEGA TU UID DE USUARIO AQUÍ !!!
+#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+
 // Estructura para almacenar credenciales WiFi
 struct WiFiNetwork {
   const char* ssid;
@@ -41,7 +41,11 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================================
 #define API_KEY "AIzaSyCMmir0FR57YVoVGQ9QCUG4oG7bUEF3w7I"
 #define FIREBASE_PROJECT_ID "studio-4253330981-dcdc9"
-#define DATABASE_URL "https://studio-4253330981-dcdc9-default-rtdb.firebaseio.com"
+
+// Objetos de Firebase
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
 
 
 // ===============================================
@@ -57,21 +61,17 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // 4. OBJETOS Y VARIABLES DE ESTADO
 // ===============================================
 
-// Objetos de Firebase
-FirebaseData fbdo;
-FirebaseData stream;
-FirebaseAuth auth;
-FirebaseConfig config;
-
 // Variables de estado del sistema
 bool isArmed = false;
 bool presenceDetected = false;
 unsigned long lastBuzzerToggleTime = 0;
 const long buzzerToggleInterval = 250; // Intervalo para el parpadeo del buzzer
 
+// Variables para el sondeo (polling)
+unsigned long lastStateFetchMillis = 0;
+const long stateFetchInterval = 2000; // Consultar a Firebase cada 2 segundos
+
 // Declaración de funciones
-void streamCallback(FirebaseStream data);
-void streamTimeoutCallback(bool timeout);
 void connectToWiFi();
 void tokenStatusCallback(TokenInfo info);
 
@@ -92,15 +92,17 @@ void setup() {
 
   connectToWiFi();
 
-  // Configuración de Firebase
+  // Configuración de Firebase (replicando el método funcional)
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-  
+
   // Usar un email y password de placeholder como en el ejemplo funcional
   auth.user.email = "esp32@alumnosuade.com";
   auth.user.password = "password";
 
+  // Asignar el UID que se usará para la autenticación de prueba
+  config.signer.test_mode = true;
+  
   config.token_status_callback = tokenStatusCallback;
 
   Firebase.reconnectWiFi(true);
@@ -110,7 +112,52 @@ void setup() {
 }
 
 void loop() {
-  // 1. Lectura del sensor PIR
+  unsigned long currentMillis = millis();
+
+  // --- 1. SONDEO A FIREBASE PARA OBTENER EL ESTADO ---
+  if (Firebase.ready() && (currentMillis - lastStateFetchMillis > stateFetchInterval)) {
+    lastStateFetchMillis = currentMillis;
+
+    String documentPath = "/alarm/state";
+    
+    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
+        if(fbdo.httpCode() == 200) {
+            String payload = fbdo.payload();
+            
+            // Procesar el JSON de respuesta de Firestore
+            FirebaseJson json;
+            String fieldsPath = "/fields";
+            json.setJsonData(payload);
+            FirebaseJsonData result;
+
+            // Obtener isArmed
+            if (json.get(result, fieldsPath + "/isArmed/booleanValue")) {
+                bool armedStateFromFirebase = result.to<bool>();
+                if (isArmed != armedStateFromFirebase) {
+                    isArmed = armedStateFromFirebase;
+                    Serial.printf("Estado 'isArmed' actualizado desde Firebase a: %s\n", isArmed ? "TRUE" : "FALSE");
+                    // Si se desarma desde la app, reseteamos la detección de presencia
+                    if (!isArmed && presenceDetected) {
+                        presenceDetected = false;
+                        Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}", "presenceDetected");
+                    }
+                }
+            }
+
+            // Obtener presenceDetected (por si se resetea desde la app)
+            if (json.get(result, fieldsPath + "/presenceDetected/booleanValue")) {
+                bool presenceStateFromFirebase = result.to<bool>();
+                if (presenceDetected != presenceStateFromFirebase) {
+                    presenceDetected = presenceStateFromFirebase;
+                     Serial.printf("Estado 'presenceDetected' actualizado desde Firebase a: %s\n", presenceDetected ? "TRUE" : "FALSE");
+                }
+            }
+        }
+    }
+  }
+
+
+  // --- 2. LECTURA DEL SENSOR PIR ---
   bool currentPresence = digitalRead(PIR_PIN) == HIGH;
 
   // Si el sistema está armado y se detecta presencia por primera vez
@@ -118,22 +165,25 @@ void loop() {
       Serial.println("¡PRESENCIA DETECTADA!");
       presenceDetected = true;
       
-      // Enviar el estado a Firebase Realtime Database
-      if (Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", true)) {
-        Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
-      } else {
-        Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
+      // Enviar el estado a Firebase Firestore
+      if (Firebase.ready()) {
+        String documentPath = "/alarm/state";
+        String patchContent = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
+        if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), patchContent.c_str(), "presenceDetected")) {
+          Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
+        } else {
+          Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
+        }
       }
   }
 
-  // 2. Control de actuadores
+  // --- 3. CONTROL DE ACTUADORES ---
   digitalWrite(LED_AZUL_PIN, isArmed); // LED azul encendido si el sistema está armado
 
   if (presenceDetected) {
     // Si hay presencia, el LED rojo se enciende fijo
     digitalWrite(LED_ROJO_PIN, HIGH);
     // Y el buzzer emite un sonido intermitente
-    unsigned long currentMillis = millis();
     if (currentMillis - lastBuzzerToggleTime > buzzerToggleInterval) {
       lastBuzzerToggleTime = currentMillis;
       digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN)); // Alterna el estado del buzzer
@@ -144,87 +194,14 @@ void loop() {
     digitalWrite(BUZZER_PIN, LOW);
   }
   
-  // 3. Leer datos del stream de Firebase si está listo
-  if (Firebase.ready() && stream.httpConnected()) {
-      if (Firebase.RTDB.readStream(&stream)) {
-          streamCallback(stream);
-      }
-  }
-
   delay(100); // Pequeña pausa para estabilizar el loop
-}
-
-
-// Esta función se llama cuando llegan datos del stream de Firebase
-void streamCallback(FirebaseStream data) {
-    Serial.printf("Stream de datos recibido: %s, %s, %s\n", data.streamPath().c_str(), data.dataPath().c_str(), data.dataType().c_str());
-
-    if (data.dataTypeEnum() == fb_esp_rtdb_data_type_json) {
-        FirebaseJson *json = data.to<FirebaseJson *>();
-        FirebaseJsonData result;
-
-        // Buscar el campo "isArmed"
-        if (json->get(result, "isArmed")) {
-            if (result.typeNum == FirebaseJson::JSON_BOOL) {
-                isArmed = result.to<bool>();
-                Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-                
-                // Si se desarma el sistema, reseteamos la detección de presencia
-                if (!isArmed && presenceDetected) {
-                    presenceDetected = false;
-                    Serial.println("  - Sistema desarmado, reseteando presencia.");
-                    Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", false);
-                }
-            }
-        }
-
-         // Escuchar también por si la app resetea la presencia manualmente
-        if (json->get(result, "presenceDetected")) {
-             if(result.typeNum == FirebaseJson::JSON_BOOL) {
-                bool newPresenceState = result.to<bool>();
-                if (presenceDetected != newPresenceState) {
-                    presenceDetected = newPresenceState;
-                    Serial.printf("  - Estado 'presenceDetected' actualizado remotamente a: %s\n", presenceDetected ? "TRUE" : "FALSE");
-                }
-            }
-        }
-    } else if (data.dataTypeEnum() == fb_esp_rtdb_data_type_boolean) {
-        // Manejar el caso en que solo cambia un booleano (ej. /alarm/state/isArmed)
-        if (data.dataPath() == "/isArmed") {
-            isArmed = data.to<bool>();
-            Serial.printf("  - Estado 'isArmed' (booleano) actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-
-            if (!isArmed && presenceDetected) {
-                presenceDetected = false;
-                Serial.println("  - Sistema desarmado, reseteando presencia.");
-                Firebase.RTDB.setBool(&fbdo, "/alarm/state/presenceDetected", false);
-            }
-        }
-    }
-}
-
-
-// Esta función se llama si el stream de Firebase expira
-void streamTimeoutCallback(bool timeout) {
-  if (timeout) {
-    Serial.println("Stream de Firebase ha expirado. Intentando reconectar...");
-  }
 }
 
 // Esta función se llama para informar sobre el estado del token de autenticación
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.printf("Token de Firebase listo. UID de Auth: %s\n", Firebase.auth().getUID().c_str());
-    Serial.println("Conectando al stream de Realtime Database...");
-    
-    // Iniciar el stream para escuchar cambios en el documento /alarm/state
-    if (!Firebase.RTDB.beginStream(&stream, "/alarm/state")) {
-      Serial.printf("Error al iniciar el stream de RTDB: %s\n", stream.errorReason().c_str());
-    }
-
-    // Asignar los callbacks después de iniciar el stream
-    Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
-
+    // Para la v4.x.x, el UID se obtiene del objeto auth global después de la autenticación
+    Serial.printf("Token de Firebase listo. El dispositivo está autenticado como UID: %s\n", auth.token.uid.c_str());
   } else {
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
   }

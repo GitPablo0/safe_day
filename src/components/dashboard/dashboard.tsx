@@ -41,10 +41,10 @@ export function Dashboard() {
   } = useDoc<AlarmState>(alarmStateRef);
 
   // While checking auth state or loading data, show a skeleton
-  if (isUserLoading || (user && isAlarmStateLoading)) {
+  if (isUserLoading || (user && isAlarmStateLoading && alarmState === undefined)) {
     return <DashboardSkeleton />;
   }
-
+  
   // If there's no user, don't render the dashboard content, the redirect will handle it
   if (!user) {
     return <DashboardSkeleton />;
@@ -86,7 +86,7 @@ export function Dashboard() {
             <p className="font-bold">Esperando datos del dispositivo...</p>
             <p className="text-xs mt-2">
               Asegúrate de que el ESP32 esté conectado y configurado con tu
-              UID de usuario.
+              UID de usuario. Interactúa con un control (ej. armar la alarma) para inicializar el estado.
             </p>
           </div>
         )}

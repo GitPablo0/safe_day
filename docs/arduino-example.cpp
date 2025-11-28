@@ -109,6 +109,7 @@ void setup() {
   // Configuración de Firebase (replicando el método funcional)
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
+  config.database_url = DATABASE_URL; // <-- LA LÍNEA CLAVE QUE FALTABA
 
   // Usar un email y password de placeholder como en el ejemplo funcional
   auth.user.email = "esp32@alumnosuade.com";

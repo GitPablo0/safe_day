@@ -7,8 +7,8 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Nuevo Proyecto',
-  description: 'Creado con Firebase Studio',
+  title: 'Sistema de Alarma',
+  description: 'Panel de control para sistema de alarma con sensor PIR.',
 };
 
 export default function RootLayout({
@@ -19,9 +19,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className={`${inter.variable} font-sans antialiased`}>
-        <FirebaseClientProvider>
-            {children}
-        </FirebaseClientProvider>
+        <FirebaseClientProvider>{children}</FirebaseClientProvider>
         <Toaster />
       </body>
     </html>

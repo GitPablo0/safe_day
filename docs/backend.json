@@ -1,10 +1,38 @@
 {
-  "entities": {},
+  "entities": {
+    "AlarmState": {
+      "title": "Alarm State",
+      "description": "Represents the state and configuration of the PIR alarm system.",
+      "type": "object",
+      "properties": {
+        "isArmed": {
+          "type": "boolean",
+          "description": "Indicates if the alarm system is currently armed."
+        },
+        "presenceDetected": {
+          "type": "boolean",
+          "description": "True if the PIR sensor has detected presence."
+        },
+        "alarmDuration": {
+          "type": "number",
+          "description": "Duration in seconds for the buzzer to sound when triggered."
+        },
+        "lastStatusUpdate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp of the last update from the device."
+        }
+      },
+      "required": ["isArmed", "presenceDetected", "alarmDuration"]
+    }
+  },
   "auth": {
-    "providers": ["password", "anonymous"]
+    "providers": ["anonymous"]
   },
   "firestore": {
-    "structure": [],
-    "reasoning": "Nueva estructura de base de datos para un nuevo proyecto."
+    "/alarm/state": {
+      "schema": { "$ref": "#/entities/AlarmState" },
+      "description": "Singleton document to hold the current state and configuration of the alarm."
+    }
   }
 }

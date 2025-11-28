@@ -115,36 +115,42 @@ void loop() {
   unsigned long currentMillis = millis();
 
   // --- 1. SONDEO A FIREBASE PARA OBTENER EL ESTADO ---
+  // Si Firebase está listo y ha pasado el intervalo de sondeo...
   if (Firebase.ready() && (currentMillis - lastStateFetchMillis > stateFetchInterval)) {
     lastStateFetchMillis = currentMillis;
 
     String documentPath = "/alarm/state";
     
+    // Intentar obtener el documento de Firestore
     if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
+        // Verificar si la petición HTTP fue exitosa
         if(fbdo.httpCode() == 200) {
             String payload = fbdo.payload();
             
             // Procesar el JSON de respuesta de Firestore
             FirebaseJson json;
+            // La respuesta de Firestore anida los campos en un objeto "fields"
             String fieldsPath = "/fields";
             json.setJsonData(payload);
             FirebaseJsonData result;
 
-            // Obtener isArmed
+            // Obtener el valor de 'isArmed'
             if (json.get(result, fieldsPath + "/isArmed/booleanValue")) {
                 bool armedStateFromFirebase = result.to<bool>();
+                // Actualizar solo si el estado ha cambiado
                 if (isArmed != armedStateFromFirebase) {
                     isArmed = armedStateFromFirebase;
                     Serial.printf("Estado 'isArmed' actualizado desde Firebase a: %s\n", isArmed ? "TRUE" : "FALSE");
                     // Si se desarma desde la app, reseteamos la detección de presencia
                     if (!isArmed && presenceDetected) {
                         presenceDetected = false;
+                        // Notificar a Firebase que la presencia ha sido reseteada
                         Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), "{\"fields\":{\"presenceDetected\":{\"booleanValue\":false}}}", "presenceDetected");
                     }
                 }
             }
 
-            // Obtener presenceDetected (por si se resetea desde la app)
+            // Obtener el valor de 'presenceDetected' (por si se resetea desde la app)
             if (json.get(result, fieldsPath + "/presenceDetected/booleanValue")) {
                 bool presenceStateFromFirebase = result.to<bool>();
                 if (presenceDetected != presenceStateFromFirebase) {
@@ -154,6 +160,10 @@ void loop() {
             }
         }
     }
+  } else {
+    // ----> AÑADIDO PARA DIAGNÓSTICO <----
+    // Si Firebase no está listo, imprime un punto para saber que el loop sigue corriendo.
+    Serial.print(".");
   }
 
 
@@ -168,6 +178,7 @@ void loop() {
       // Enviar el estado a Firebase Firestore
       if (Firebase.ready()) {
         String documentPath = "/alarm/state";
+        // Contenido del parche para actualizar solo el campo 'presenceDetected'
         String patchContent = "{\"fields\":{\"presenceDetected\":{\"booleanValue\":true}}}";
         if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), patchContent.c_str(), "presenceDetected")) {
           Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
@@ -200,10 +211,14 @@ void loop() {
 // Esta función se llama para informar sobre el estado del token de autenticación
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    // Para la v4.x.x, el UID se obtiene del objeto auth global después de la autenticación
-    Serial.printf("Token de Firebase listo. El dispositivo está autenticado como UID: %s\n", auth.token.uid.c_str());
+    Serial.println("\n------------------------------------");
+    Serial.println("Token de Firebase listo. ¡Conectado!");
+    Serial.printf("UID del Dispositivo: %s\n", auth.token.uid.c_str());
+    Serial.println("------------------------------------");
   } else {
+    Serial.println("\n------------------------------------");
     Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
+    Serial.println("------------------------------------");
   }
 }
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { doc, Firestore, DocumentData } from 'firebase/firestore';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, Firestore } from 'firebase/firestore';
+import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
 import { AlarmStatusCard } from './alarm-status-card';
 import { AlarmControlsCard } from './alarm-controls-card';
+import { UserUidCard } from './user-uid-card';
 import { Skeleton } from '../ui/skeleton';
 
 export interface AlarmState {
@@ -14,6 +15,7 @@ export interface AlarmState {
 
 export function Dashboard() {
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
 
   const alarmStateRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -22,11 +24,11 @@ export function Dashboard() {
 
   const {
     data: alarmState,
-    isLoading,
+    isLoading: isAlarmStateLoading,
     error,
   } = useDoc<AlarmState>(alarmStateRef);
 
-  if (isLoading) {
+  if (isAlarmStateLoading) {
     return <DashboardSkeleton />;
   }
 
@@ -39,45 +41,55 @@ export function Dashboard() {
     );
   }
 
-  if (!alarmState) {
-    return (
-        <div className="text-center text-muted-foreground">
-            <p>Esperando datos del sistema de alarma...</p>
-            <p className="text-xs">
-                Asegúrate de que el dispositivo esté conectado y enviando información.
-            </p>
-        </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto grid max-w-2xl grid-cols-1 gap-6 md:grid-cols-2">
-      <div className="md:col-span-2">
-        <h1 className="text-3xl font-bold tracking-tight text-center">
+    <div className="container mx-auto grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <h1 className="text-3xl font-bold tracking-tight text-center mb-6">
           Panel de Control de Alarma
         </h1>
       </div>
-      <AlarmStatusCard
-        isArmed={alarmState.isArmed}
-        presenceDetected={alarmState.presenceDetected}
-      />
-      <AlarmControlsCard
-        isArmed={alarmState.isArmed}
-        alarmDuration={alarmState.alarmDuration}
-        firestore={firestore}
-      />
+
+      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <AlarmStatusCard
+            isArmed={alarmState?.isArmed ?? false}
+            presenceDetected={alarmState?.presenceDetected ?? false}
+        />
+        <AlarmControlsCard
+            isArmed={alarmState?.isArmed ?? false}
+            alarmDuration={alarmState?.alarmDuration ?? 10}
+            firestore={firestore}
+            isDeviceConnected={!!alarmState}
+        />
+      </div>
+
+      <div className="md:col-span-1 flex flex-col gap-6">
+        <UserUidCard user={user} isLoading={isUserLoading} />
+         {!alarmState && (
+             <div className="text-center text-muted-foreground border rounded-lg p-4 flex flex-col items-center justify-center h-full">
+                <p className="font-bold">Esperando datos del dispositivo...</p>
+                <p className="text-xs mt-2">
+                    Asegúrate de que el ESP32 esté conectado a internet y tenga el UID correcto.
+                </p>
+            </div>
+         )}
+      </div>
     </div>
   );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="container mx-auto grid max-w-2xl grid-cols-1 gap-6 md:grid-cols-2">
-      <div className="md:col-span-2">
-        <Skeleton className="h-9 w-3/4 mx-auto" />
+    <div className="container mx-auto grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <Skeleton className="h-9 w-3/4 mx-auto mb-6" />
       </div>
-      <Skeleton className="h-56 w-full" />
-      <Skeleton className="h-56 w-full" />
+      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-56 w-full" />
+      </div>
+      <div className="md:col-span-1">
+        <Skeleton className="h-40 w-full" />
+      </div>
     </div>
   );
 }

@@ -18,12 +18,14 @@ interface AlarmControlsCardProps {
   isArmed: boolean;
   alarmDuration: number;
   firestore: Firestore;
+  isDeviceConnected: boolean;
 }
 
 export function AlarmControlsCard({
   isArmed,
   alarmDuration,
   firestore,
+  isDeviceConnected,
 }: AlarmControlsCardProps) {
 
   const handleArmChange = (armed: boolean) => {
@@ -35,7 +37,7 @@ export function AlarmControlsCard({
   };
 
   return (
-    <Card>
+    <Card className={!isDeviceConnected ? 'bg-muted/30' : ''}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Settings className="size-5" />
@@ -58,6 +60,7 @@ export function AlarmControlsCard({
             checked={isArmed}
             onCheckedChange={handleArmChange}
             aria-label="Armar alarma"
+            disabled={!isDeviceConnected}
           />
         </div>
 
@@ -76,7 +79,7 @@ export function AlarmControlsCard({
               step={5}
               value={[alarmDuration]}
               onValueChange={handleDurationChange}
-              disabled={isArmed}
+              disabled={isArmed || !isDeviceConnected}
               aria-label="Duración de la sirena"
             />
             <span className="w-12 text-center font-mono text-lg">

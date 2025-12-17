@@ -6,15 +6,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
+    // Un usuario solo puede leer/escribir sus propios datos de perfil,
+    // pero no el estado de la alarma directamente en este nivel.
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if request.auth.uid == userId;
 
+      // La regla clave: cualquier usuario autenticado (tú o el ESP32)
+      // puede leer y escribir en el documento de estado de la alarma.
       match /soundAlarm/state {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isSignedIn();
       }
     }
   }

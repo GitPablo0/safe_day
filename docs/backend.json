@@ -1,38 +1,33 @@
 {
   "entities": {
-    "AlarmState": {
-      "title": "Alarm State",
-      "description": "Represents the state and configuration of the PIR alarm system for a specific user.",
+    "SoundAlarmState": {
+      "title": "Sound Alarm State",
+      "description": "Represents the state and configuration of the sound alarm system for a specific user.",
       "type": "object",
       "properties": {
         "isArmed": {
           "type": "boolean",
           "description": "Indicates if the alarm system is currently armed."
         },
-        "presenceDetected": {
+        "soundDetected": {
           "type": "boolean",
-          "description": "True if the PIR sensor has detected presence."
+          "description": "True if the sound sensor has detected a sound event."
         },
         "alarmDuration": {
           "type": "number",
           "description": "Duration in seconds for the buzzer to sound when triggered."
-        },
-        "lastStatusUpdate": {
-          "type": "string",
-          "format": "date-time",
-          "description": "The timestamp of the last update from the device."
         }
       },
-      "required": ["isArmed", "presenceDetected", "alarmDuration"]
+      "required": ["isArmed", "soundDetected", "alarmDuration"]
     }
   },
   "auth": {
     "providers": ["email-and-password"]
   },
   "firestore": {
-    "/users/{userId}/alarm/state": {
-      "schema": { "$ref": "#/entities/AlarmState" },
-      "description": "Singleton document per user to hold the current state and configuration of their alarm."
+    "/users/{userId}/soundAlarm/state": {
+      "schema": { "$ref": "#/entities/SoundAlarmState" },
+      "description": "Singleton document per user to hold the current state and configuration of their sound alarm."
     }
   }
 }

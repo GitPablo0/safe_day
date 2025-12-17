@@ -1,40 +1,39 @@
 'use client';
 
-import { Shield, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Volume2, VolumeX, BellRing } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { ShieldIcon } from '../icons/shield-icon';
 
 interface AlarmStatusCardProps {
   isArmed: boolean;
-  presenceDetected: boolean;
+  soundDetected: boolean;
 }
 
 export function AlarmStatusCard({
   isArmed,
-  presenceDetected,
+  soundDetected,
 }: AlarmStatusCardProps) {
   const getStatus = () => {
-    if (isArmed && presenceDetected) {
+    if (isArmed && soundDetected) {
       return {
-        text: '¡ACTIVADA!',
+        text: '¡SONIDO DETECTADO!',
         color: 'text-destructive',
-        Icon: ShieldAlert,
+        Icon: BellRing,
         pulse: true,
       };
     }
     if (isArmed) {
       return {
-        text: 'Armada',
+        text: 'Escuchando',
         color: 'text-primary',
-        Icon: ShieldCheck,
+        Icon: Volume2,
         pulse: false,
       };
     }
     return {
       text: 'Desarmada',
       color: 'text-muted-foreground',
-      Icon: Shield,
+      Icon: VolumeX,
       pulse: false,
     };
   };
@@ -45,7 +44,7 @@ export function AlarmStatusCard({
     <Card className="flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldIcon className="size-5" />
+          <status.Icon className="size-5" />
           <span>Estado del Sistema</span>
         </CardTitle>
       </CardHeader>

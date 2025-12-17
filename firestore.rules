@@ -2,8 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write only their own alarm state.
-    match /users/{userId}/alarm/state {
+    // Allow users to read and write only their own sound alarm state.
+    match /users/{userId}/soundAlarm/state {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }

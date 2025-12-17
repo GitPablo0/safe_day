@@ -10,10 +10,11 @@ import { AlarmStatusCard } from './alarm-status-card';
 import { AlarmControlsCard } from './alarm-controls-card';
 import { UserUidCard } from './user-uid-card';
 import { Skeleton } from '../ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 export interface AlarmState {
   isArmed: boolean;
-  presenceDetected: boolean;
+  soundDetected: boolean;
   alarmDuration: number;
 }
 
@@ -21,16 +22,16 @@ export function Dashboard() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // If loading is finished and there's no user, redirect to login
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [isUserLoading, user, router]);
 
   const alarmStateRef = useMemo(
-    () => (firestore && user ? doc(firestore, `users/${user.uid}/alarm/state`) : null),
+    () => (firestore && user ? doc(firestore, `users/${user.uid}/soundAlarm/state`) : null),
     [firestore, user]
   );
 
@@ -40,12 +41,22 @@ export function Dashboard() {
     error,
   } = useDoc<AlarmState>(alarmStateRef);
 
-  // While checking auth state or loading data, show a skeleton
+  // Effect for triggering toast notification
+  useEffect(() => {
+    if (alarmState?.isArmed && alarmState?.soundDetected) {
+      toast({
+        variant: 'destructive',
+        title: '¡Alarma Activada!',
+        description: 'Se ha detectado un sonido fuerte.',
+      });
+    }
+  }, [alarmState?.soundDetected, alarmState?.isArmed, toast]);
+
+
   if (isUserLoading || (user && isAlarmStateLoading && alarmState === undefined)) {
     return <DashboardSkeleton />;
   }
   
-  // If there's no user, don't render the dashboard content, the redirect will handle it
   if (!user) {
     return <DashboardSkeleton />;
   }
@@ -63,14 +74,14 @@ export function Dashboard() {
     <div className="container mx-auto grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-3">
       <div className="md:col-span-3">
         <h1 className="text-3xl font-bold tracking-tight text-center mb-6">
-          Panel de Control de Alarma
+          Panel de Control de Alarma por Sonido
         </h1>
       </div>
 
       <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
         <AlarmStatusCard
           isArmed={alarmState?.isArmed ?? false}
-          presenceDetected={alarmState?.presenceDetected ?? false}
+          soundDetected={alarmState?.soundDetected ?? false}
         />
         <AlarmControlsCard
           isArmed={alarmState?.isArmed ?? false}

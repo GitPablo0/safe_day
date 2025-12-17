@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 interface AlarmControlsCardProps {
   isArmed: boolean;
   alarmDuration: number;
-  isDeviceConnected: boolean; // This prop now correctly reflects if the doc exists
+  isDeviceConnected: boolean; 
 }
 
 export function AlarmControlsCard({
@@ -31,30 +31,26 @@ export function AlarmControlsCard({
 
   const handleArmChange = (armed: boolean) => {
     if (!firestore || !user) return;
-    // This will now CREATE the document if it's missing, or update it.
-    // When arming, we also ensure presence is reset to false.
-    updateAlarmState(firestore, user.uid, { isArmed: armed, presenceDetected: false });
+    updateAlarmState(firestore, user.uid, { isArmed: armed, soundDetected: false });
   };
 
   const handleDurationChange = (value: number[]) => {
     if (!firestore || !user) return;
-    // This will also CREATE the document if it's missing.
     updateAlarmState(firestore, user.uid, { alarmDuration: value[0] });
   };
 
   return (
-    // The card is visually muted if the document doesn't exist yet.
     <Card className={cn(!isDeviceConnected && 'border-dashed bg-muted/20')}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Settings className="size-5" />
-          <span>Controles</span>
+          <span>Controles de Alarma</span>
         </CardTitle>
         <CardDescription>
-          Ajusta la configuración de tu sistema de alarma.
+          Ajusta la configuración de tu sistema de alarma por sonido.
           {!isDeviceConnected && (
             <span className="mt-1 block text-xs text-primary">
-              Usa un control para inicializar el estado.
+              Usa un control para inicializar el estado del dispositivo.
             </span>
           )}
         </CardDescription>
@@ -64,7 +60,7 @@ export function AlarmControlsCard({
           <Label htmlFor="arm-switch" className="flex flex-col space-y-1">
             <span className="font-medium">Armar Alarma</span>
             <span className="font-normal text-muted-foreground">
-              Activa o desactiva el monitoreo de presencia.
+              Activa o desactiva el monitoreo de sonido.
             </span>
           </Label>
           <Switch
@@ -90,7 +86,7 @@ export function AlarmControlsCard({
               step={5}
               value={[alarmDuration]}
               onValueChange={handleDurationChange}
-              disabled={isArmed} // Still disabled when armed for safety
+              disabled={isArmed}
               aria-label="Duración de la sirena"
             />
             <span className="w-12 text-center font-mono text-lg">

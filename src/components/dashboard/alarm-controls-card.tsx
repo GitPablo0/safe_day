@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
 import { Settings } from 'lucide-react';
 import { updateAlarmState } from '@/firebase/firestore/mutations';
 import { useFirestore, useUser } from '@/firebase';
@@ -17,13 +16,11 @@ import { cn } from '@/lib/utils';
 
 interface AlarmControlsCardProps {
   isArmed: boolean;
-  alarmDuration: number;
   isDeviceConnected: boolean; 
 }
 
 export function AlarmControlsCard({
   isArmed,
-  alarmDuration,
   isDeviceConnected,
 }: AlarmControlsCardProps) {
   const firestore = useFirestore();
@@ -32,11 +29,6 @@ export function AlarmControlsCard({
   const handleArmChange = (armed: boolean) => {
     if (!firestore || !user) return;
     updateAlarmState(firestore, user.uid, { isArmed: armed, soundDetected: false });
-  };
-
-  const handleDurationChange = (value: number[]) => {
-    if (!firestore || !user) return;
-    updateAlarmState(firestore, user.uid, { alarmDuration: value[0] });
   };
 
   return (
@@ -55,7 +47,7 @@ export function AlarmControlsCard({
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-8 pt-2">
+      <CardContent className="space-y-8 pt-6">
         <div className="flex items-center justify-between space-x-2">
           <Label htmlFor="arm-switch" className="flex flex-col space-y-1">
             <span className="font-medium">Armar Alarma</span>
@@ -69,30 +61,6 @@ export function AlarmControlsCard({
             onCheckedChange={handleArmChange}
             aria-label="Armar alarma"
           />
-        </div>
-
-        <div className="space-y-4">
-          <Label htmlFor="duration-slider" className="flex flex-col space-y-1">
-            <span className="font-medium">Duración de la Sirena</span>
-            <span className="font-normal text-muted-foreground">
-              Tiempo que sonará el buzzer al activarse.
-            </span>
-          </Label>
-          <div className="flex items-center gap-4">
-            <Slider
-              id="duration-slider"
-              min={5}
-              max={60}
-              step={5}
-              value={[alarmDuration]}
-              onValueChange={handleDurationChange}
-              disabled={isArmed}
-              aria-label="Duración de la sirena"
-            />
-            <span className="w-12 text-center font-mono text-lg">
-              {alarmDuration}s
-            </span>
-          </div>
         </div>
       </CardContent>
     </Card>

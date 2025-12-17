@@ -2,7 +2,7 @@
   "entities": {
     "SoundAlarmState": {
       "title": "Sound Alarm State",
-      "description": "Represents the state and configuration of the sound alarm system for a user.",
+      "description": "Represents the state of the sound alarm system for a user.",
       "type": "object",
       "properties": {
         "isArmed": {
@@ -13,17 +13,13 @@
           "type": "boolean",
           "description": "True if the sound sensor has detected a sound that crossed the threshold."
         },
-        "alarmDuration": {
-          "type": "number",
-          "description": "Duration in seconds for the buzzer/LED to stay active when triggered."
-        },
         "lastStatusUpdate": {
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the last status update from the device."
         }
       },
-      "required": ["isArmed", "soundDetected", "alarmDuration"]
+      "required": ["isArmed", "soundDetected"]
     }
   },
   "auth": {
@@ -38,7 +34,7 @@
           "schema": {
             "$ref": "#/backend/entities/SoundAlarmState"
           },
-          "description": "Singleton document for each user to hold the current state and configuration of their sound alarm.",
+          "description": "Singleton document for each user to hold the current state of their sound alarm.",
           "params": [
             {
               "name": "userId",

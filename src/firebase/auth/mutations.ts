@@ -32,7 +32,6 @@ export async function signUpWithEmail(
       const initialAlarmState = {
         isArmed: false,
         soundDetected: false,
-        alarmDuration: 10,
       };
 
       await setDoc(alarmStateRef, initialAlarmState);

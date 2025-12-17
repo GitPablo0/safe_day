@@ -7,7 +7,6 @@ import { FirestorePermissionError } from '@/firebase/errors';
 interface AlarmStateUpdate {
   isArmed?: boolean;
   soundDetected?: boolean;
-  alarmDuration?: number;
 }
 
 /**

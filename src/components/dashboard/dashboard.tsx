@@ -15,7 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 export interface AlarmState {
   isArmed: boolean;
   soundDetected: boolean;
-  alarmDuration: number;
 }
 
 export function Dashboard() {
@@ -85,7 +84,6 @@ export function Dashboard() {
         />
         <AlarmControlsCard
           isArmed={alarmState?.isArmed ?? false}
-          alarmDuration={alarmState?.alarmDuration ?? 10}
           isDeviceConnected={!!alarmState}
         />
       </div>

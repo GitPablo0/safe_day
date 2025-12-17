@@ -1,9 +1,8 @@
 export const firebaseConfig = {
-  "projectId": "sistemaalarma-11019109-94c6b",
-  "appId": "1:833132567912:web:a2872836755fa76f1b4add",
-  "apiKey": "AIzaSyD26vBFuUd45oUiio76gLNAz6Mh3062Muw",
-  "authDomain": "sistemaalarma-11019109-94c6b.firebaseapp.com",
-  "databaseURL": "https://sistemaalarma-11019109-94c6b-default-rtdb.firebaseio.com",
+  "projectId": "sistemababyalarm-3851454-f8120",
+  "appId": "1:585899168994:web:72d4d450d95eba6e263abb",
+  "apiKey": "AIzaSyALvpGn2QsEJOxuG-3xaQehba-cSdRYbVQ",
+  "authDomain": "sistemababyalarm-3851454-f8120.firebaseapp.com",
   "measurementId": "",
-  "messagingSenderId": "833132567912"
+  "messagingSenderId": "585899168994"
 };

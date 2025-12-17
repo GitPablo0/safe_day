@@ -73,7 +73,7 @@ export function Dashboard() {
     <div className="container mx-auto grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-3">
       <div className="md:col-span-3">
         <h1 className="text-3xl font-bold tracking-tight text-center mb-6">
-          Panel de Control de Alarma por Sonido
+          Panel de control de BabyAlarm
         </h1>
       </div>
 

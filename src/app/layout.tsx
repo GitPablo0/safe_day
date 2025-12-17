@@ -7,7 +7,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Alarma por Sonido',
+  title: 'BabyAlarm',
   description: 'Panel de control para sistema de alarma con sensor de sonido.',
 };
 

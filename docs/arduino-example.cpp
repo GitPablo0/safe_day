@@ -1,15 +1,16 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma por sonido conectado a Firebase.
+ * v2 - Basado en la lógica robusta de PixelGrid.
  *
- * Puntos Clave:
- * 1. UID de Usuario Manual: El dispositivo se vincula a una cuenta de usuario específica
- *    en la app web. Debes copiar el UID y pegarlo en la variable USER_UID.
- * 2. Estructura de datos por usuario: /users/{UID}/soundAlarm/state
- * 3. Sincronización de Hora NTP: Crítico para la validación de tokens de Firebase.
- * 4. Loop no bloqueante: Usa millis() para operaciones temporizadas.
- * 5. Detección por Nivel Lógico: La mayoría de sensores de sonido digitales
- *    emiten un nivel BAJO (LOW) cuando detectan un sonido que supera su umbral.
+ * --- ¡IMPORTANTE! INSTRUCCIONES DE CONFIGURACIÓN ---
+ * 1. Ve a Firebase > Authentication y crea un usuario con el email
+ *    "esp32@soundalarm.com" y la contraseña "soundalarm123". Este es un paso
+ *    único para que el dispositivo pueda autenticarse.
+ * 2. Inicia sesión en la aplicación web con TU cuenta personal.
+ * 3. Copia el "Device UID" que aparece en el panel de control.
+ * 4. Pega ese UID en la constante USER_UID de abajo.
+ * 5. Sube este código a tu ESP32.
  * ==================================================================================
  */
 
@@ -37,11 +38,12 @@ WiFiNetwork knownNetworks[] = {
 const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
 // ===============================================================
-// 2. CONFIGURACIÓN DE FIREBASE
+// 2. CONFIGURACIÓN DE FIREBASE (NO TOCAR)
 // ===============================================================
-#define API_KEY "AIzaSyD26vBFuUd45oUiio76gLNAz6Mh3062Muw"
-#define FIREBASE_PROJECT_ID "sistemaalarma-11019109-94c6b"
-#define DATABASE_URL "https://sistemaalarma-11019109-94c6b-default-rtdb.firebaseio.com/"
+// Estos valores son específicos del nuevo proyecto de Firebase.
+#define API_KEY "AIzaSyALvpGn2QsEJOxuG-3xaQehba-cSdRYbVQ"
+#define FIREBASE_PROJECT_ID "sistemababyalarm-3851454-f8120"
+#define DATABASE_URL "https://sistemababyalarm-3851454-f8120-default-rtdb.firebaseio.com"
 
 // ===============================================
 // 3. PINES Y SENSORES
@@ -62,18 +64,19 @@ FirebaseConfig config;
 bool isArmed = false;
 bool soundDetected = false;
 unsigned long lastSoundDetectedTime = 0;
-const unsigned long SOUND_COOLDOWN = 2000; // 2 segundos de espera entre detecciones
+const unsigned long SOUND_COOLDOWN = 3000; // 3 segundos de espera entre detecciones
 
-// Estado anterior del sensor para detectar flancos
-int lastSoundSensorState = HIGH;
+// Estado anterior del sensor para detectar flancos (evita lecturas continuas)
+int lastSoundSensorState = HIGH; // Los sensores digitales suelen estar en HIGH en reposo
 
 unsigned long lastFirestoreRead = 0;
-const long firestoreReadInterval = 5000; // Leer estado desde Firestore cada 5 segundos
+const long firestoreReadInterval = 3000; // Leer estado desde Firestore cada 3 segundos
 
 // ===============================================
 // 5. DECLARACIÓN DE FUNCIONES
 // ===============================================
 void connectToWiFi();
+bool syncTime();
 void tokenStatusCallback(TokenInfo info);
 void readAlarmStateFromFirestore();
 void sendSoundDetectionToFirestore(bool detected);
@@ -81,7 +84,7 @@ String getJsonField(String& payload, const char* fieldName);
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Inicializando sistema de alarma por sonido...");
+  Serial.println("Inicializando Sistema de Alarma por Sonido v2...");
 
   pinMode(SOUND_PIN, INPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
@@ -94,39 +97,34 @@ void setup() {
 
   connectToWiFi();
 
-  // --- SINCRONIZACIÓN DE HORA (NTP) ---
-  Serial.println("Sincronizando hora con servidor NTP...");
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t now = time(nullptr);
-  while (now < 8 * 3600 * 2) {
-      delay(500);
-      Serial.print(".");
-      now = time(nullptr);
+  if (!syncTime()) {
+    Serial.println("Error crítico de NTP. Reiniciando en 5 segundos...");
+    delay(5000);
+    ESP.restart();
   }
-  Serial.println("\nHora sincronizada correctamente.");
 
-  // --- AUTENTICACIÓN ---
   Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   
-  auth.user.email = "pabloportillo12345@gmail.com";
-  auth.user.password = "admin123";
+  auth.user.email = "esp32@soundalarm.com";
+  auth.user.password = "soundalarm123";
 
   config.token_status_callback = tokenStatusCallback;
   
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
 
-  Serial.println("Sistema de Alarma por Sonido Inicializado. Esperando conexión a Firebase...");
+  Serial.println("Sistema de Alarma por Sonido Inicializado.");
 }
 
 void loop() {
   unsigned long currentMillis = millis();
 
+  // No hacer nada hasta que Firebase esté listo y el UID esté configurado.
   if (!Firebase.ready() || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
     if (strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
-        Serial.println("UID de usuario no configurado. Pegue el UID en el código.");
+        Serial.println("UID de usuario no configurado. Pega el UID en el código.");
         delay(5000);
     }
     return;
@@ -138,9 +136,10 @@ void loop() {
     readAlarmStateFromFirestore();
   }
 
-  // 2. Lógica de detección de sonido
+  // 2. Lógica de detección de sonido (basada en flanco descendente)
   int currentSoundState = digitalRead(SOUND_PIN);
 
+  // Un sonido es detectado cuando el pin pasa de HIGH a LOW (lo más común)
   if (isArmed && currentSoundState == LOW && lastSoundSensorState == HIGH) {
     if (currentMillis - lastSoundDetectedTime > SOUND_COOLDOWN) {
         Serial.println("¡SONIDO DETECTADO!");
@@ -148,78 +147,54 @@ void loop() {
         sendSoundDetectionToFirestore(true);
         lastSoundDetectedTime = currentMillis;
         
-        // Activa el buzzer y el LED localmente de inmediato
+        // Activa el LED localmente de inmediato
         digitalWrite(LED_ROJO_PIN, HIGH);
-        digitalWrite(BUZZER_PIN, HIGH);
+        // Opcional: activar buzzer
+        // digitalWrite(BUZZER_PIN, HIGH);
     }
   }
-
-  // 3. Resetear la detección si ya no se detecta sonido (opcional, depende del sensor)
-  // O si se desarma la alarma
-  if ((isArmed && currentSoundState == HIGH && soundDetected) || (!isArmed && soundDetected)) {
-      Serial.println("Condiciones de sonido reseteadas.");
-      soundDetected = false;
-      sendSoundDetectionToFirestore(false);
-      digitalWrite(LED_ROJO_PIN, LOW);
-      digitalWrite(BUZZER_PIN, LOW);
-  }
   
+  // Actualizar el estado anterior del sensor
   lastSoundSensorState = currentSoundState;
 
 
-  // 4. Control de actuadores visuales
+  // 3. Control de actuadores visuales
   digitalWrite(LED_AZUL_PIN, isArmed);
-}
-
-String getJsonField(String& payload, const char* fieldName) {
-    String searchKey = "\"" + String(fieldName) + "\":";
-    int startIndex = payload.indexOf(searchKey);
-    if (startIndex == -1) return "{}";
-    startIndex = payload.indexOf("{", startIndex);
-    int braceCount = 1;
-    int endIndex = startIndex + 1;
-    while (endIndex < payload.length() && braceCount > 0) {
-        if (payload[endIndex] == '{') braceCount++;
-        if (payload[endIndex] == '}') braceCount--;
-        endIndex++;
-    }
-    if (endIndex > payload.length()) return "{}";
-    return payload.substring(startIndex, endIndex);
 }
 
 // Función para leer el estado de la alarma desde Firestore
 void readAlarmStateFromFirestore() {
   String documentPath = "users/" + String(USER_UID) + "/soundAlarm/state";
-  Serial.println("Leyendo estado desde Firestore: " + documentPath);
-
+  
   if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str())) {
     if (fbdo.httpCode() == 200) {
-      String payload = fbdo.payload();
       FirebaseJson json;
-      
-      String fieldsJson = getJsonField(payload, "fields");
-      json.setJsonData(fieldsJson);
-      
+      json.setJsonData(fbdo.payload());
       FirebaseJsonData result;
 
-      if (json.get(result, "isArmed/booleanValue")) {
-        bool newArmedState = result.to<bool>();
-        if (isArmed != newArmedState) {
-            isArmed = newArmedState;
-            Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "ARMADO" : "DESARMADO");
-            if (!isArmed) { // Si se desarma, resetea todo
-                soundDetected = false;
-                sendSoundDetectionToFirestore(false);
-                digitalWrite(LED_ROJO_PIN, LOW);
-                digitalWrite(BUZZER_PIN, LOW);
+      // Parsear el campo 'isArmed'
+      if (json.get(result, "fields/isArmed/booleanValue")) {
+        if(result.success) {
+            bool newArmedState = result.to<bool>();
+            if (isArmed != newArmedState) {
+                isArmed = newArmedState;
+                Serial.printf("Estado 'isArmed' actualizado desde Firestore a: %s\n", isArmed ? "ARMADO" : "DESARMADO");
+                
+                // Si se desarma, resetea la detección de sonido local y remotamente
+                if (!isArmed) {
+                    soundDetected = false;
+                    sendSoundDetectionToFirestore(false);
+                    digitalWrite(LED_ROJO_PIN, LOW);
+                    digitalWrite(BUZZER_PIN, LOW);
+                }
             }
         }
       }
     } else {
-      Serial.printf("Error al leer el documento. HTTP Code: %d, Razón: %s\n", fbdo.httpCode(), fbdo.errorReason().c_str());
+      Serial.printf("Error al leer documento. HTTP: %d, Razón: %s\n", fbdo.httpCode(), fbdo.errorReason().c_str());
     }
   } else {
-    Serial.println(fbdo.errorReason().c_str());
+    Serial.println("Fallo en getDocument: " + fbdo.errorReason());
   }
 }
 
@@ -230,6 +205,7 @@ void sendSoundDetectionToFirestore(bool detected) {
   
   Serial.printf("Enviando 'soundDetected: %s' a Firestore...\n", detected ? "true" : "false");
 
+  // El "updateMask" (último parámetro) le dice a Firestore que solo actualice el campo "soundDetected".
   if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "soundDetected")) {
     Serial.printf("  - Error al enviar estado: %s\n", fbdo.errorReason().c_str());
   }
@@ -238,14 +214,37 @@ void sendSoundDetectionToFirestore(bool detected) {
 // Función de callback para el estado del token
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.println("Token de Firebase listo. ¡Conectado y autenticado!");
-    Serial.printf("UID del dispositivo: %s\n", auth.token.uid.c_str());
+    Serial.println("------------------------------------");
+    Serial.println("Token de Firebase listo. ¡Dispositivo Autenticado!");
+    Serial.printf("UID de Dispositivo: %s\n", auth.token.uid.c_str());
+    Serial.println("------------------------------------");
   } else {
     Serial.println("------------------------------------");
     Serial.println("Error de token de Firebase:");
-    Serial.println(info.error.message.c_str());
+    Serial.printf("Mensaje: %s\n", info.error.message.c_str());
     Serial.println("------------------------------------");
   }
+}
+
+// Función para sincronizar la hora (esencial para Firebase)
+bool syncTime() {
+  Serial.println("Sincronizando hora con servidor NTP...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  int retries = 0;
+  while (now < 8 * 3600 * 2 && retries < 30) {
+      delay(500); Serial.print(".");
+      now = time(nullptr);
+      retries++;
+  }
+  if (retries >= 30) {
+    Serial.println("\nFallo al sincronizar la hora después de varios intentos.");
+    return false;
+  }
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  Serial.printf("\nHora sincronizada: %s", asctime(&timeinfo));
+  return true;
 }
 
 // Función para conectar a la red WiFi
@@ -254,28 +253,19 @@ void connectToWiFi() {
   while (WiFi.status() != WL_CONNECTED) {
     Serial.println("Buscando redes WiFi conocidas...");
     for (int i = 0; i < numKnownNetworks; i++) {
-      Serial.print("Intentando conectar a: ");
-      Serial.println(knownNetworks[i].ssid);
-      
+      Serial.printf("Intentando conectar a: %s\n", knownNetworks[i].ssid);
       WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
-      
-      unsigned long startAttemptTime = millis();
-      while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
-        Serial.print(".");
-        delay(500);
+      unsigned long start = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
+        delay(500); Serial.print(".");
       }
-      
       if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\n¡Conectado a WiFi!");
-        Serial.print("Red: ");
-        Serial.println(WiFi.SSID());
-        Serial.print("Dirección IP: ");
-        Serial.println(WiFi.localIP());
+        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
         return;
-      } else {
-        Serial.println("\nFallo al conectar. Probando siguiente red...");
-        WiFi.disconnect();
       }
+      Serial.println("\nFallo al conectar. Probando siguiente red...");
+      WiFi.disconnect();
     }
     Serial.println("No se encontró ninguna red conocida. Reintentando en 10 segundos...");
     delay(10000);

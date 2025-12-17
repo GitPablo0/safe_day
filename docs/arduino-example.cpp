@@ -80,6 +80,7 @@ void tokenStatusCallback(TokenInfo info);
 void readAlarmStateFromFirestore();
 void sendFirestoreUpdate(String content, String updateMask);
 void checkTimer();
+String getTimestampString();
 
 void setup() {
   Serial.begin(115200);
@@ -143,7 +144,7 @@ void loop() {
         soundDetectedTimestamp = currentMillis; // Iniciar temporizador
         // Al detectar sonido, también se actualiza el timestamp en Firebase
         // para que el contador de la App Web inicie sincronizado.
-        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true},\"lastArmedTimestamp\":{\"timestampValue\":\"" + Firebase.getISO8601Time(0) + "\"}}}";
+        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true},\"lastArmedTimestamp\":{\"timestampValue\":\"" + getTimestampString() + "\"}}}";
         sendFirestoreUpdate(content, "soundDetected,lastArmedTimestamp");
         lastSoundDetectedTime = currentMillis;
     }
@@ -155,6 +156,16 @@ void loop() {
   digitalWrite(LED_AZUL_PIN, isArmed);
   digitalWrite(LED_ROJO_PIN, isArmed && soundDetected);
 }
+
+// Función para obtener la fecha y hora en formato ISO 8601
+String getTimestampString() {
+  time_t now;
+  time(&now);
+  char buf[sizeof "2011-10-08T07:07:09Z"];
+  strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+  return String(buf);
+}
+
 
 // Comprueba si el temporizador de detección de sonido ha expirado
 void checkTimer() {

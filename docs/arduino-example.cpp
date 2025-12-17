@@ -62,7 +62,7 @@ FirebaseConfig config;
 bool isArmed = false;
 bool soundDetected = false;
 int alarmDurationMinutes = 10; // Duración por defecto del temporizador
-unsigned long armingTimestamp = 0; // Momento en que se armó la alarma
+unsigned long soundDetectedTimestamp = 0; // Momento en que se detectó el sonido
 unsigned long lastSoundDetectedTime = 0;
 const unsigned long SOUND_COOLDOWN = 3000; // 3 segundos de espera
 
@@ -131,38 +131,44 @@ void loop() {
     readAlarmStateFromFirestore();
   }
 
-  checkTimer(); // Comprobar si el temporizador debe desarmar la alarma
+  checkTimer(); // Comprobar si el temporizador debe resetear la detección
 
   int currentSoundState = digitalRead(SOUND_PIN);
 
-  if (isArmed && currentSoundState == LOW && lastSoundSensorState == HIGH) {
+  // Si la alarma está armada y no hay un sonido ya detectado...
+  if (isArmed && !soundDetected && currentSoundState == LOW && lastSoundSensorState == HIGH) {
     if (currentMillis - lastSoundDetectedTime > SOUND_COOLDOWN) {
         Serial.println("¡SONIDO DETECTADO!");
         soundDetected = true;
-        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true}}}";
-        sendFirestoreUpdate(content, "soundDetected");
+        soundDetectedTimestamp = currentMillis; // Iniciar temporizador
+        // Al detectar sonido, también se actualiza el timestamp en Firebase
+        // para que el contador de la App Web inicie sincronizado.
+        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true},\"lastArmedTimestamp\":{\"timestampValue\":\"" + String(Firebase.getCurrentTime()) + "\"}}}";
+        sendFirestoreUpdate(content, "soundDetected,lastArmedTimestamp");
         lastSoundDetectedTime = currentMillis;
-        
-        digitalWrite(LED_ROJO_PIN, HIGH);
     }
   }
   
   lastSoundSensorState = currentSoundState;
 
+  // Actualizar LEDs basados en el estado
   digitalWrite(LED_AZUL_PIN, isArmed);
+  digitalWrite(LED_ROJO_PIN, isArmed && soundDetected);
 }
 
-// Comprueba si el temporizador de la alarma ha expirado
+// Comprueba si el temporizador de detección de sonido ha expirado
 void checkTimer() {
-  if (isArmed && alarmDurationMinutes > 0 && armingTimestamp > 0) {
-    unsigned long elapsedTime = millis() - armingTimestamp;
+  // El temporizador solo se considera si se ha detectado un sonido
+  if (isArmed && soundDetected && alarmDurationMinutes > 0 && soundDetectedTimestamp > 0) {
+    unsigned long elapsedTime = millis() - soundDetectedTimestamp;
     if (elapsedTime >= (unsigned long)alarmDurationMinutes * 60 * 1000) {
-      Serial.printf("Temporizador de %d minutos finalizado. Desarmando alarma.\n", alarmDurationMinutes);
-      isArmed = false;
-      armingTimestamp = 0; // Resetear el temporizador
-      String content = "{\"fields\":{\"isArmed\":{\"booleanValue\":false},\"soundDetected\":{\"booleanValue\":false},\"lastArmedTimestamp\":{\"nullValue\":null}}}";
-      sendFirestoreUpdate(content, "isArmed,soundDetected,lastArmedTimestamp");
-      digitalWrite(LED_ROJO_PIN, LOW); // Apagar LED de detección
+      Serial.printf("Temporizador de %d minutos finalizado. Volviendo a estado 'Escuchando'.\n", alarmDurationMinutes);
+      soundDetected = false;
+      soundDetectedTimestamp = 0; // Resetear el temporizador
+      
+      // Actualizamos Firestore para que la UI vuelva al estado "Escuchando"
+      String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":false}}}";
+      sendFirestoreUpdate(content, "soundDetected");
     }
   }
 }
@@ -177,6 +183,7 @@ void readAlarmStateFromFirestore() {
       json.setJsonData(fbdo.payload());
       FirebaseJsonData result;
 
+      // Actualizar isArmed
       if (json.get(result, "fields/isArmed/booleanValue")) {
         if(result.success) {
             bool newArmedState = result.to<bool>();
@@ -184,17 +191,16 @@ void readAlarmStateFromFirestore() {
                 isArmed = newArmedState;
                 Serial.printf("Estado 'isArmed' actualizado desde Firestore a: %s\n", isArmed ? "ARMADO" : "DESARMADO");
                 
-                if (isArmed) {
-                  armingTimestamp = millis(); // Iniciar temporizador al armar
-                } else {
-                  armingTimestamp = 0; // Detener temporizador al desarmar
+                if (!isArmed) {
+                  // Si se desarma desde la App, resetear todo
                   soundDetected = false;
-                  digitalWrite(LED_ROJO_PIN, LOW);
+                  soundDetectedTimestamp = 0; 
                 }
             }
         }
       }
       
+      // Actualizar la duración del temporizador
       if (json.get(result, "fields/alarmDuration/integerValue") || json.get(result, "fields/alarmDuration/doubleValue")) {
         if(result.success) {
           int newDuration = result.to<int>();

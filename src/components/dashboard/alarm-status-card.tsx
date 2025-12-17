@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { VolumeX, Timer } from 'lucide-react';
+import { Volume2, VolumeX, Timer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -55,9 +55,12 @@ export function AlarmStatusCard({
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-
-    if (isArmed && lastArmedTimestamp && alarmDuration > 0) {
+    
+    // El contador solo se activa si la alarma está armada, se ha detectado sonido
+    // y hay una duración y timestamp válidos.
+    if (isArmed && soundDetected && lastArmedTimestamp && alarmDuration > 0) {
       interval = setInterval(() => {
+        // El timestamp de inicio es cuando se armó la alarma (o cuando se detectó el sonido si se ajusta el backend)
         const armedAt = lastArmedTimestamp.toDate();
         const now = new Date();
         const endTime = new Date(armedAt.getTime() + alarmDuration * 60 * 1000);
@@ -71,13 +74,13 @@ export function AlarmStatusCard({
         }
       }, 1000);
     } else {
-        setRemainingTime(null);
+      setRemainingTime(null);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isArmed, lastArmedTimestamp, alarmDuration]);
+  }, [isArmed, soundDetected, lastArmedTimestamp, alarmDuration]);
 
   const getStatus = () => {
     if (isArmed && soundDetected) {
@@ -90,9 +93,9 @@ export function AlarmStatusCard({
     }
     if (isArmed) {
       return {
-        text: remainingTime ? 'Tiempo Restante' : 'Escuchando',
-        color: 'text-primary',
-        Icon: Timer,
+        text: 'Escuchando',
+        color: 'text-muted-foreground', // Un color más sutil para "Escuchando"
+        Icon: Volume2,
         pulse: false,
       };
     }
@@ -123,7 +126,7 @@ export function AlarmStatusCard({
         >
           <status.Icon className={cn('h-16 w-16', status.color)} />
         </div>
-        {isArmed && remainingTime ? (
+        {isArmed && soundDetected && remainingTime ? (
             <p className="text-4xl font-bold tabular-nums text-primary">{remainingTime}</p>
         ) : (
             <p className={cn('text-2xl font-bold', status.color)}>{status.text}</p>

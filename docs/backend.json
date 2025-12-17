@@ -17,6 +17,10 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the last status update from the device."
+        },
+        "alarmDuration": {
+          "type": "number",
+          "description": "The duration in minutes for which the alarm should remain armed. Defaults to 0 (manual disarm)."
         }
       },
       "required": ["isArmed", "soundDetected"]

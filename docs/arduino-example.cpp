@@ -1,7 +1,7 @@
 /**
  * ==================================================================================
  * Código de control para un sistema de alarma por sonido conectado a Firebase.
- * v2 - Basado en la lógica robusta de PixelGrid.
+ * v3 - Añadido temporizador para auto-desarmado.
  *
  * --- ¡IMPORTANTE! INSTRUCCIONES DE CONFIGURACIÓN ---
  * 1. Ve a Firebase > Authentication y crea un usuario con el email
@@ -40,7 +40,6 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE (NO TOCAR)
 // ===============================================================
-// Estos valores son específicos del nuevo proyecto de Firebase.
 #define API_KEY "AIzaSyALvpGn2QsEJOxuG-3xaQehba-cSdRYbVQ"
 #define FIREBASE_PROJECT_ID "sistemababyalarm-3851454-f8120"
 #define DATABASE_URL "https://sistemababyalarm-3851454-f8120-default-rtdb.firebaseio.com"
@@ -51,7 +50,6 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 #define SOUND_PIN 27      // Pin para el sensor de sonido digital (DO)
 #define LED_ROJO_PIN 4    // Pin para el LED rojo (detección de sonido)
 #define LED_AZUL_PIN 2    // Pin para el LED azul (sistema armado)
-#define BUZZER_PIN 22     // Pin para el buzzer (opcional, para alarma sonora)
 
 // ===============================================
 // 4. OBJETOS Y VARIABLES DE ESTADO
@@ -63,11 +61,12 @@ FirebaseConfig config;
 // Variables de estado del sistema
 bool isArmed = false;
 bool soundDetected = false;
+int alarmDurationMinutes = 10; // Duración por defecto del temporizador
+unsigned long armingTimestamp = 0; // Momento en que se armó la alarma
 unsigned long lastSoundDetectedTime = 0;
-const unsigned long SOUND_COOLDOWN = 3000; // 3 segundos de espera entre detecciones
+const unsigned long SOUND_COOLDOWN = 3000; // 3 segundos de espera
 
-// Estado anterior del sensor para detectar flancos (evita lecturas continuas)
-int lastSoundSensorState = HIGH; // Los sensores digitales suelen estar en HIGH en reposo
+int lastSoundSensorState = HIGH; 
 
 unsigned long lastFirestoreRead = 0;
 const long firestoreReadInterval = 3000; // Leer estado desde Firestore cada 3 segundos
@@ -79,21 +78,19 @@ void connectToWiFi();
 bool syncTime();
 void tokenStatusCallback(TokenInfo info);
 void readAlarmStateFromFirestore();
-void sendSoundDetectionToFirestore(bool detected);
-String getJsonField(String& payload, const char* fieldName);
+void sendFirestoreUpdate(String content, String updateMask);
+void checkTimer();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Inicializando Sistema de Alarma por Sonido v2...");
+  Serial.println("Inicializando Sistema de Alarma por Sonido v3...");
 
   pinMode(SOUND_PIN, INPUT);
   pinMode(LED_ROJO_PIN, OUTPUT);
   pinMode(LED_AZUL_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
 
   digitalWrite(LED_ROJO_PIN, LOW);
   digitalWrite(LED_AZUL_PIN, LOW);
-  digitalWrite(BUZZER_PIN, LOW);
 
   connectToWiFi();
 
@@ -121,7 +118,6 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  // No hacer nada hasta que Firebase esté listo y el UID esté configurado.
   if (!Firebase.ready() || strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
     if (strcmp(USER_UID, "PASTE_YOUR_USER_UID_HERE") == 0) {
         Serial.println("UID de usuario no configurado. Pega el UID en el código.");
@@ -130,36 +126,45 @@ void loop() {
     return;
   }
 
-  // 1. Leer estado de la alarma desde Firestore periódicamente
   if (currentMillis - lastFirestoreRead > firestoreReadInterval) {
     lastFirestoreRead = currentMillis;
     readAlarmStateFromFirestore();
   }
 
-  // 2. Lógica de detección de sonido (basada en flanco descendente)
+  checkTimer(); // Comprobar si el temporizador debe desarmar la alarma
+
   int currentSoundState = digitalRead(SOUND_PIN);
 
-  // Un sonido es detectado cuando el pin pasa de HIGH a LOW (lo más común)
   if (isArmed && currentSoundState == LOW && lastSoundSensorState == HIGH) {
     if (currentMillis - lastSoundDetectedTime > SOUND_COOLDOWN) {
         Serial.println("¡SONIDO DETECTADO!");
         soundDetected = true;
-        sendSoundDetectionToFirestore(true);
+        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true}}}";
+        sendFirestoreUpdate(content, "soundDetected");
         lastSoundDetectedTime = currentMillis;
         
-        // Activa el LED localmente de inmediato
         digitalWrite(LED_ROJO_PIN, HIGH);
-        // Opcional: activar buzzer
-        // digitalWrite(BUZZER_PIN, HIGH);
     }
   }
   
-  // Actualizar el estado anterior del sensor
   lastSoundSensorState = currentSoundState;
 
-
-  // 3. Control de actuadores visuales
   digitalWrite(LED_AZUL_PIN, isArmed);
+}
+
+// Comprueba si el temporizador de la alarma ha expirado
+void checkTimer() {
+  if (isArmed && alarmDurationMinutes > 0 && armingTimestamp > 0) {
+    unsigned long elapsedTime = millis() - armingTimestamp;
+    if (elapsedTime >= (unsigned long)alarmDurationMinutes * 60 * 1000) {
+      Serial.printf("Temporizador de %d minutos finalizado. Desarmando alarma.\n", alarmDurationMinutes);
+      isArmed = false;
+      armingTimestamp = 0; // Resetear el temporizador
+      String content = "{\"fields\":{\"isArmed\":{\"booleanValue\":false},\"soundDetected\":{\"booleanValue\":false}}}";
+      sendFirestoreUpdate(content, "isArmed,soundDetected");
+      digitalWrite(LED_ROJO_PIN, LOW); // Apagar LED de detección
+    }
+  }
 }
 
 // Función para leer el estado de la alarma desde Firestore
@@ -172,7 +177,6 @@ void readAlarmStateFromFirestore() {
       json.setJsonData(fbdo.payload());
       FirebaseJsonData result;
 
-      // Parsear el campo 'isArmed'
       if (json.get(result, "fields/isArmed/booleanValue")) {
         if(result.success) {
             bool newArmedState = result.to<bool>();
@@ -180,16 +184,27 @@ void readAlarmStateFromFirestore() {
                 isArmed = newArmedState;
                 Serial.printf("Estado 'isArmed' actualizado desde Firestore a: %s\n", isArmed ? "ARMADO" : "DESARMADO");
                 
-                // Si se desarma, resetea la detección de sonido local y remotamente
-                if (!isArmed) {
-                    soundDetected = false;
-                    sendSoundDetectionToFirestore(false);
-                    digitalWrite(LED_ROJO_PIN, LOW);
-                    digitalWrite(BUZZER_PIN, LOW);
+                if (isArmed) {
+                  armingTimestamp = millis(); // Iniciar temporizador al armar
+                } else {
+                  armingTimestamp = 0; // Detener temporizador al desarmar
+                  soundDetected = false;
+                  digitalWrite(LED_ROJO_PIN, LOW);
                 }
             }
         }
       }
+      
+      if (json.get(result, "fields/alarmDuration/integerValue") || json.get(result, "fields/alarmDuration/doubleValue")) {
+        if(result.success) {
+          int newDuration = result.to<int>();
+          if (alarmDurationMinutes != newDuration) {
+            alarmDurationMinutes = newDuration;
+            Serial.printf("Duración de la alarma actualizada a: %d minutos\n", alarmDurationMinutes);
+          }
+        }
+      }
+      
     } else {
       Serial.printf("Error al leer documento. HTTP: %d, Razón: %s\n", fbdo.httpCode(), fbdo.errorReason().c_str());
     }
@@ -198,18 +213,17 @@ void readAlarmStateFromFirestore() {
   }
 }
 
-// Función para enviar el estado de detección a Firestore
-void sendSoundDetectionToFirestore(bool detected) {
+// Función genérica para enviar actualizaciones a Firestore
+void sendFirestoreUpdate(String content, String updateMask) {
   String documentPath = "users/" + String(USER_UID) + "/soundAlarm/state";
-  String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":" + String(detected ? "true" : "false") + "}}}";
   
-  Serial.printf("Enviando 'soundDetected: %s' a Firestore...\n", detected ? "true" : "false");
+  Serial.printf("Enviando actualización a Firestore (%s)...\n", updateMask.c_str());
 
-  // El "updateMask" (último parámetro) le dice a Firestore que solo actualice el campo "soundDetected".
-  if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), "soundDetected")) {
+  if (!Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.c_str(), updateMask.c_str())) {
     Serial.printf("  - Error al enviar estado: %s\n", fbdo.errorReason().c_str());
   }
 }
+
 
 // Función de callback para el estado del token
 void tokenStatusCallback(TokenInfo info) {

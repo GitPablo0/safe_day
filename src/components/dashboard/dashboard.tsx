@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface AlarmState {
   isArmed: boolean;
   soundDetected: boolean;
+  alarmDuration: number;
 }
 
 export function Dashboard() {
@@ -44,7 +45,6 @@ export function Dashboard() {
   useEffect(() => {
     if (alarmState?.isArmed && alarmState?.soundDetected) {
       toast({
-        variant: 'destructive',
         title: '¡Alarma Activada!',
         description: 'Se ha detectado un sonido fuerte.',
       });
@@ -85,6 +85,7 @@ export function Dashboard() {
         <AlarmControlsCard
           isArmed={alarmState?.isArmed ?? false}
           isDeviceConnected={!!alarmState}
+          initialDuration={alarmState?.alarmDuration ?? 10}
         />
       </div>
 

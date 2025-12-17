@@ -7,6 +7,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 interface AlarmStateUpdate {
   isArmed?: boolean;
   soundDetected?: boolean;
+  alarmDuration?: number;
 }
 
 /**
@@ -20,7 +21,9 @@ export function updateAlarmState(firestore: Firestore, userId: string, data: Ala
   const docRef = doc(firestore, `users/${userId}/soundAlarm/state`);
 
   const updateData = { ...data };
-  if (updateData.isArmed === true || updateData.isArmed === false) {
+  
+  // When arming/disarming, always reset sound detection state.
+  if (data.isArmed === true || data.isArmed === false) {
     updateData.soundDetected = false;
   }
 

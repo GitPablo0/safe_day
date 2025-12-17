@@ -1,134 +1,20 @@
-/**
- * This ruleset enforces a strict user-ownership security model for the NeuroSense Dashboard application.
- *
- * Core Philosophy:
- * The fundamental principle is that users have complete control over their own data and no access to anyone else's.
- * All operations are scoped to the currently authenticated user, ensuring strong data privacy and isolation.
- *
- * Data Structure:
- * The Firestore structure is hierarchical. All user-specific data, including their profile and threshold
- * configurations, is nested under a top-level `users` collection, keyed by the user's unique authentication ID (UID).
- *   - /users/{userId} -> UserProfile document
- *   - /users/{userId}/thresholdConfigurations/{configId} -> User's configuration documents
- *
- * Key Security Decisions:
- * - User Listing Disabled: To protect user privacy, querying the top-level `/users` collection is explicitly disallowed.
- * - Strict Path-Based Access: All rules leverage the `{userId}` wildcard in the path, ensuring that a user's
- *   requests are confined to their own data tree.
- * - Authorization-Critical Fields: Rules validate that internal ID fields (`id` in UserProfile, `userId` in
- *   ThresholdConfiguration) match the document path on creation and are immutable on update. This maintains
- *   relational integrity and prevents documents from being "moved" between users.
- *
- * Denormalization for Authorization:
- * The `ThresholdConfiguration` documents contain a denormalized `userId` field. This is a deliberate design choice
- * that allows security rules to verify ownership directly from the document being accessed, without needing a slow
- * and costly `get()` call to the parent `UserProfile` document. This makes rules faster, cheaper, and more reliable.
- *
- * Structural Segregation:
- * The use of a user-specific subcollection (`/thresholdConfigurations`) for settings provides a clear and secure
- * boundary. This simplifies rule logic, as any document within this subcollection inherently belongs to the user
- * defined in the path.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions for reusable logic
-    // ===================================
-
-    /**
-     * Checks if the request is from an authenticated user.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * Checks if the authenticated user is the owner of the document based on the path's userId.
-     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /**
-     * Checks if the authenticated user is the owner of an EXISTING document.
-     * Crucial for preventing updates or deletes on non-existent documents.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * Validates that the incoming UserProfile document has an 'id' field that
-     * correctly matches the user's auth UID. Enforces relational integrity on creation.
-     */
-    function hasValidUserProfileData(userId) {
-      return request.resource.data.id == userId;
-    }
-
-    /**
-     * Ensures the UserProfile 'id' field cannot be changed after creation.
-     */
-    function isImmutableUser() {
-      return request.resource.data.id == resource.data.id;
-    }
-
-    /**
-     * Validates that the incoming ThresholdConfiguration has a 'userId' field that
-     * correctly matches the parent user's auth UID. Enforces ownership on creation.
-     */
-    function hasValidThresholdConfigData(userId) {
-      return request.resource.data.userId == userId;
-    }
-
-    /**
-     * Ensures the ThresholdConfiguration 'userId' field cannot be changed after creation.
-     */
-    function isImmutableThresholdConfig() {
-      return request.resource.data.userId == resource.data.userId;
-    }
-
-
-    // Collection Rules
-    // ================
-
-    /**
-     * @description Controls access to a user's own profile document.
-     * @path /users/{userId}
-     * @allow (get) A signed-in user reads their own profile: `db.collection('users').doc('my-uid').get()`
-     * @allow (create) A new user creates their own profile document for the first time.
-     * @deny (list) A user tries to list all documents in the `/users` collection.
-     * @deny (update) A user tries to update another user's profile.
-     * @principle Restricts access to a user's own data tree and prevents enumeration of all users.
-     */
     match /users/{userId} {
-      // READS
-      allow get: if isOwner(userId);
-      allow list: if false; // Critically important: prevents listing all users.
+      allow read, write: if isOwner(userId);
 
-      // WRITES
-      allow create: if isOwner(userId) && hasValidUserProfileData(userId);
-      allow update: if isExistingOwner(userId) && isImmutableUser();
-      allow delete: if isExistingOwner(userId);
-
-      /**
-       * @description Controls access to a user's environmental threshold configurations.
-       * @path /users/{userId}/thresholdConfigurations/{thresholdConfigurationId}
-       * @allow (list) A signed-in user lists their own configurations: `db.collection('users/my-uid/thresholdConfigurations').get()`
-       * @allow (create) A signed-in user creates a new configuration for themselves.
-       * @deny (get) A user tries to read a configuration belonging to another user.
-       * @deny (create) A user tries to create a configuration under another user's profile.
-       * @principle Enforces document ownership for all operations within a user-specific subcollection.
-       */
-      match /thresholdConfigurations/{thresholdConfigurationId} {
-        // READS
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
-
-        // WRITES
-        allow create: if isOwner(userId) && hasValidThresholdConfigData(userId);
-        allow update: if isExistingOwner(userId) && isImmutableThresholdConfig();
-        allow delete: if isExistingOwner(userId);
+      match /soundAlarm/state {
+        allow read, write: if isOwner(userId);
       }
     }
   }

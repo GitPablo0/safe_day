@@ -1,132 +1,52 @@
 {
   "entities": {
-    "ThresholdConfiguration": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ThresholdConfiguration",
+    "SoundAlarmState": {
+      "title": "Sound Alarm State",
+      "description": "Represents the state and configuration of the sound alarm system for a user.",
       "type": "object",
-      "description": "Represents the configuration settings for the environmental stress detection system.",
       "properties": {
-        "id": {
+        "isArmed": {
+          "type": "boolean",
+          "description": "Indicates if the alarm system is currently armed and listening for sound."
+        },
+        "soundDetected": {
+          "type": "boolean",
+          "description": "True if the sound sensor has detected a sound that crossed the threshold."
+        },
+        "alarmDuration": {
+          "type": "number",
+          "description": "Duration in seconds for the buzzer/LED to stay active when triggered."
+        },
+        "lastStatusUpdate": {
           "type": "string",
-          "description": "Unique identifier for the ThresholdConfiguration entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N ThresholdConfiguration)"
-        },
-        "soundThresholdLow": {
-          "type": "number",
-          "description": "The lower threshold for sound level detection, below which the system considers the environment calm."
-        },
-        "soundThresholdMedium": {
-          "type": "number",
-          "description": "The medium threshold for sound level detection, above which the system considers the environment moderately stressful."
-        },
-        "temperatureThresholdGreen": {
-          "type": "number",
-          "description": "The temperature threshold (°C) for the 'green' (safe) zone."
-        },
-        "temperatureThresholdOrange": {
-          "type": "number",
-          "description": "The temperature threshold (°C) for the 'orange' (warning) zone."
-        },
-        "redLightBlockDuration": {
-          "type": "number",
-          "description": "Duration in milliseconds for how long the red light will be active given a high stress environment."
-        },
-        "orangeLightBlockDuration": {
-          "type": "number",
-          "description": "Duration in milliseconds for how long the orange light will be active given a medium stress environment."
-        },
-        "timeBetweenEvents": {
-          "type": "number",
-          "description": "Duration in milliseconds between stress events before counting stress level again."
+          "format": "date-time",
+          "description": "The timestamp of the last status update from the device."
         }
       },
-      "required": [
-        "id",
-        "userId",
-        "soundThresholdLow",
-        "soundThresholdMedium",
-        "temperatureThresholdGreen",
-        "temperatureThresholdOrange",
-        "redLightBlockDuration",
-        "orangeLightBlockDuration",
-        "timeBetweenEvents"
-      ]
-    },
-    "UserProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UserProfile",
-      "type": "object",
-      "description": "Represents a user profile within the NeuroSense Dashboard application.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the UserProfile entity."
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address.",
-          "format": "email"
-        },
-        "name": {
-          "type": "string",
-          "description": "The user's display name."
-        }
-      },
-      "required": [
-        "id",
-        "email",
-        "name"
-      ]
+      "required": ["isArmed", "soundDetected", "alarmDuration"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["email-and-password"]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}",
+        "path": "/users/{userId}/soundAlarm/state",
         "definition": {
-          "entityName": "UserProfile",
+          "entityName": "SoundAlarmState",
           "schema": {
-            "$ref": "#/backend/entities/UserProfile"
+            "$ref": "#/backend/entities/SoundAlarmState"
           },
-          "description": "Stores user profile information.  The userId parameter is the Firebase Auth UID.",
+          "description": "Singleton document for each user to hold the current state and configuration of their sound alarm.",
           "params": [
             {
               "name": "userId",
               "description": "The Firebase Auth UID of the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}",
-        "definition": {
-          "entityName": "ThresholdConfiguration",
-          "schema": {
-            "$ref": "#/backend/entities/ThresholdConfiguration"
-          },
-          "description": "Stores threshold configurations for each user. Includes denormalized 'userId' for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The Firebase Auth UID of the user."
-            },
-            {
-              "name": "thresholdConfigurationId",
-              "description": "The unique identifier for the threshold configuration."
             }
           ]
         }
       }
-    ],
-    "reasoning": "This Firestore data structure is designed to manage user profiles and their associated threshold configurations for the NeuroSense Dashboard application. It prioritizes authorization independence, clarity, and scalability, following the design principles outlined.\n\n**Authorization Independence:**\n-   The `ThresholdConfiguration` subcollection includes the `userId` field, denormalizing the user association. This enables direct security rules based on `request.auth.uid` without requiring `get()` calls to the parent `UserProfile` document. This is crucial for atomic operations (transactions/batches) when creating or updating configurations.\n\n**Structural Segregation:**\n-   The data is segregated based on ownership. User profiles are stored under `/users/{userId}`, and each user's threshold configurations are stored in the `/users/{userId}/thresholdConfigurations/{thresholdConfigurationId}` subcollection. This ensures that security rules can be applied consistently at each level.\n\n**Access Modeling:**\n-   Path-based ownership is used for both `UserProfile` and `ThresholdConfiguration` entities. This allows direct access control based on the user's ID. Users can only access their own profiles and configurations.\n\n**QAPs Support:**\n-   The segregation strategy ensures secure list operations. Rules can efficiently filter configurations based on the `userId` without needing to inspect document contents.\n\n**Invariants:**\n-   The structure supports ownership integrity, as the `userId` field in `ThresholdConfiguration` explicitly links back to the user profile. This link can be enforced through security rules, ensuring that each configuration belongs to a valid user.\n\n**Denormalization Explanation:**\nAuthorization independence is achieved by including the `userId` within the `ThresholdConfiguration` documents. Without this denormalization, security rules would need to perform a `get()` operation on the parent `UserProfile` document to verify ownership. This `get()` operation would break the atomicity of operations, complicate security rules, and increase read costs. By including `userId` directly in the `ThresholdConfiguration`, security rules can immediately verify that the requesting user (`request.auth.uid`) matches the `userId` in the document, enabling secure and efficient access control."
+    ]
   }
 }

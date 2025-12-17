@@ -43,7 +43,7 @@ export function AlarmStatusCard({
     if (isArmed && soundDetected) {
       return {
         text: '¡Bebé llorando!',
-        color: 'text-destructive',
+        color: 'text-primary',
         Icon: CryingBabyIcon,
         pulse: true,
       };
@@ -78,7 +78,7 @@ export function AlarmStatusCard({
         <div
           className={cn(
             'relative flex h-32 w-32 items-center justify-center rounded-full',
-            status.pulse && 'animate-pulse bg-destructive/20'
+            status.pulse && 'animate-pulse bg-primary/20'
           )}
         >
           <status.Icon className={cn('h-16 w-16', status.color)} />

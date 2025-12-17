@@ -143,7 +143,7 @@ void loop() {
         soundDetectedTimestamp = currentMillis; // Iniciar temporizador
         // Al detectar sonido, también se actualiza el timestamp en Firebase
         // para que el contador de la App Web inicie sincronizado.
-        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true},\"lastArmedTimestamp\":{\"timestampValue\":\"" + String(Firebase.getCurrentTime()) + "\"}}}";
+        String content = "{\"fields\":{\"soundDetected\":{\"booleanValue\":true},\"lastArmedTimestamp\":{\"timestampValue\":\"" + Firebase.getISO8601Time(0) + "\"}}}";
         sendFirestoreUpdate(content, "soundDetected,lastArmedTimestamp");
         lastSoundDetectedTime = currentMillis;
     }

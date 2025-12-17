@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, Timestamp } from 'firebase/firestore';
 import { useDoc } from '@/firebase/firestore/use-doc';
 
 import { AlarmStatusCard } from './alarm-status-card';
@@ -16,6 +16,7 @@ export interface AlarmState {
   isArmed: boolean;
   soundDetected: boolean;
   alarmDuration: number;
+  lastArmedTimestamp?: Timestamp;
 }
 
 export function Dashboard() {
@@ -81,6 +82,8 @@ export function Dashboard() {
         <AlarmStatusCard
           isArmed={alarmState?.isArmed ?? false}
           soundDetected={alarmState?.soundDetected ?? false}
+          alarmDuration={alarmState?.alarmDuration ?? 0}
+          lastArmedTimestamp={alarmState?.lastArmedTimestamp}
         />
         <AlarmControlsCard
           isArmed={alarmState?.isArmed ?? false}

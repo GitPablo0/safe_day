@@ -160,8 +160,8 @@ void checkTimer() {
       Serial.printf("Temporizador de %d minutos finalizado. Desarmando alarma.\n", alarmDurationMinutes);
       isArmed = false;
       armingTimestamp = 0; // Resetear el temporizador
-      String content = "{\"fields\":{\"isArmed\":{\"booleanValue\":false},\"soundDetected\":{\"booleanValue\":false}}}";
-      sendFirestoreUpdate(content, "isArmed,soundDetected");
+      String content = "{\"fields\":{\"isArmed\":{\"booleanValue\":false},\"soundDetected\":{\"booleanValue\":false},\"lastArmedTimestamp\":{\"nullValue\":null}}}";
+      sendFirestoreUpdate(content, "isArmed,soundDetected,lastArmedTimestamp");
       digitalWrite(LED_ROJO_PIN, LOW); // Apagar LED de detección
     }
   }

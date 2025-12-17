@@ -1,6 +1,6 @@
 'use client';
 
-import { doc, setDoc, Firestore } from 'firebase/firestore';
+import { doc, setDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -8,6 +8,7 @@ interface AlarmStateUpdate {
   isArmed?: boolean;
   soundDetected?: boolean;
   alarmDuration?: number;
+  lastArmedTimestamp?: any;
 }
 
 /**
@@ -20,12 +21,16 @@ interface AlarmStateUpdate {
 export function updateAlarmState(firestore: Firestore, userId: string, data: AlarmStateUpdate) {
   const docRef = doc(firestore, `users/${userId}/soundAlarm/state`);
 
-  const updateData = { ...data };
+  const updateData: AlarmStateUpdate = { ...data };
   
-  // When arming/disarming, always reset sound detection state.
-  if (data.isArmed === true || data.isArmed === false) {
+  if (data.isArmed === true) {
     updateData.soundDetected = false;
+    updateData.lastArmedTimestamp = serverTimestamp(); // Set timestamp when arming
+  } else if (data.isArmed === false) {
+    updateData.soundDetected = false;
+    updateData.lastArmedTimestamp = null; // Clear timestamp when disarming
   }
+
 
   setDoc(docRef, updateData, { merge: true }).catch((error) => {
     const permissionError = new FirestorePermissionError({

@@ -1,12 +1,16 @@
 'use client';
 
-import { Volume2, VolumeX } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Timestamp } from 'firebase/firestore';
+import { VolumeX, Timer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface AlarmStatusCardProps {
   isArmed: boolean;
   soundDetected: boolean;
+  alarmDuration: number; // in minutes
+  lastArmedTimestamp?: Timestamp;
 }
 
 function CryingBabyIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -34,11 +38,47 @@ function CryingBabyIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+const formatTime = (timeInSeconds: number): string => {
+  if (timeInSeconds < 0) return '00:00';
+  const minutes = Math.floor(timeInSeconds / 60);
+  const seconds = timeInSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
 
 export function AlarmStatusCard({
   isArmed,
   soundDetected,
+  alarmDuration,
+  lastArmedTimestamp,
 }: AlarmStatusCardProps) {
+  const [remainingTime, setRemainingTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isArmed && lastArmedTimestamp && alarmDuration > 0) {
+      interval = setInterval(() => {
+        const armedAt = lastArmedTimestamp.toDate();
+        const now = new Date();
+        const endTime = new Date(armedAt.getTime() + alarmDuration * 60 * 1000);
+        const diffInSeconds = Math.round((endTime.getTime() - now.getTime()) / 1000);
+        
+        if (diffInSeconds >= 0) {
+          setRemainingTime(formatTime(diffInSeconds));
+        } else {
+          setRemainingTime('00:00');
+          if (interval) clearInterval(interval);
+        }
+      }, 1000);
+    } else {
+        setRemainingTime(null);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isArmed, lastArmedTimestamp, alarmDuration]);
+
   const getStatus = () => {
     if (isArmed && soundDetected) {
       return {
@@ -50,9 +90,9 @@ export function AlarmStatusCard({
     }
     if (isArmed) {
       return {
-        text: 'Escuchando',
+        text: remainingTime ? 'Tiempo Restante' : 'Escuchando',
         color: 'text-primary',
-        Icon: Volume2,
+        Icon: Timer,
         pulse: false,
       };
     }
@@ -83,9 +123,11 @@ export function AlarmStatusCard({
         >
           <status.Icon className={cn('h-16 w-16', status.color)} />
         </div>
-        <p className={cn('text-2xl font-bold', status.color)}>
-          {status.text}
-        </p>
+        {isArmed && remainingTime ? (
+            <p className="text-4xl font-bold tabular-nums text-primary">{remainingTime}</p>
+        ) : (
+            <p className={cn('text-2xl font-bold', status.color)}>{status.text}</p>
+        )}
       </CardContent>
     </Card>
   );

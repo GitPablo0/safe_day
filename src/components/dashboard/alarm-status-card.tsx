@@ -1,6 +1,6 @@
 'use client';
 
-import { Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,32 @@ interface AlarmStatusCardProps {
   soundDetected: boolean;
 }
 
+function CryingBabyIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2" />
+      <path d="M8 14c.5-1 2-2 4-2s3.5 1 4 2" />
+      <path d="M9 9h.01" />
+      <path d="M15 9h.01" />
+      <path d="M17.5 16.5a2.5 2.5 0 0 1-5 0" />
+      <path d="M8.5 18H6.5a2 2 0 0 1-2-2v-1.5" />
+      <path d="M17.5 14.5V16a2 2 0 0 1-2 2h-2" />
+    </svg>
+  );
+}
+
+
 export function AlarmStatusCard({
   isArmed,
   soundDetected,
@@ -16,9 +42,9 @@ export function AlarmStatusCard({
   const getStatus = () => {
     if (isArmed && soundDetected) {
       return {
-        text: '¡SONIDO DETECTADO!',
+        text: '¡Bebé llorando!',
         color: 'text-destructive',
-        Icon: BellRing,
+        Icon: CryingBabyIcon,
         pulse: true,
       };
     }

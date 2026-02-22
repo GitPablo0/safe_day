@@ -1,154 +1,58 @@
 {
   "entities": {
-    "UserProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UserProfile",
-      "type": "object",
-      "description": "Represents a user's profile within the NeuroSense Dashboard application, linked to an external authentication system. This entity stores non-authentication related user information.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the UserProfile entity, typically matching the external authentication system's user ID. (Primary Key)"
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address.",
-          "format": "email"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "The user's display name or preferred name."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the user profile was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the user profile was last updated.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "email",
-        "displayName",
-        "createdAt",
-        "updatedAt"
-      ]
-    },
-    "Device": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Device",
-      "type": "object",
-      "description": "Represents an individual ESP32 device managed by the NeuroSense Dashboard, used for monitoring environmental stress factors.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Device entity. (Primary Key)"
-        },
-        "name": {
-          "type": "string",
-          "description": "A user-friendly name for the device (e.g., 'Living Room Sensor' or 'Bedroom Device')."
-        },
-        "description": {
-          "type": "string",
-          "description": "An optional detailed description of the device's location, purpose, or specific characteristics."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the UserProfile who owns or manages this device. (Relationship: UserProfile 1:N Device)"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the device was registered in the system.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the device information was last updated.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "userId",
-        "createdAt",
-        "updatedAt"
-      ]
-    },
     "DeviceConfiguration": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "DeviceConfiguration",
       "type": "object",
-      "description": "Stores the configurable parameters and thresholds for a specific NeuroSense ESP32 device, defining how it reacts to environmental stimuli (sound, temperature) and activates LED sequences.",
+      "description": "Stores the configurable thresholds and timing parameters for the NeuroSense device, allowing users to customize its behavior for stress detection and LED activation.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the DeviceConfiguration entity. (Primary Key)"
-        },
-        "deviceId": {
-          "type": "string",
-          "description": "Reference to the Device to which this configuration applies. (Relationship: Device 1:N DeviceConfiguration)"
+          "description": "Unique identifier for the DeviceConfiguration entity."
         },
         "soundThresholdLow": {
           "type": "number",
-          "description": "The sound level threshold (analog reading units) below which the environment is considered 'green'. Corresponds to UMBRAL_BAJO in the Arduino code."
+          "description": "The raw analog sound sensor value threshold below which the environment is considered 'green' (low stress). Corresponds to UMBRAL_BAJO in the Arduino code."
         },
         "soundThresholdMedium": {
           "type": "number",
-          "description": "The sound level threshold (analog reading units) below which the environment is considered 'orange' but above 'green'. Corresponds to UMBRAL_MEDIO in the Arduino code."
+          "description": "The raw analog sound sensor value threshold below which the environment is considered 'orange' (medium stress), and above 'green'. Corresponds to UMBRAL_MEDIO in the Arduino code."
         },
         "temperatureThresholdGreen": {
           "type": "number",
-          "description": "The temperature threshold (in Celsius) below which the environment is considered 'green'. Corresponds to TEMP_VERDE in the Arduino code."
+          "description": "The temperature threshold (in Celsius) below which the environment is considered 'green' (low stress). Corresponds to TEMP_VERDE in the Arduino code."
         },
         "temperatureThresholdOrange": {
           "type": "number",
-          "description": "The temperature threshold (in Celsius) below which the environment is considered 'orange' but above 'green'. Corresponds to TEMP_NARANJA in the Arduino code."
+          "description": "The temperature threshold (in Celsius) below which the environment is considered 'orange' (medium stress), and above 'green'. Corresponds to TEMP_NARANJA in the Arduino code."
         },
-        "redLedLockoutDurationMs": {
+        "redLedBlockDurationMs": {
           "type": "number",
-          "description": "The duration (in milliseconds) for which the red LED remains lit after repeated strong noise events, indicating a high-stress environment. Corresponds to BLOQUEO_ROJO_DURACION."
+          "description": "The duration (in milliseconds) for which the red LED remains fixed after repeated strong noise events, indicating a prolonged high-stress state. Corresponds to BLOQUEO_ROJO_DURACION in the Arduino code."
         },
-        "orangeLedLockoutDurationMs": {
+        "orangeLedBlockDurationMs": {
           "type": "number",
-          "description": "The duration (in milliseconds) for which the orange LED remains lit after repeated medium noise events, indicating a moderate-stress environment. Corresponds to BLOQUEO_NARANJA_DURACION."
+          "description": "The duration (in milliseconds) for which the orange LED remains fixed after repeated medium noise events, indicating a prolonged medium-stress state. Corresponds to BLOQUEO_NARANJA_DURACION in the Arduino code."
         },
-        "eventIntervalMs": {
+        "soundEventIntervalMs": {
           "type": "number",
-          "description": "The time interval (in milliseconds) within which consecutive strong or medium noise events are counted to trigger a lockout. Corresponds to TIEMPO_ENTRE_EVENTOS."
+          "description": "The maximum time (in milliseconds) between consecutive sound events for them to be counted as 'repeated' for the purpose of triggering LED blocks. Corresponds to TIEMPO_ENTRE_EVENTOS in the Arduino code."
         },
         "dhtReadIntervalMs": {
           "type": "number",
-          "description": "The interval (in milliseconds) at which the DHT sensor reads temperature and humidity data. Corresponds to INTERVALO_DHT."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when this specific device configuration was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when this device configuration was last updated.",
-          "format": "date-time"
+          "description": "The interval (in milliseconds) at which the DHT sensor (temperature and humidity) readings are performed. Corresponds to INTERVALO_DHT in the Arduino code."
         }
       },
       "required": [
         "id",
-        "deviceId",
         "soundThresholdLow",
         "soundThresholdMedium",
         "temperatureThresholdGreen",
         "temperatureThresholdOrange",
-        "redLedLockoutDurationMs",
-        "orangeLedLockoutDurationMs",
-        "eventIntervalMs",
-        "dhtReadIntervalMs",
-        "createdAt",
-        "updatedAt"
+        "redLedBlockDurationMs",
+        "orangeLedBlockDurationMs",
+        "soundEventIntervalMs",
+        "dhtReadIntervalMs"
       ]
     }
   },
@@ -161,66 +65,22 @@
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "UserProfile",
-          "schema": {
-            "$ref": "#/backend/entities/UserProfile"
-          },
-          "description": "Stores individual user profile information. The document ID (`{userId}`) corresponds to the authenticated user's UID. Access is restricted to the owner.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user, matching `request.auth.uid`."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/devices/{deviceId}",
-        "definition": {
-          "entityName": "Device",
-          "schema": {
-            "$ref": "#/backend/entities/Device"
-          },
-          "description": "Stores information about an ESP32 device owned by a specific user. Includes denormalized 'userId' field for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who owns this device, matching `request.auth.uid`."
-            },
-            {
-              "name": "deviceId",
-              "description": "The unique identifier for the device."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/devices/{deviceId}/configurations/{configurationId}",
+        "path": "/users/{userId}/deviceConfiguration/default",
         "definition": {
           "entityName": "DeviceConfiguration",
           "schema": {
             "$ref": "#/backend/entities/DeviceConfiguration"
           },
-          "description": "Stores the configurable parameters and thresholds for a specific device. Each document MUST include denormalized 'userId' (owner's ID) and 'deviceId' (parent device's ID) fields for authorization independence.",
+          "description": "Stores the single, default device configuration for a specific user. The 'id' field within the document should be 'default'. Includes 'userId' in the path for direct authorization via security rules.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier of the user who owns the parent device, matching `request.auth.uid`."
-            },
-            {
-              "name": "deviceId",
-              "description": "The unique identifier of the parent device."
-            },
-            {
-              "name": "configurationId",
-              "description": "The unique identifier for this specific device configuration."
+              "description": "The unique identifier of the user who owns this device configuration."
             }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to be secure, scalable, and highly debuggable by adhering strictly to the core design principles. It primarily utilizes a hierarchical, path-based ownership model, which is the most robust strategy for user-owned data.\n\n**Authorization Independence (CRITICAL):**\n1.  **UserProfile (`/users/{userId}`):** Authorization for user profiles is inherently independent. The document ID (`{userId}`) directly matches the authenticated user's UID (`request.auth.uid`), eliminating the need for any `get()` operations in security rules. The `id` field within the `UserProfile` document also matches this `userId` for further clarity and rule robustness.\n2.  **Device (`/users/{userId}/devices/{deviceId}`):** Each `Device` document explicitly includes a `userId` field, referencing its owner. This `userId` field is denormalized from the owning `UserProfile`. Security rules for devices can directly check `request.auth.uid == resource.data.userId` without needing to perform a `get()` operation on the parent `UserProfile` document. The path itself (`/users/{userId}/devices/{deviceId}`) further reinforces this, allowing rules to also check `request.auth.uid == userId` (from the path wildcard).\n3.  **DeviceConfiguration (`/users/{userId}/devices/{deviceId}/configurations/{configurationId}`):** To achieve authorization independence for device configurations, each `DeviceConfiguration` document **MUST** denormalize the `userId` (owner's ID) and `deviceId` (parent device's ID) from its parent `Device`. This critical denormalization allows security rules to directly evaluate `request.auth.uid == resource.data.userId` and `deviceId == resource.data.deviceId` (from path wildcard) without any `get()` calls to the parent `Device` or `UserProfile` documents. This ensures atomic operations (e.g., creating a configuration) are secure and prevents complex, error-prone rule dependencies.\n\n**QAPs (Rules are not Filters):**\n1.  **Structural Segregation:** All documents within a given collection path (`/users/{userId}`, `/users/{userId}/devices`, `/users/{userId}/devices/{deviceId}/configurations`) share a homogeneous security posture. There is no mixing of public and private data in the same collection, simplifying security rules significantly.\n2.  **Path-Based Scoping:** The hierarchical paths inherently enforce data ownership. When a user queries `db.collection('users').doc(auth.currentUser.uid).collection('devices')`, the query is naturally scoped to only the devices owned by that specific user. The security rules then only need to verify that `request.auth.uid` matches the `{userId}` wildcard in the path, making it impossible for a user to inadvertently or maliciously query data outside their authorized scope.\n3.  **Denormalized Fields:** The denormalized `userId` and `deviceId` fields in `Device` and `DeviceConfiguration` documents, respectively, provide an additional layer of explicit data ownership. Even if a client somehow constructs an illegitimate query (which the path-based rules should prevent), these fields allow rules to quickly and efficiently validate ownership without requiring complex data fetches, ensuring that rules remain expressive and performant. This design makes `list` operations secure and prevents rules from acting as data filters, upholding the QAP principle."
+    "reasoning": "The recommended Firestore structure prioritizes Authorization Independence and Structural Segregation to ensure secure, scalable, and debuggable rules. Each user will have their own dedicated device configuration stored under their unique user ID.\n\n**Authorization Independence (Strategy A):** The core principle is achieved by placing the `DeviceConfiguration` document directly within a subcollection of the owning user's document. The path `/users/{userId}/deviceConfiguration/default` explicitly includes the `userId` as a path parameter. This denormalizes the ownership information directly into the document's path. Consequently, Firestore security rules for accessing a `DeviceConfiguration` document can directly compare `request.auth.uid` with the `{userId}` wildcard in the path, eliminating the need for expensive and complex `get()` calls to a parent user document. This enables atomic operations and simplifies rule debugging.\n\n**Structural Segregation (Strategy B):** All documents within a user's `deviceConfiguration` subcollection (in this case, only the 'default' document) share the same security posture: only the owner (`userId`) can read or write. This prevents mixing data with different access requirements in the same collection, making security rules straightforward and easier to reason about.\n\n**QAPs (Rules are not Filters):** By using path-based ownership, `list` operations become inherently secure. A user would query `/users/{request.auth.uid}/deviceConfiguration` to retrieve their configuration. The security rules can then easily enforce that `request.auth.uid` matches the `{userId}` in the path, ensuring that users can only list *their own* configurations and not accidentally access or filter others' data. This avoids inefficient and insecure queries where rules act as filters rather than enforcers."
   }
 }

@@ -1,95 +1,94 @@
+/**
+ * FIRESTORE SECURITY RULES
+ * 
+ * CORE PHILOSOPHY:
+ * This ruleset enforces a strict user-ownership model designed for the NeuroSense device ecosystem.
+ * Security is rooted in the path structure, ensuring that users can only access and modify
+ * their own device configurations.
+ * 
+ * DATA STRUCTURE:
+ * The primary data hierarchy is user-centric: /users/{userId}/deviceConfiguration/{configId}.
+ * This structure leverages Firestore's path-based authorization to provide high performance
+ * and clear isolation between user data.
+ * 
+ * KEY SECURITY DECISIONS:
+ * 1. Authorization Independence: By including the {userId} in the document path, we eliminate 
+ *    the need for cross-document lookups (get() calls), making rules faster and more reliable.
+ * 2. Structural Segregation: Device configurations are stored in private subcollections 
+ *    belonging to specific users. There are no public or shared configuration paths.
+ * 3. Prototyping Flexibility: While authorization is strictly enforced (who can access what), 
+ *    the specific schema of the configuration data is not enforced to allow for rapid 
+ *    hardware/firmware iteration without rule changes.
+ * 
+ * DENORMALIZATION FOR AUTHORIZATION:
+ * The system uses path-based denormalization. The owner's identity is encoded directly 
+ * into the URI of the resource, allowing for O(1) authorization checks using 
+ * the 'isOwner' helper function.
+ */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- GLOBAL HELPER FUNCTIONS ---
+
     /**
-     * NEUROSENSE DASHBOARD SECURITY RULES
-     *
-     * CORE PHILOSOPHY:
-     * This ruleset enforces a strict User-Ownership model. Access to data is gated by the 
-     * authenticated user's UID, which is embedded directly into the document paths.
-     *
-     * DATA STRUCTURE:
-     * Data is organized hierarchically: /users/{userId} -> devices -> configurations.
-     * This structure ensures that a user's data is naturally partitioned and easily 
-     * secured via path-based wildcards.
-     *
-     * KEY SECURITY DECISIONS:
-     * 1. No Public Access: All read and write operations require authentication.
-     * 2. Path-Based Scoping: Users can only list or get documents within their own /users/{userId} tree.
-     * 3. Denormalization for Authorization: To maintain high performance and avoid costly 
-     *    cross-document lookups (get() calls), ownership fields (userId) and relational 
-     *    links (deviceId) are required to be stored directly on child documents.
-     * 4. Structural Segregation: All collections are private by default. There are no 
-     *    shared or public collections in this current iteration.
-     *
-     * PROTOTYPING MODE:
-     * These rules prioritize strict authorization (who can access) while remaining flexible 
-     * on the specific data schema (what is stored) to facilitate rapid development.
+     * @description Checks if the request is made by an authenticated user.
      */
-
-    // --- Helper Functions ---
-
-    /** @description Checks if the user is authenticated with Firebase Auth. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user's UID matches the provided userId. */
+    /**
+     * @description Checks if the authenticated user's UID matches the provided userId.
+     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Checks ownership and ensures the document exists for state-changing operations. */
+    /**
+     * @description Combines ownership check with a check for the document's existence.
+     * Used for update and delete operations to ensure state-changing requests are valid.
+     */
     function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
+      return isOwner(userId) && resource != null;
     }
 
-    // --- Collection Rules ---
+    // --- COLLECTION RULES ---
 
     /**
-     * @description Rules for UserProfile documents. Restricts access to the profile owner.
+     * @description Rules for the root user document. 
      * @path /users/{userId}
-     * @allow (create) User 'abc' creating a document at /users/abc.
-     * @deny (get) User 'abc' attempting to read /users/xyz.
-     * @principle Enforces path-based ownership and relational integrity for the root user document.
+     * @allow Authenticated user (userId) can create and manage their own profile document.
+     * @deny Any user attempting to access or create a profile for a different UID.
+     * @principle Ownership-based access control.
      */
     match /users/{userId} {
       allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if isExistingOwner(userId);
 
       /**
-       * @description Rules for individual ESP32 Devices.
-       * @path /users/{userId}/devices/{deviceId}
-       * @allow (list) User 'abc' querying their own devices collection.
-       * @deny (update) User 'abc' trying to change the 'userId' field to 'xyz'.
-       * @principle Uses denormalized 'userId' field to verify ownership and ensure data consistency.
+       * @description Rules for device configurations (e.g., sound thresholds, LED timings).
+       * @path /users/{userId}/deviceConfiguration/{configId}
+       * @allow User (userId) can create/read/update/delete their 'default' configuration.
+       * @deny Unauthenticated users or users attempting to read/write another user's config.
+       * @principle Relational integrity and path-based authorization.
        */
-      match /devices/{deviceId} {
+      match /deviceConfiguration/{configId} {
         allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && request.resource.data.userId == userId;
-        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+        
+        // On Create: Ensure the user is the owner and the internal ID matches the document ID for consistency.
+        allow create: if isOwner(userId) && request.resource.data.id == configId;
+        
+        // On Update: Ensure the document exists, user is owner, and the internal ID remains immutable.
+        allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+        
         allow delete: if isExistingOwner(userId);
-
-        /**
-         * @description Rules for Device Configurations (thresholds, intervals, etc.).
-         * @path /users/{userId}/devices/{deviceId}/configurations/{configurationId}
-         * @allow (create) User 'abc' adding a config to their device 'dev123'.
-         * @deny (create) User 'abc' adding a config where 'deviceId' in data doesn't match the path.
-         * @principle Ensures deep relational integrity by validating both owner and parent device links.
-         */
-        match /configurations/{configurationId} {
-          allow get, list: if isOwner(userId);
-          allow create: if isOwner(userId) && request.resource.data.userId == userId && request.resource.data.deviceId == deviceId;
-          allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId && request.resource.data.deviceId == resource.data.deviceId;
-          allow delete: if isExistingOwner(userId);
-        }
       }
     }
-
-    // Explicitly deny access to any other collections or paths not defined above.
+    
+    // Default deny for any paths not explicitly matched above.
     match /{path=**} {
       allow read, write: if false;
     }

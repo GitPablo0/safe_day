@@ -1,108 +1,154 @@
 {
   "entities": {
-    "CaregiverProfile": {
+    "UserProfile": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "CaregiverProfile",
+      "title": "UserProfile",
       "type": "object",
-      "description": "Represents a caregiver who manages patient routines within the SafeDay application.",
+      "description": "Represents a user's profile within the NeuroSense Dashboard application, linked to an external authentication system. This entity stores non-authentication related user information.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the CaregiverProfile entity, typically matching the authentication system's user ID."
+          "description": "Unique identifier for the UserProfile entity, typically matching the external authentication system's user ID. (Primary Key)"
         },
         "email": {
           "type": "string",
-          "description": "The email address of the caregiver.",
+          "description": "The user's email address.",
           "format": "email"
         },
-        "name": {
+        "displayName": {
           "type": "string",
-          "description": "The full name of the caregiver."
+          "description": "The user's display name or preferred name."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user profile was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user profile was last updated.",
+          "format": "date-time"
         }
       },
       "required": [
         "id",
         "email",
-        "name"
+        "displayName",
+        "createdAt",
+        "updatedAt"
       ]
     },
-    "Patient": {
+    "Device": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Patient",
+      "title": "Device",
       "type": "object",
-      "description": "Represents a patient with Alzheimer's whose daily routine is managed by a caregiver through the SafeDay app.",
+      "description": "Represents an individual ESP32 device managed by the NeuroSense Dashboard, used for monitoring environmental stress factors.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the Patient entity."
+          "description": "Unique identifier for the Device entity. (Primary Key)"
         },
         "name": {
           "type": "string",
-          "description": "The name of the patient."
+          "description": "A user-friendly name for the device (e.g., 'Living Room Sensor' or 'Bedroom Device')."
         },
-        "caregiverId": {
+        "description": {
           "type": "string",
-          "description": "Reference to CaregiverProfile. Identifies the caregiver managing this patient's routine. (Relationship: CaregiverProfile 1:N Patient)"
+          "description": "An optional detailed description of the device's location, purpose, or specific characteristics."
         },
-        "deviceId": {
+        "userId": {
           "type": "string",
-          "description": "Unique identifier for the physical ESP32 device associated with this patient, used to sync routines."
+          "description": "Reference to the UserProfile who owns or manages this device. (Relationship: UserProfile 1:N Device)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the device was registered in the system.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the device information was last updated.",
+          "format": "date-time"
         }
       },
       "required": [
         "id",
         "name",
-        "caregiverId",
-        "deviceId"
+        "userId",
+        "createdAt",
+        "updatedAt"
       ]
     },
-    "RoutineEvent": {
+    "DeviceConfiguration": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "RoutineEvent",
+      "title": "DeviceConfiguration",
       "type": "object",
-      "description": "Represents a single scheduled activity or reminder within a patient's routine, configured by the caregiver.",
+      "description": "Stores the configurable parameters and thresholds for a specific NeuroSense ESP32 device, defining how it reacts to environmental stimuli (sound, temperature) and activates LED sequences.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the RoutineEvent entity."
+          "description": "Unique identifier for the DeviceConfiguration entity. (Primary Key)"
         },
-        "patientId": {
+        "deviceId": {
           "type": "string",
-          "description": "Reference to Patient. Links this routine event to a specific patient. (Relationship: Patient 1:N RoutineEvent)"
+          "description": "Reference to the Device to which this configuration applies. (Relationship: Device 1:N DeviceConfiguration)"
         },
-        "time": {
-          "type": "string",
-          "description": "The specific time of day (HH:MM:SS) when this routine event should trigger on the device.",
-          "format": "time"
-        },
-        "description": {
-          "type": "string",
-          "description": "A textual description of the activity or reminder (e.g., 'Es hora de merendar')."
-        },
-        "audioTrackNumber": {
+        "soundThresholdLow": {
           "type": "number",
-          "description": "The numerical identifier of the audio track stored on the device's SD card to be played for this event."
+          "description": "The sound level threshold (analog reading units) below which the environment is considered 'green'. Corresponds to UMBRAL_BAJO in the Arduino code."
         },
-        "daysOfWeek": {
-          "type": "array",
-          "description": "An array of strings (e.g., 'monday', 'tuesday') indicating on which days of the week this routine event is active.",
-          "items": {
-            "type": "string"
-          }
+        "soundThresholdMedium": {
+          "type": "number",
+          "description": "The sound level threshold (analog reading units) below which the environment is considered 'orange' but above 'green'. Corresponds to UMBRAL_MEDIO in the Arduino code."
         },
-        "active": {
-          "type": "boolean",
-          "description": "A boolean flag indicating whether this routine event is currently enabled (true) or disabled (false)."
+        "temperatureThresholdGreen": {
+          "type": "number",
+          "description": "The temperature threshold (in Celsius) below which the environment is considered 'green'. Corresponds to TEMP_VERDE in the Arduino code."
+        },
+        "temperatureThresholdOrange": {
+          "type": "number",
+          "description": "The temperature threshold (in Celsius) below which the environment is considered 'orange' but above 'green'. Corresponds to TEMP_NARANJA in the Arduino code."
+        },
+        "redLedLockoutDurationMs": {
+          "type": "number",
+          "description": "The duration (in milliseconds) for which the red LED remains lit after repeated strong noise events, indicating a high-stress environment. Corresponds to BLOQUEO_ROJO_DURACION."
+        },
+        "orangeLedLockoutDurationMs": {
+          "type": "number",
+          "description": "The duration (in milliseconds) for which the orange LED remains lit after repeated medium noise events, indicating a moderate-stress environment. Corresponds to BLOQUEO_NARANJA_DURACION."
+        },
+        "eventIntervalMs": {
+          "type": "number",
+          "description": "The time interval (in milliseconds) within which consecutive strong or medium noise events are counted to trigger a lockout. Corresponds to TIEMPO_ENTRE_EVENTOS."
+        },
+        "dhtReadIntervalMs": {
+          "type": "number",
+          "description": "The interval (in milliseconds) at which the DHT sensor reads temperature and humidity data. Corresponds to INTERVALO_DHT."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when this specific device configuration was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when this device configuration was last updated.",
+          "format": "date-time"
         }
       },
       "required": [
         "id",
-        "patientId",
-        "time",
-        "description",
-        "audioTrackNumber",
-        "daysOfWeek",
-        "active"
+        "deviceId",
+        "soundThresholdLow",
+        "soundThresholdMedium",
+        "temperatureThresholdGreen",
+        "temperatureThresholdOrange",
+        "redLedLockoutDurationMs",
+        "orangeLedLockoutDurationMs",
+        "eventIntervalMs",
+        "dhtReadIntervalMs",
+        "createdAt",
+        "updatedAt"
       ]
     }
   },
@@ -115,58 +161,66 @@
   "firestore": {
     "structure": [
       {
-        "path": "/caregivers/{caregiverId}",
+        "path": "/users/{userId}",
         "definition": {
-          "entityName": "caregiverProfile",
+          "entityName": "UserProfile",
           "schema": {
-            "$ref": "#/backend/entities/CaregiverProfile"
+            "$ref": "#/backend/entities/UserProfile"
           },
-          "description": "Stores the profile information for each caregiver. The 'caregiverId' document ID directly corresponds to the Firebase Authentication UID of the caregiver, ensuring path-based ownership. All documents in this collection are private to their respective caregiver.",
+          "description": "Stores individual user profile information. The document ID (`{userId}`) corresponds to the authenticated user's UID. Access is restricted to the owner.",
           "params": [
             {
-              "name": "caregiverId",
-              "description": "The unique identifier of the caregiver, matching the user's Firebase Authentication UID."
+              "name": "userId",
+              "description": "The unique identifier of the user, matching `request.auth.uid`."
             }
           ]
         }
       },
       {
-        "path": "/patients/{patientId}",
+        "path": "/users/{userId}/devices/{deviceId}",
         "definition": {
-          "entityName": "patient",
+          "entityName": "Device",
           "schema": {
-            "$ref": "#/backend/entities/Patient"
+            "$ref": "#/backend/entities/Device"
           },
-          "description": "Stores patient details. Each document includes 'caregiverId' for caregiver authorization and 'deviceId' for the associated ESP32 device's authorization. This denormalization is critical for Authorization Independence and QAPs, allowing caregivers to query their patients and devices to query their assigned patient.",
+          "description": "Stores information about an ESP32 device owned by a specific user. Includes denormalized 'userId' field for authorization independence.",
           "params": [
             {
-              "name": "patientId",
-              "description": "The unique identifier for the patient."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/patients/{patientId}/routineEvents/{routineEventId}",
-        "definition": {
-          "entityName": "routineEvent",
-          "schema": {
-            "$ref": "#/backend/entities/RoutineEvent"
-          },
-          "description": "Stores individual routine events for a patient. Each document explicitly includes denormalized 'caregiverId' and 'deviceId' fields (copied from the parent Patient) in addition to its 'patientId'. This critical denormalization ensures Authorization Independence, allowing both caregivers and devices to securely access routine events without needing 'get()' operations to parent documents in security rules. Supports QAPs for listing routines specific to a caregiver's patient or a device's assigned patient.",
-          "params": [
-            {
-              "name": "patientId",
-              "description": "The unique identifier of the parent patient."
+              "name": "userId",
+              "description": "The unique identifier of the user who owns this device, matching `request.auth.uid`."
             },
             {
-              "name": "routineEventId",
-              "description": "The unique identifier for the routine event."
+              "name": "deviceId",
+              "description": "The unique identifier for the device."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/devices/{deviceId}/configurations/{configurationId}",
+        "definition": {
+          "entityName": "DeviceConfiguration",
+          "schema": {
+            "$ref": "#/backend/entities/DeviceConfiguration"
+          },
+          "description": "Stores the configurable parameters and thresholds for a specific device. Each document MUST include denormalized 'userId' (owner's ID) and 'deviceId' (parent device's ID) fields for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who owns the parent device, matching `request.auth.uid`."
+            },
+            {
+              "name": "deviceId",
+              "description": "The unique identifier of the parent device."
+            },
+            {
+              "name": "configurationId",
+              "description": "The unique identifier for this specific device configuration."
             }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore structure for the SafeDay application prioritizes security, scalability, and debuggability by strictly adhering to the core design principles. The primary goal is to ensure Authorization Independence (CRITICAL), eliminating the need for `get()` calls in security rules, which simplifies rule logic and supports atomic operations and robust QAPs (Queries Are Not Filters).\n\n1.  **CaregiverProfile (`/caregivers/{caregiverId}`):** This top-level collection stores the profile information for each caregiver. The document ID (`caregiverId`) directly corresponds to the Firebase Authentication UID of the logged-in caregiver (`request.auth.uid`). This provides direct, path-based ownership for profile management.\n\n2.  **Patient (`/patients/{patientId}`):** This is a top-level collection for Patient entities. Each Patient document includes `caregiverId` and `deviceId` fields. This is a crucial denormalization that serves two purposes:\n    *   **Caregiver Authorization:** The `caregiverId` field explicitly links a patient to their managing caregiver. This enables caregivers to securely `list` and manage *their* patients using queries like `where('caregiverId', '==', request.auth.uid)`, directly fulfilling QAPs and Authorization Independence without needing to traverse a parent caregiver path or perform `get()` operations in rules.\n    *   **Device Authorization:** The `deviceId` field explicitly links a patient to their associated ESP32 device. This allows the device (when authenticated as its `deviceId` or a linked UID) to securely `read` its associated patient's data using `where('deviceId', '==', request.auth.uid)`, also ensuring QAPs and Authorization Independence for devices.\n\n3.  **RoutineEvent (`/patients/{patientId}/routineEvents/{routineEventId}`):** This is a subcollection under each `Patient` document. Each `RoutineEvent` document includes `patientId` (from its parent path wildcard), and critically, it **denormalizes** the `caregiverId` and `deviceId` from its parent `Patient` document. This is the most vital denormalization step:\n    *   **Authorization Independence for RoutineEvents:** By having `caregiverId` and `deviceId` directly within each `RoutineEvent` document, security rules can evaluate access requests (read/write by caregiver, read by device) directly against `resource.data.caregiverId` and `resource.data.deviceId` without executing a `get()` call to the parent `Patient` document. This significantly simplifies rules, makes them more robust, and enables atomic creation/updates.\n    *   **QAPs for RoutineEvents:** Both caregivers and devices can perform secure `list` operations for routine events. Caregivers can query `db.collection('patients').doc(patientId).collection('routineEvents').where('caregiverId', '==', request.auth.uid)` and devices can similarly query `db.collection('patients').doc(patientId).collection('routineEvents').where('deviceId', '==', request.auth.uid)`. The `patientId` for the device would be retrieved from its `Patient` document in a prior step.\n\nThis structure ensures that all authorization decisions can be made based on the data present within the requested document itself or its direct ancestors in the path, without cross-document `get()` calls that create dependencies and complexity in security rules. Structural segregation ensures homogeneous security postures within each collection, further simplifying rule logic. Standardized fields like `caregiverId` and `deviceId` make authorization intent explicit and predictable."
+    "reasoning": "The Firestore structure is designed to be secure, scalable, and highly debuggable by adhering strictly to the core design principles. It primarily utilizes a hierarchical, path-based ownership model, which is the most robust strategy for user-owned data.\n\n**Authorization Independence (CRITICAL):**\n1.  **UserProfile (`/users/{userId}`):** Authorization for user profiles is inherently independent. The document ID (`{userId}`) directly matches the authenticated user's UID (`request.auth.uid`), eliminating the need for any `get()` operations in security rules. The `id` field within the `UserProfile` document also matches this `userId` for further clarity and rule robustness.\n2.  **Device (`/users/{userId}/devices/{deviceId}`):** Each `Device` document explicitly includes a `userId` field, referencing its owner. This `userId` field is denormalized from the owning `UserProfile`. Security rules for devices can directly check `request.auth.uid == resource.data.userId` without needing to perform a `get()` operation on the parent `UserProfile` document. The path itself (`/users/{userId}/devices/{deviceId}`) further reinforces this, allowing rules to also check `request.auth.uid == userId` (from the path wildcard).\n3.  **DeviceConfiguration (`/users/{userId}/devices/{deviceId}/configurations/{configurationId}`):** To achieve authorization independence for device configurations, each `DeviceConfiguration` document **MUST** denormalize the `userId` (owner's ID) and `deviceId` (parent device's ID) from its parent `Device`. This critical denormalization allows security rules to directly evaluate `request.auth.uid == resource.data.userId` and `deviceId == resource.data.deviceId` (from path wildcard) without any `get()` calls to the parent `Device` or `UserProfile` documents. This ensures atomic operations (e.g., creating a configuration) are secure and prevents complex, error-prone rule dependencies.\n\n**QAPs (Rules are not Filters):**\n1.  **Structural Segregation:** All documents within a given collection path (`/users/{userId}`, `/users/{userId}/devices`, `/users/{userId}/devices/{deviceId}/configurations`) share a homogeneous security posture. There is no mixing of public and private data in the same collection, simplifying security rules significantly.\n2.  **Path-Based Scoping:** The hierarchical paths inherently enforce data ownership. When a user queries `db.collection('users').doc(auth.currentUser.uid).collection('devices')`, the query is naturally scoped to only the devices owned by that specific user. The security rules then only need to verify that `request.auth.uid` matches the `{userId}` wildcard in the path, making it impossible for a user to inadvertently or maliciously query data outside their authorized scope.\n3.  **Denormalized Fields:** The denormalized `userId` and `deviceId` fields in `Device` and `DeviceConfiguration` documents, respectively, provide an additional layer of explicit data ownership. Even if a client somehow constructs an illegitimate query (which the path-based rules should prevent), these fields allow rules to quickly and efficiently validate ownership without requiring complex data fetches, ensuring that rules remain expressive and performant. This design makes `list` operations secure and prevents rules from acting as data filters, upholding the QAP principle."
   }
 }

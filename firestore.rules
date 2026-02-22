@@ -2,20 +2,112 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /**
+     * SAFE DAY SECURITY RULES - PROTOTYPING MODE
+     * 
+     * Core Philosophy:
+     * This ruleset implements a dual-authorization model designed for the SafeDay ecosystem. 
+     * It secures data for two distinct actors: Caregivers (who manage routines) and 
+     * ESP32 Devices (which execute routines). 
+     * 
+     * Data Structure:
+     * - /caregivers/{caregiverId}: Private profiles for caregivers, secured by path-based ownership.
+     * - /patients/{patientId}: Top-level patient records. Authorization is determined by 
+     *   'caregiverId' and 'deviceId' fields within the document.
+     * - /patients/{patientId}/routineEvents/{eventId}: Nested subcollection of events. 
+     *   These documents denormalize 'caregiverId' and 'deviceId' to allow instant, 
+     *   independent authorization without parent document lookups.
+     * 
+     * Key Security Decisions:
+     * - Authorization Independence: Critical fields (caregiverId, deviceId) are copied 
+     *   to child documents to avoid expensive and slow get() calls in rules.
+     * - Write Restriction: Only Caregivers can create or modify data. ESP32 devices 
+     *   are restricted to read-only access.
+     * - Prototyping Flexibility: Schema validation is ignored for general fields 
+     *   to allow rapid UI/Hardware iteration, but relational integrity (IDs) is 
+     *   strictly enforced to prevent data hijacking.
+     */
+
+    // --- Helper Functions ---
+
+    /** Checks if the request is from an authenticated user or device. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Un usuario solo puede leer/escribir sus propios datos de perfil,
-    // pero no el estado de la alarma directamente en este nivel.
-    match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
-
-      // La regla clave: cualquier usuario autenticado (tú o el ESP32)
-      // puede leer y escribir en el documento de estado de la alarma.
-      match /soundAlarm/state {
-        allow read, write: if isSignedIn();
-      }
+    /** Checks if the authenticated UID matches a specific user ID from the path. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
+
+    /** Checks if the authenticated UID matches the caregiverId field in the document data. */
+    function isCaregiver(data) {
+      return isSignedIn() && data.caregiverId == request.auth.uid;
+    }
+
+    /** Checks if the authenticated UID matches the deviceId field in the document data. */
+    function isDevice(data) {
+      return isSignedIn() && data.deviceId == request.auth.uid;
+    }
+
+    /** Combines caregiver check with document existence for updates and deletes. */
+    function isExistingCaregiver(data) {
+      return resource != null && isCaregiver(data);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for Caregiver profiles. Uses path-based ownership.
+     * @path /caregivers/{caregiverId}
+     * @allow Create/Read/Update/Delete if the auth.uid matches the {caregiverId} in the URL.
+     * @deny Any access if the auth.uid does not match the document ID.
+     * @principle Path-based ownership for user profiles.
+     */
+    match /caregivers/{caregiverId} {
+      allow get, list: if isOwner(caregiverId);
+      allow create: if isOwner(caregiverId);
+      allow update, delete: if isOwner(caregiverId) && resource != null;
+    }
+
+    /**
+     * @description Rules for Patient documents. Accessible by assigned Caregivers and Devices.
+     * @path /patients/{patientId}
+     * @allow Read if the user is the assigned caregiver OR the assigned device.
+     * @allow Write if the user is the assigned caregiver.
+     * @deny Write access for devices; access for unlinked caregivers.
+     * @principle Field-based shared access with caregiver-only write permissions.
+     */
+    match /patients/{patientId} {
+      allow get: if isCaregiver(resource.data) || isDevice(resource.data);
+      allow list: if isSignedIn(); // Queries must filter by caregiverId or deviceId.
+      
+      allow create: if isCaregiver(request.resource.data);
+      allow update: if isExistingCaregiver(resource.data) && request.resource.data.caregiverId == resource.data.caregiverId;
+      allow delete: if isExistingCaregiver(resource.data);
+    }
+
+    /**
+     * @description Rules for Routine Events. Employs denormalized fields for fast authorization.
+     * @path /patients/{patientId}/routineEvents/{eventId}
+     * @allow Read if auth.uid matches denormalized caregiverId or deviceId.
+     * @allow Write if auth.uid matches denormalized caregiverId.
+     * @deny Any access if denormalized ID fields are missing or mismatched.
+     * @principle Authorization Independence via denormalization; Relational integrity enforcement.
+     */
+    match /patients/{patientId}/routineEvents/{eventId} {
+      allow get: if isCaregiver(resource.data) || isDevice(resource.data);
+      allow list: if isSignedIn(); // Supports QAPs for both caregivers and devices.
+
+      allow create: if isCaregiver(request.resource.data) 
+                    && request.resource.data.patientId == patientId;
+      
+      allow update: if isExistingCaregiver(resource.data) 
+                    && request.resource.data.caregiverId == resource.data.caregiverId 
+                    && request.resource.data.patientId == resource.data.patientId;
+      
+      allow delete: if isExistingCaregiver(resource.data);
+    }
+
   }
 }

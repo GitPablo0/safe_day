@@ -1,57 +1,172 @@
 {
   "entities": {
-    "SoundAlarmState": {
-      "title": "Sound Alarm State",
-      "description": "Represents the state of the sound alarm system for a user.",
+    "CaregiverProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CaregiverProfile",
       "type": "object",
+      "description": "Represents a caregiver who manages patient routines within the SafeDay application.",
       "properties": {
-        "isArmed": {
-          "type": "boolean",
-          "description": "Indicates if the alarm system is currently armed and listening for sound."
-        },
-        "soundDetected": {
-          "type": "boolean",
-          "description": "True if the sound sensor has detected a sound that crossed the threshold."
-        },
-        "lastStatusUpdate": {
+        "id": {
           "type": "string",
-          "format": "date-time",
-          "description": "The timestamp of the last status update from the device."
+          "description": "Unique identifier for the CaregiverProfile entity, typically matching the authentication system's user ID."
         },
-        "alarmDuration": {
-          "type": "number",
-          "description": "The duration in minutes for which the alarm should remain armed. Defaults to 0 (manual disarm)."
-        },
-        "lastArmedTimestamp": {
+        "email": {
           "type": "string",
-          "format": "date-time",
-          "description": "The timestamp when the alarm was last armed."
+          "description": "The email address of the caregiver.",
+          "format": "email"
+        },
+        "name": {
+          "type": "string",
+          "description": "The full name of the caregiver."
         }
       },
-      "required": ["isArmed", "soundDetected"]
+      "required": [
+        "id",
+        "email",
+        "name"
+      ]
+    },
+    "Patient": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Patient",
+      "type": "object",
+      "description": "Represents a patient with Alzheimer's whose daily routine is managed by a caregiver through the SafeDay app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Patient entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the patient."
+        },
+        "caregiverId": {
+          "type": "string",
+          "description": "Reference to CaregiverProfile. Identifies the caregiver managing this patient's routine. (Relationship: CaregiverProfile 1:N Patient)"
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Unique identifier for the physical ESP32 device associated with this patient, used to sync routines."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "caregiverId",
+        "deviceId"
+      ]
+    },
+    "RoutineEvent": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RoutineEvent",
+      "type": "object",
+      "description": "Represents a single scheduled activity or reminder within a patient's routine, configured by the caregiver.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the RoutineEvent entity."
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Reference to Patient. Links this routine event to a specific patient. (Relationship: Patient 1:N RoutineEvent)"
+        },
+        "time": {
+          "type": "string",
+          "description": "The specific time of day (HH:MM:SS) when this routine event should trigger on the device.",
+          "format": "time"
+        },
+        "description": {
+          "type": "string",
+          "description": "A textual description of the activity or reminder (e.g., 'Es hora de merendar')."
+        },
+        "audioTrackNumber": {
+          "type": "number",
+          "description": "The numerical identifier of the audio track stored on the device's SD card to be played for this event."
+        },
+        "daysOfWeek": {
+          "type": "array",
+          "description": "An array of strings (e.g., 'monday', 'tuesday') indicating on which days of the week this routine event is active.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "active": {
+          "type": "boolean",
+          "description": "A boolean flag indicating whether this routine event is currently enabled (true) or disabled (false)."
+        }
+      },
+      "required": [
+        "id",
+        "patientId",
+        "time",
+        "description",
+        "audioTrackNumber",
+        "daysOfWeek",
+        "active"
+      ]
     }
   },
   "auth": {
-    "providers": ["email-and-password"]
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}/soundAlarm/state",
+        "path": "/caregivers/{caregiverId}",
         "definition": {
-          "entityName": "SoundAlarmState",
+          "entityName": "caregiverProfile",
           "schema": {
-            "$ref": "#/backend/entities/SoundAlarmState"
+            "$ref": "#/backend/entities/CaregiverProfile"
           },
-          "description": "Singleton document for each user to hold the current state of their sound alarm.",
+          "description": "Stores the profile information for each caregiver. The 'caregiverId' document ID directly corresponds to the Firebase Authentication UID of the caregiver, ensuring path-based ownership. All documents in this collection are private to their respective caregiver.",
           "params": [
             {
-              "name": "userId",
-              "description": "The Firebase Auth UID of the user."
+              "name": "caregiverId",
+              "description": "The unique identifier of the caregiver, matching the user's Firebase Authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/patients/{patientId}",
+        "definition": {
+          "entityName": "patient",
+          "schema": {
+            "$ref": "#/backend/entities/Patient"
+          },
+          "description": "Stores patient details. Each document includes 'caregiverId' for caregiver authorization and 'deviceId' for the associated ESP32 device's authorization. This denormalization is critical for Authorization Independence and QAPs, allowing caregivers to query their patients and devices to query their assigned patient.",
+          "params": [
+            {
+              "name": "patientId",
+              "description": "The unique identifier for the patient."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/patients/{patientId}/routineEvents/{routineEventId}",
+        "definition": {
+          "entityName": "routineEvent",
+          "schema": {
+            "$ref": "#/backend/entities/RoutineEvent"
+          },
+          "description": "Stores individual routine events for a patient. Each document explicitly includes denormalized 'caregiverId' and 'deviceId' fields (copied from the parent Patient) in addition to its 'patientId'. This critical denormalization ensures Authorization Independence, allowing both caregivers and devices to securely access routine events without needing 'get()' operations to parent documents in security rules. Supports QAPs for listing routines specific to a caregiver's patient or a device's assigned patient.",
+          "params": [
+            {
+              "name": "patientId",
+              "description": "The unique identifier of the parent patient."
+            },
+            {
+              "name": "routineEventId",
+              "description": "The unique identifier for the routine event."
             }
           ]
         }
       }
-    ]
+    ],
+    "reasoning": "The Firestore structure for the SafeDay application prioritizes security, scalability, and debuggability by strictly adhering to the core design principles. The primary goal is to ensure Authorization Independence (CRITICAL), eliminating the need for `get()` calls in security rules, which simplifies rule logic and supports atomic operations and robust QAPs (Queries Are Not Filters).\n\n1.  **CaregiverProfile (`/caregivers/{caregiverId}`):** This top-level collection stores the profile information for each caregiver. The document ID (`caregiverId`) directly corresponds to the Firebase Authentication UID of the logged-in caregiver (`request.auth.uid`). This provides direct, path-based ownership for profile management.\n\n2.  **Patient (`/patients/{patientId}`):** This is a top-level collection for Patient entities. Each Patient document includes `caregiverId` and `deviceId` fields. This is a crucial denormalization that serves two purposes:\n    *   **Caregiver Authorization:** The `caregiverId` field explicitly links a patient to their managing caregiver. This enables caregivers to securely `list` and manage *their* patients using queries like `where('caregiverId', '==', request.auth.uid)`, directly fulfilling QAPs and Authorization Independence without needing to traverse a parent caregiver path or perform `get()` operations in rules.\n    *   **Device Authorization:** The `deviceId` field explicitly links a patient to their associated ESP32 device. This allows the device (when authenticated as its `deviceId` or a linked UID) to securely `read` its associated patient's data using `where('deviceId', '==', request.auth.uid)`, also ensuring QAPs and Authorization Independence for devices.\n\n3.  **RoutineEvent (`/patients/{patientId}/routineEvents/{routineEventId}`):** This is a subcollection under each `Patient` document. Each `RoutineEvent` document includes `patientId` (from its parent path wildcard), and critically, it **denormalizes** the `caregiverId` and `deviceId` from its parent `Patient` document. This is the most vital denormalization step:\n    *   **Authorization Independence for RoutineEvents:** By having `caregiverId` and `deviceId` directly within each `RoutineEvent` document, security rules can evaluate access requests (read/write by caregiver, read by device) directly against `resource.data.caregiverId` and `resource.data.deviceId` without executing a `get()` call to the parent `Patient` document. This significantly simplifies rules, makes them more robust, and enables atomic creation/updates.\n    *   **QAPs for RoutineEvents:** Both caregivers and devices can perform secure `list` operations for routine events. Caregivers can query `db.collection('patients').doc(patientId).collection('routineEvents').where('caregiverId', '==', request.auth.uid)` and devices can similarly query `db.collection('patients').doc(patientId).collection('routineEvents').where('deviceId', '==', request.auth.uid)`. The `patientId` for the device would be retrieved from its `Patient` document in a prior step.\n\nThis structure ensures that all authorization decisions can be made based on the data present within the requested document itself or its direct ancestors in the path, without cross-document `get()` calls that create dependencies and complexity in security rules. Structural segregation ensures homogeneous security postures within each collection, further simplifying rule logic. Standardized fields like `caregiverId` and `deviceId` make authorization intent explicit and predictable."
   }
 }

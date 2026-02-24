@@ -1,8 +1,7 @@
 
 /**
  * ==================================================================================
- * SafeDay v1.7 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
- * Basado en la arquitectura robusta v3 de Sound Alarm.
+ * SafeDay v1.8 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
  * 
  * INSTRUCCIONES:
  * 1. Crea un usuario en Firebase Auth: "esp32@safeday.com" / "safeday123".
@@ -24,7 +23,6 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// UID FIJO CONFIGURADO POR EL USUARIO
 #define USER_UID "WWxcJu01odP4dFIp42sHjKUliQ13"
 
 struct WiFiNetwork {
@@ -51,8 +49,8 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================
 #define BTN_STOP_PIN 14   // Pulsador físico para detener alarma
 #define LED_INDICATOR 2   // LED indicador (parpadea al sonar)
-#define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32 (HardwareSerial)
-#define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32 (HardwareSerial)
+#define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32
+#define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32
 
 // ===============================================
 // 4. OBJETOS Y VARIABLES
@@ -79,8 +77,7 @@ void markTaskAsDone(String taskId);
 void setup() {
   Serial.begin(115200);
   
-  // Inicializar Serial2 para el DFPlayer (HardwareSerial Nativo en ESP32)
-  // Pines: RX2 = GPIO 16, TX2 = GPIO 17
+  // Inicializar Serial2 para el DFPlayer
   Serial2.begin(9600, SERIAL_8N1, DF_RX, DF_TX);
   
   pinMode(BTN_STOP_PIN, INPUT_PULLUP);
@@ -89,7 +86,7 @@ void setup() {
   
   Serial.println("Iniciando DFPlayer...");
   if (!myDFPlayer.begin(Serial2)) {
-    Serial.println("Error: DFPlayer no detectado. Revisa conexiones RX2/TX2 y tarjeta SD.");
+    Serial.println("Error: DFPlayer no detectado.");
   } else {
     Serial.println("DFPlayer Mini Online.");
     myDFPlayer.volume(20); 
@@ -106,7 +103,7 @@ void setup() {
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
 
-  Serial.println("SafeDay Inicializado con UID y WiFi configurados.");
+  Serial.println("SafeDay Inicializado.");
 }
 
 void loop() {
@@ -114,31 +111,25 @@ void loop() {
 
   if (!Firebase.ready()) return;
 
-  // Lógica de Alarma Activa
   if (isAlarmActive) {
-    // El LED parpadea solo cuando la instrucción está sonando
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
     
-    // Repetir audio cada 12 segundos si no se ha detenido (bucle de recordatorio)
     static unsigned long lastPlay = 0;
     if (millis() - lastPlay > 12000) { 
        myDFPlayer.play(activeTrack);
        lastPlay = millis();
     }
 
-    // Si se presiona el botón físico
     if (digitalRead(BTN_STOP_PIN) == LOW) {
       myDFPlayer.stop();
       digitalWrite(LED_INDICATOR, LOW);
       isAlarmActive = false;
       markTaskAsDone(activeTaskId);
-      delay(1000); // Evitar rebotes
+      delay(1000); 
     }
   } else {
-    // Apagar LED si no hay alarma activa
     digitalWrite(LED_INDICATOR, LOW);
     
-    // Revisar rutina periódicamente
     if (currentMillis - lastFirestoreRead > firestoreReadInterval) {
       lastFirestoreRead = currentMillis;
       checkRoutineInFirestore();
@@ -154,38 +145,45 @@ void checkRoutineInFirestore() {
   sprintf(currentTime, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
   String nowStr = String(currentTime);
 
-  // Evitar disparar múltiples veces en el mismo minuto
   if (nowStr == lastTriggeredMinute) return;
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) {
+  // listDocuments requiere 9 argumentos en esta versión de la librería
+  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), "", "", "", "", false)) {
     FirebaseJson data;
     data.setJsonData(fbdo.payload().c_str());
-    FirebaseJsonArray docs;
-    data.get(docs, "documents");
     
-    for (size_t i = 0; i < docs.size(); i++) {
-      FirebaseJsonData result;
-      docs.get(result, i);
-      FirebaseJson doc;
-      doc.setJsonData(result.stringValue.c_str());
+    FirebaseJsonData result;
+    data.get(result, "documents");
+    
+    if (result.success && result.type == FirebaseJson::JSON_ARRAY) {
+      FirebaseJsonArray docs;
+      result.getArray(docs);
       
-      FirebaseJsonData taskTime, taskTrack, taskId, taskActive;
-      doc.get(taskTime, "fields/time/stringValue");
-      doc.get(taskTrack, "fields/trackNumber/integerValue");
-      doc.get(taskActive, "fields/isActive/booleanValue");
-      doc.get(taskId, "name");
+      for (size_t i = 0; i < docs.size(); i++) {
+        FirebaseJsonData docResult;
+        docs.get(docResult, i);
+        
+        FirebaseJson doc;
+        doc.setJsonData(docResult.stringValue.c_str());
+        
+        FirebaseJsonData taskTime, taskTrack, taskId, taskActive;
+        doc.get(taskTime, "fields/time/stringValue");
+        doc.get(taskTrack, "fields/trackNumber/integerValue");
+        doc.get(taskActive, "fields/isActive/booleanValue");
+        doc.get(taskId, "name");
 
-      if (taskActive.boolValue && taskTime.stringValue == nowStr) {
-        isAlarmActive = true;
-        activeTrack = taskTrack.intValue;
-        String fullPath = taskId.stringValue;
-        activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
-        lastTriggeredMinute = nowStr;
-        myDFPlayer.play(activeTrack);
-        Serial.printf("¡ACTIVADA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
-        break;
+        if (taskActive.boolValue && taskTime.stringValue == nowStr) {
+          isAlarmActive = true;
+          activeTrack = taskTrack.intValue;
+          String fullPath = taskId.stringValue;
+          activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
+          lastTriggeredMinute = nowStr;
+          myDFPlayer.play(activeTrack);
+          Serial.printf("¡ACTIVADA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
+          break;
+        }
       }
     }
   }
@@ -198,22 +196,21 @@ void markTaskAsDone(String taskId) {
   strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
   
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
-  // Actualizamos el cumplimiento para que el cuidador lo vea en la App Web
   String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
   
   if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt")) {
-    Serial.println("Cumplimiento registrado en la nube.");
+    Serial.println("Cumplimiento registrado.");
   }
 }
 
 void tokenStatusCallback(TokenInfo info) {
   if (info.status == token_status_ready) {
-    Serial.println("Dispositivo Autenticado con éxito.");
+    Serial.println("Autenticado con éxito.");
   }
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar si es necesario)
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

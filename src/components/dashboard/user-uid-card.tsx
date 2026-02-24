@@ -66,7 +66,7 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
           <Info className="h-4 w-4 text-primary" />
           <AlertTitle className="text-xs font-bold uppercase tracking-wider text-primary">Paso a paso</AlertTitle>
           <AlertDescription className="text-xs text-muted-foreground">
-            Copia este UID y pégalo en el código Arduino. No necesitas configurar correos en el dispositivo.
+            Copia este UID y pégalo en el código Arduino. No olvides crear el usuario "esp32@safeday.com" con la contraseña que elijas en el panel de Firebase.
           </AlertDescription>
         </Alert>
 

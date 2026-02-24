@@ -9,8 +9,8 @@
  * 3. Conexiones: 
  *    - DFPlayer RX -> ESP32 TX2 (GPIO 17)
  *    - DFPlayer TX -> ESP32 RX2 (GPIO 16)
- *    - Botón Stop -> GPIO 4 y GND
- *    - LED -> GPIO 2 y GND
+ *    - Botón Stop -> GPIO 4 (conectar a GND al presionar)
+ *    - LED -> GPIO 2 (conectar a GND con resistencia)
  * ==================================================================================
  */
 
@@ -47,8 +47,8 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================
 // 3. PINES
 // ===============================================
-#define BTN_STOP_PIN 4    // Pulsador físico para detener alarma (GPIO 4)
-#define LED_INDICATOR 2   // LED indicador (GPIO 2)
+#define BTN_STOP_PIN 4    // Botón físico en GPIO 4
+#define LED_INDICATOR 2   // LED indicador en GPIO 2
 #define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32
 #define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32
 
@@ -77,14 +77,14 @@ void markTaskAsDone(String taskId);
 void setup() {
   Serial.begin(115200);
   
-  // Inicializar Serial2 para el DFPlayer
+  // Inicializar Serial2 para el DFPlayer (Hardware Serial nativo de ESP32)
   Serial2.begin(9600, SERIAL_8N1, DF_RX, DF_TX);
   
   pinMode(BTN_STOP_PIN, INPUT_PULLUP);
   pinMode(LED_INDICATOR, OUTPUT);
   digitalWrite(LED_INDICATOR, LOW);
   
-  Serial.println("Iniciando DFPlayer...");
+  Serial.println("Iniciando SafeDay...");
   if (!myDFPlayer.begin(Serial2)) {
     Serial.println("Error: DFPlayer no detectado.");
   } else {
@@ -112,6 +112,7 @@ void loop() {
   if (!Firebase.ready()) return;
 
   if (isAlarmActive) {
+    // Parpadeo de LED mientras la alarma suena
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
     
     static unsigned long lastPlay = 0;
@@ -120,6 +121,7 @@ void loop() {
        lastPlay = millis();
     }
 
+    // El botón detiene la alarma
     if (digitalRead(BTN_STOP_PIN) == LOW) {
       myDFPlayer.stop();
       digitalWrite(LED_INDICATOR, LOW);
@@ -149,15 +151,16 @@ void checkRoutineInFirestore() {
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  // listDocuments requiere 9 argumentos en esta versión de la librería
-  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), "", "", "", "", false)) {
+  // IMPORTANTE: Se pasan 9 argumentos exactos. pageSize (5to arg) DEBE ser un entero 0.
+  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), 0, "", "", "", false)) {
     FirebaseJson data;
     data.setJsonData(fbdo.payload().c_str());
     
     FirebaseJsonData result;
     data.get(result, "documents");
     
-    if (result.success && result.type == FirebaseJson::JSON_ARRAY) {
+    // Corregido: Comparar typeNum (entero) con el enum de la librería
+    if (result.success && result.typeNum == FirebaseJson::JSON_ARRAY) {
       FirebaseJsonArray docs;
       result.getArray(docs);
       
@@ -174,10 +177,11 @@ void checkRoutineInFirestore() {
         doc.get(taskActive, "fields/isActive/booleanValue");
         doc.get(taskId, "name");
 
-        if (taskActive.boolValue && taskTime.stringValue == nowStr) {
+        // Usar .to<T>() para conversiones seguras
+        if (taskActive.to<bool>() && taskTime.to<String>() == nowStr) {
           isAlarmActive = true;
-          activeTrack = taskTrack.intValue;
-          String fullPath = taskId.stringValue;
+          activeTrack = taskTrack.to<int>();
+          String fullPath = taskId.to<String>();
           activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
           lastTriggeredMinute = nowStr;
           myDFPlayer.play(activeTrack);
@@ -198,8 +202,9 @@ void markTaskAsDone(String taskId) {
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
   String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
   
+  // Patch para actualizar solo el campo de cumplimiento
   if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt")) {
-    Serial.println("Cumplimiento registrado.");
+    Serial.println("Cumplimiento registrado en Firestore.");
   }
 }
 
@@ -210,7 +215,7 @@ void tokenStatusCallback(TokenInfo info) {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // GMT-3
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar según tu zona)
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

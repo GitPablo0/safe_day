@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Speaker, Volume2 } from 'lucide-react';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export function DeviceConfig({ userId }: { userId: string }) {
   const firestore = useFirestore();
@@ -20,7 +22,14 @@ export function DeviceConfig({ userId }: { userId: string }) {
 
   const handleVolumeChange = (val: number[]) => {
     if (!settingsRef) return;
-    setDoc(settingsRef, { volume: val[0] }, { merge: true });
+    const data = { volume: val[0] };
+    setDoc(settingsRef, data, { merge: true }).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: settingsRef.path,
+        operation: 'update',
+        requestResourceData: data,
+      }));
+    });
   };
 
   return (

@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface Task {
   id: string;
@@ -46,16 +48,24 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
   const [isAdding, setIsAdding] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', time: '', trackNumber: 1 });
 
-  const addTask = async () => {
-    if (!newTask.title || !newTask.time) return;
+  const addTask = () => {
+    if (!newTask.title || !newTask.time || !firestore) return;
     const id = crypto.randomUUID();
     const taskRef = doc(firestore, `users/${userId}/routine/${id}`);
     
-    await setDoc(taskRef, {
+    const data = {
       ...newTask,
       id,
       isActive: true,
       trackNumber: Number(newTask.trackNumber)
+    };
+
+    setDoc(taskRef, data).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: taskRef.path,
+        operation: 'create',
+        requestResourceData: data,
+      }));
     });
 
     setNewTask({ title: '', time: '', trackNumber: 1 });
@@ -63,8 +73,15 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
     toast({ title: 'Actividad añadida', description: 'La rutina se ha actualizado.' });
   };
 
-  const deleteTask = async (id: string) => {
-    await deleteDoc(doc(firestore, `users/${userId}/routine/${id}`));
+  const deleteTask = (id: string) => {
+    if (!firestore) return;
+    const taskRef = doc(firestore, `users/${userId}/routine/${id}`);
+    deleteDoc(taskRef).catch(async (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: taskRef.path,
+        operation: 'delete',
+      }));
+    });
     toast({ title: 'Actividad eliminada' });
   };
 

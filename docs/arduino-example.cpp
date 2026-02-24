@@ -1,8 +1,8 @@
 
 /**
  * ==================================================================================
- * SafeDay v1 - Sistema de apoyo Alzheimer con ESP32 y DFPlayer Mini.
- * hardware: ESP32, DFPlayer Mini, Pulsador (Pin 14), LED (Pin 2).
+ * SafeDay v1.1 - Sistema de apoyo Alzheimer con ESP32 y DFPlayer Mini.
+ * Hardware: ESP32, DFPlayer Mini, Pulsador (Pin 14), LED (Pin 2), MicroSD.
  * ==================================================================================
  */
 
@@ -13,12 +13,12 @@
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-// 1. CONFIGURACIÓN USUARIO (Pega tu UID aquí)
-#define USER_UID "PASTE_YOUR_USER_UID_HERE"
+// 1. CONFIGURACIÓN USUARIO (Copia el UID desde la WebApp)
+#define USER_UID "TU_USER_UID_AQUI"
 
 // 2. CONFIGURACIÓN WIFI
-const char* ssid = "TU_WIFI";
-const char* password = "TU_PASSWORD";
+const char* ssid = "TU_WIFI_NAME";
+const char* password = "TU_WIFI_PASSWORD";
 
 // 3. PINES
 #define BTN_STOP_PIN 14
@@ -36,8 +36,16 @@ FirebaseConfig config;
 // 5. VARIABLES DE ESTADO
 bool isAlarmActive = false;
 unsigned long lastCheck = 0;
-const long checkInterval = 10000; // Revisar rutina cada 10s
+const long checkInterval = 15000; // Revisar rutina cada 15s
 String lastTriggeredTime = "";
+
+void syncTime() {
+  const char* ntpServer = "pool.ntp.org";
+  const long  gmtOffset_sec = -10800; // Ajustar según tu zona horaria (ej: -3h = -10800s)
+  const int   daylightOffset_sec = 0;
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Serial.println("Sincronizando hora...");
+}
 
 void setup() {
   Serial.begin(115200);
@@ -45,33 +53,79 @@ void setup() {
   
   pinMode(BTN_STOP_PIN, INPUT_PULLUP);
   pinMode(LED_INDICATOR, OUTPUT);
+  digitalWrite(LED_INDICATOR, LOW);
   
   if (!myDFPlayer.begin(softSerial)) {
-    Serial.println("Error: DFPlayer no detectado.");
+    Serial.println("Error: DFPlayer no detectado. Revisa conexiones y MicroSD.");
+  } else {
+    Serial.println("DFPlayer Mini Online.");
+    myDFPlayer.volume(20);
   }
-  myDFPlayer.volume(20);
 
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.print("Conectando a WiFi");
+  while (WiFi.status() != WL_CONNECTED) { 
+    delay(500); 
+    Serial.print("."); 
+  }
+  Serial.println("\nWiFi Conectado.");
   
-  configTime(0, 0, "pool.ntp.org"); // Sincronizar hora
+  syncTime();
   
-  config.api_key = "TU_API_KEY";
-  config.database_url = "TU_RTDB_URL"; // Si usas RTDB o Firestore
-  auth.user.email = "dispositivo@safeday.com";
-  auth.user.password = "safeday123";
+  // Configuración Firebase (Reemplazar con tus credenciales de Proyecto)
+  config.api_key = "TU_API_KEY_DE_FIREBASE";
+  config.database_url = "TU_DATABASE_URL"; 
+  
+  // Credenciales para el dispositivo (Usar el usuario creado en la app)
+  auth.user.email = "tu@email.com";
+  auth.user.password = "tu_password";
   
   Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+}
+
+void triggerAlarm(int track) {
+  if (isAlarmActive) return;
+  isAlarmActive = true;
+  myDFPlayer.play(track);
+  Serial.printf("¡ALERTA ACTIVADA! Reproduciendo pista %d\n", track);
+}
+
+void checkRoutine() {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Error al obtener la hora");
+    return;
+  }
+
+  char currentTime[6];
+  sprintf(currentTime, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  String nowStr = String(currentTime);
+
+  if (nowStr == lastTriggeredTime) return;
+
+  // Consulta Firestore: users/{USER_UID}/routine
+  // Implementar lógica de lectura de colección según la librería
+  // Firebase.Firestore.getDocument(&fbdo, ...);
+  
+  // Simulacro de detección:
+  // if (hayTareaProgramadaPara(nowStr)) {
+  //    triggerAlarm(tarea.trackNumber);
+  //    lastTriggeredTime = nowStr;
+  // }
 }
 
 void loop() {
   if (isAlarmActive) {
-    digitalWrite(LED_INDICATOR, (millis() / 500) % 2); // Parpadeo
+    // Parpadeo de LED mientras la alarma suena
+    digitalWrite(LED_INDICATOR, (millis() / 500) % 2);
+    
     if (digitalRead(BTN_STOP_PIN) == LOW) {
-      Serial.println("Botón presionado: Alarma detenida.");
+      Serial.println("Botón presionado: Alarma detenida por el paciente.");
       myDFPlayer.stop();
       digitalWrite(LED_INDICATOR, LOW);
       isAlarmActive = false;
+      delay(1000); // Debounce
     }
   }
 
@@ -79,25 +133,4 @@ void loop() {
     lastCheck = millis();
     checkRoutine();
   }
-}
-
-void checkRoutine() {
-  time_t now = time(nullptr);
-  struct tm* p_tm = localtime(&now);
-  char currentTime[6];
-  sprintf(currentTime, "%02d:%02d", p_tm->tm_hour, p_tm->tm_min);
-  
-  if (String(currentTime) == lastTriggeredTime) return;
-
-  // Consultar Firestore: users/{USER_UID}/routine
-  // Nota: Implementar lectura de colección con Firebase.Firestore.getDocument
-  // Si encontramos una tarea con la hora actual:
-  // triggerAlarm(trackNumber);
-  // lastTriggeredTime = String(currentTime);
-}
-
-void triggerAlarm(int track) {
-  isAlarmActive = true;
-  myDFPlayer.play(track);
-  Serial.printf("Disparando alarma: Pista %d\n", track);
 }

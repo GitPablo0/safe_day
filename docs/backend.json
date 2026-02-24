@@ -1,111 +1,72 @@
+
 {
   "entities": {
-    "ConfigurationProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ConfigurationProfile",
+    "RoutineTask": {
+      "title": "RoutineTask",
       "type": "object",
-      "description": "Represents a saved set of user-defined thresholds and operational parameters for the NeuroSense device, enabling personalized sensitivity settings for neurodivergent individuals.",
+      "description": "Represents a scheduled activity for a patient with Alzheimer's, including the time and the audio track to play.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the ConfigurationProfile entity."
+          "description": "Unique identifier for the routine task."
         },
-        "profileName": {
+        "title": {
           "type": "string",
-          "description": "A user-friendly name for this specific configuration profile (e.g., \"Relaxed Evening\", \"Focus Mode\"). This helps users identify and select their preferred settings."
+          "description": "Name of the activity (e.g., 'Take medication', 'Lunch time')."
         },
-        "description": {
+        "time": {
           "type": "string",
-          "description": "An optional longer description explaining when this profile is most suitable or its specific purpose."
+          "description": "Time of day in HH:mm format (24h)."
         },
-        "soundLowThreshold": {
+        "trackNumber": {
           "type": "number",
-          "description": "The maximum sound level (analog reading) below which the environment is considered 'Green' (low stress). Corresponds to UMBRAL_BAJO in the Arduino code."
+          "description": "The specific track number on the SD card to be played by the DFPlayer Mini."
         },
-        "soundMediumThreshold": {
-          "type": "number",
-          "description": "The maximum sound level (analog reading) below which the environment is considered 'Orange' (medium stress). Sound levels above this will trigger 'Red'. Corresponds to UMBRAL_MEDIO in the Arduino code."
-        },
-        "temperatureGreenThreshold": {
-          "type": "number",
-          "description": "The maximum temperature (°C) below which the environment is considered 'Green' (low stress). Corresponds to TEMP_VERDE in the Arduino code."
-        },
-        "temperatureOrangeThreshold": {
-          "type": "number",
-          "description": "The maximum temperature (°C) below which the environment is considered 'Orange' (medium stress). Temperatures above this will trigger 'Red'. Corresponds to TEMP_NARANJA in the Arduino code."
-        },
-        "redLedLockDurationMs": {
-          "type": "number",
-          "description": "The duration in milliseconds that the red LED remains activated (locked) after repeated strong noise detection events. Corresponds to BLOQUEO_ROJO_DURACION."
-        },
-        "orangeLedLockDurationMs": {
-          "type": "number",
-          "description": "The duration in milliseconds that the orange LED remains activated (locked) after repeated medium noise detection events. Corresponds to BLOQUEO_NARANJA_DURACION."
-        },
-        "eventIntervalMs": {
-          "type": "number",
-          "description": "The maximum time interval in milliseconds within which consecutive noise events are counted to trigger a lock (e.g., 3 events within this interval). Corresponds to TIEMPO_ENTRE_EVENTOS."
-        },
-        "dhtReadIntervalMs": {
-          "type": "number",
-          "description": "The interval in milliseconds at which the DHT sensor reads temperature and humidity data. Corresponds to INTERVALO_DHT."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp indicating when this configuration profile was initially created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating the last time this configuration profile was updated.",
-          "format": "date-time"
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether this reminder is currently enabled."
         }
       },
-      "required": [
-        "id",
-        "profileName",
-        "soundLowThreshold",
-        "soundMediumThreshold",
-        "temperatureGreenThreshold",
-        "temperatureOrangeThreshold",
-        "redLedLockDurationMs",
-        "orangeLedLockDurationMs",
-        "eventIntervalMs",
-        "dhtReadIntervalMs",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["id", "title", "time", "trackNumber", "isActive"]
+    },
+    "DeviceSettings": {
+      "title": "DeviceSettings",
+      "type": "object",
+      "description": "Operational parameters for the physical SafeDay device.",
+      "properties": {
+        "volume": {
+          "type": "number",
+          "description": "Volume level for the DFPlayer Mini (0-30)."
+        },
+        "isMuted": {
+          "type": "boolean",
+          "description": "Global mute toggle for the device."
+        }
+      },
+      "required": ["volume"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password"]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}/configurationProfiles/{profileId}",
+        "path": "/users/{userId}/routine/{taskId}",
         "definition": {
-          "entityName": "ConfigurationProfile",
-          "schema": {
-            "$ref": "#/backend/entities/ConfigurationProfile"
-          },
-          "description": "Stores user-specific NeuroSense device configuration profiles. Each document represents a unique set of thresholds and operational parameters defined by a user. Ownership is enforced by the '{userId}' in the path.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who owns this configuration profile."
-            },
-            {
-              "name": "profileId",
-              "description": "The unique identifier for a specific configuration profile belonging to the user."
-            }
-          ]
+          "entityName": "RoutineTask",
+          "schema": { "$ref": "#/backend/entities/RoutineTask" },
+          "description": "Stores individual tasks for a patient's daily routine."
+        }
+      },
+      {
+        "path": "/users/{userId}/settings/device",
+        "definition": {
+          "entityName": "DeviceSettings",
+          "schema": { "$ref": "#/backend/entities/DeviceSettings" },
+          "description": "Stores device-specific configurations like volume."
         }
       }
-    ],
-    "reasoning": "The recommended Firestore structure for the NeuroSense Dashboard prioritizes strong user data isolation, simplified security rules, and adherence to all core design principles and strategy mandates. The central entity, 'ConfigurationProfile', which stores user-defined sensor thresholds and operational parameters, will be nested under a user-specific path: `/users/{userId}/configurationProfiles/{profileId}`.\n\nThis structure achieves **Authorization Independence** by ensuring that the authorization context (who owns the profile) is directly embedded in the document's path. Specifically, `request.auth.uid` must match the `{userId}` wildcard in the path for any access to a user's configuration profiles. This eliminates the need for `get()` calls in security rules to check parent documents, thus enabling atomic operations and making rules robust and easier to debug. For instance, when a user creates a new profile, the security rule can simply check `request.auth.uid == userId` without needing to read any other document.\n\n**Structural Segregation** is naturally applied here. All documents within `/users/{userId}/configurationProfiles` represent a single user's configuration profiles and share the exact same security posture: only that specific user can access them. There are no mixed-access-level documents in this collection, simplifying security rules immensely.\n\nThis design effectively supports **Query Against Paths (QAPs)**. When a user requests their profiles, the client-side query will be scoped to `/users/myUid/configurationProfiles`. The Firestore security rules can then easily permit `list` operations if `request.auth.uid == userId`, preventing data leakage and ensuring that users only retrieve their own data without the rules acting as filters. This makes queries efficient and secure. The `userId` in the path acts as the explicit owner, aligning with the **Path-Based ownership** access model.\n\nNo denormalization of authorization context is required *within* the ConfigurationProfile document itself for basic ownership, as the `userId` in the path already provides this. If profiles were to become shareable in the future, a `members` map would be added to the ConfigurationProfile document and denormalized accordingly. For now, direct path-based ownership is the most secure and simplest approach."
+    ]
   }
 }

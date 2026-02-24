@@ -8,8 +8,8 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'SafeDay - Cuidado Alzheimer',
-  description: 'Gestión de rutinas diarias para pacientes con Alzheimer.',
+  title: 'SafeDay - Recordatorios para Alzheimer',
+  description: 'Sistema de gestión de rutinas diarias para pacientes con Alzheimer y sus cuidadores.',
 };
 
 export default function RootLayout({

@@ -3,14 +3,10 @@
  * ==================================================================================
  * SafeDay v1.8 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
  * 
- * INSTRUCCIONES:
- * 1. Crea un usuario en Firebase Auth: "esp32@safeday.com" / "safeday123".
- * 2. El UID ya está configurado abajo.
- * 3. Conexiones: 
- *    - DFPlayer RX -> ESP32 TX2 (GPIO 17)
- *    - DFPlayer TX -> ESP32 RX2 (GPIO 16)
- *    - Botón Stop -> GPIO 4 (conectar a GND al presionar)
- *    - LED -> GPIO 2 (conectar a GND con resistencia)
+ * CONFIGURACIÓN ESTABLE (BACKUP)
+ * UID: WWxcJu01odP4dFIp42sHjKUliQ13
+ * WIFI: Telecentro-416b
+ * HARDWARE: Botón (GPIO 4), LED (GPIO 2), DFPlayer (TX2/RX2)
  * ==================================================================================
  */
 

@@ -8,9 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Music, Clock } from 'lucide-react';
+import { Plus, Trash2, Music, Clock, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Task {
   id: string;
@@ -18,7 +25,20 @@ interface Task {
   time: string;
   trackNumber: number;
   isActive: boolean;
+  lastCompletedAt?: string;
 }
+
+const AUDIO_TRACKS = [
+  { id: 1, label: "Tomar pastillas" },
+  { id: 2, label: "Desayunar" },
+  { id: 3, label: "Almorzar" },
+  { id: 4, label: "Cenar" },
+  { id: 5, label: "Tomar agua" },
+  { id: 6, label: "Bañarse" },
+  { id: 7, label: "Cepillar dientes" },
+  { id: 8, label: "Vestirse" },
+  { id: 9, label: "Descansar / Dormir" },
+];
 
 export function RoutineManager({ routine, userId }: { routine: Task[], userId: string }) {
   const firestore = useFirestore();
@@ -67,13 +87,18 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
               </div>
               <div>
                 <h3 className="font-bold text-lg">{task.title}</h3>
-                <div className="flex gap-3 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   <Badge variant="outline" className="gap-1">
                     <Clock className="size-3" /> {task.time}
                   </Badge>
                   <Badge variant="secondary" className="gap-1">
-                    <Music className="size-3" /> Pista {task.trackNumber}
+                    <Music className="size-3" /> {AUDIO_TRACKS.find(t => t.id === task.trackNumber)?.label || `Pista ${task.trackNumber}`}
                   </Badge>
+                  {task.lastCompletedAt && (
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-600 gap-1">
+                      <CheckCircle2 className="size-3" /> {task.lastCompletedAt}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -94,9 +119,9 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
           <CardContent className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Actividad</Label>
+                <Label>Nombre de la Actividad</Label>
                 <Input 
-                  placeholder="Ej: Desayuno" 
+                  placeholder="Ej: Almuerzo" 
                   value={newTask.title} 
                   onChange={(e) => setNewTask({...newTask, title: e.target.value})}
                 />
@@ -110,14 +135,22 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
                 />
               </div>
               <div className="space-y-2">
-                <Label>Pista de Audio (SD)</Label>
-                <Input 
-                  type="number" 
-                  min="1" 
-                  max="99" 
-                  value={newTask.trackNumber} 
-                  onChange={(e) => setNewTask({...newTask, trackNumber: parseInt(e.target.value)})}
-                />
+                <Label>Instrucción de Audio</Label>
+                <Select 
+                  value={newTask.trackNumber.toString()} 
+                  onValueChange={(val) => setNewTask({...newTask, trackNumber: parseInt(val)})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un audio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AUDIO_TRACKS.map(track => (
+                      <SelectItem key={track.id} value={track.id.toString()}>
+                        {track.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2">

@@ -20,11 +20,15 @@
         },
         "trackNumber": {
           "type": "number",
-          "description": "The specific track number on the SD card to be played by the DFPlayer Mini."
+          "description": "The specific track number on the SD card (1-9)."
         },
         "isActive": {
           "type": "boolean",
           "description": "Whether this reminder is currently enabled."
+        },
+        "lastCompletedAt": {
+          "type": "string",
+          "description": "The last time the patient pressed the button for this specific task."
         }
       },
       "required": ["id", "title", "time", "trackNumber", "isActive"]
@@ -37,10 +41,6 @@
         "volume": {
           "type": "number",
           "description": "Volume level for the DFPlayer Mini (0-30)."
-        },
-        "isMuted": {
-          "type": "boolean",
-          "description": "Global mute toggle for the device."
         }
       },
       "required": ["volume"]

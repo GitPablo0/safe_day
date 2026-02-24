@@ -1,46 +1,60 @@
 {
   "entities": {
-    "DeviceConfiguration": {
+    "SensorConfiguration": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "DeviceConfiguration",
+      "title": "SensorConfiguration",
       "type": "object",
-      "description": "Stores the configurable thresholds and timing parameters for the NeuroSense device, allowing users to customize its behavior for stress detection and LED activation.",
+      "description": "Represents the adjustable parameters for the environmental stress detection system, controlling LED activation thresholds and timing.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the DeviceConfiguration entity."
+          "description": "Unique identifier for the SensorConfiguration entity."
         },
         "soundThresholdLow": {
           "type": "number",
-          "description": "The raw analog sound sensor value threshold below which the environment is considered 'green' (low stress). Corresponds to UMBRAL_BAJO in the Arduino code."
+          "description": "The sound level threshold (analog reading) below which the system registers 'Green' noise levels, indicating a calm environment. Corresponds to UMBRAL_BAJO in the Arduino code."
         },
         "soundThresholdMedium": {
           "type": "number",
-          "description": "The raw analog sound sensor value threshold below which the environment is considered 'orange' (medium stress), and above 'green'. Corresponds to UMBRAL_MEDIO in the Arduino code."
+          "description": "The sound level threshold (analog reading) below which the system registers 'Orange' noise levels (above 'Green'), indicating moderate noise. Corresponds to UMBRAL_MEDIO in the Arduino code."
         },
         "temperatureThresholdGreen": {
           "type": "number",
-          "description": "The temperature threshold (in Celsius) below which the environment is considered 'green' (low stress). Corresponds to TEMP_VERDE in the Arduino code."
+          "description": "The temperature threshold (°C) below which the system registers 'Green' temperature levels, indicating a comfortable temperature. Corresponds to TEMP_VERDE in the Arduino code."
         },
         "temperatureThresholdOrange": {
           "type": "number",
-          "description": "The temperature threshold (in Celsius) below which the environment is considered 'orange' (medium stress), and above 'green'. Corresponds to TEMP_NARANJA in the Arduino code."
+          "description": "The temperature threshold (°C) below which the system registers 'Orange' temperature levels (above 'Green'), indicating a warm temperature. Corresponds to TEMP_NARANJA in the Arduino code."
         },
-        "redLedBlockDurationMs": {
+        "redLockDurationMs": {
           "type": "number",
-          "description": "The duration (in milliseconds) for which the red LED remains fixed after repeated strong noise events, indicating a prolonged high-stress state. Corresponds to BLOQUEO_ROJO_DURACION in the Arduino code."
+          "description": "The duration in milliseconds for which the Red LED remains fixed after repeated strong noise events, signaling a high-stress environment. Corresponds to BLOQUEO_ROJO_DURACION in the Arduino code."
         },
-        "orangeLedBlockDurationMs": {
+        "orangeLockDurationMs": {
           "type": "number",
-          "description": "The duration (in milliseconds) for which the orange LED remains fixed after repeated medium noise events, indicating a prolonged medium-stress state. Corresponds to BLOQUEO_NARANJA_DURACION in the Arduino code."
+          "description": "The duration in milliseconds for which the Orange LED remains fixed after repeated medium noise events, signaling a moderately stressful environment. Corresponds to BLOQUEO_NARANJA_DURACION in the Arduino code."
         },
-        "soundEventIntervalMs": {
+        "eventResetIntervalMs": {
           "type": "number",
-          "description": "The maximum time (in milliseconds) between consecutive sound events for them to be counted as 'repeated' for the purpose of triggering LED blocks. Corresponds to TIEMPO_ENTRE_EVENTOS in the Arduino code."
+          "description": "The time interval in milliseconds within which consecutive noise events count towards triggering an LED lock (red or orange). If no event occurs within this time, the event counter resets. Corresponds to TIEMPO_ENTRE_EVENTOS in the Arduino code."
         },
-        "dhtReadIntervalMs": {
+        "redEventTriggerCount": {
           "type": "number",
-          "description": "The interval (in milliseconds) at which the DHT sensor (temperature and humidity) readings are performed. Corresponds to INTERVALO_DHT in the Arduino code."
+          "description": "The number of strong noise events required within the 'eventResetIntervalMs' to trigger the red LED lock. Implicitly '3' in the Arduino code (conteoRojo >= 3)."
+        },
+        "orangeEventTriggerCount": {
+          "type": "number",
+          "description": "The number of medium noise events required within the 'eventResetIntervalMs' to trigger the orange LED lock. Implicitly '3' in the Arduino code (conteoNaranja >= 3)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when this configuration was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when this configuration was last updated.",
+          "format": "date-time"
         }
       },
       "required": [
@@ -49,10 +63,11 @@
         "soundThresholdMedium",
         "temperatureThresholdGreen",
         "temperatureThresholdOrange",
-        "redLedBlockDurationMs",
-        "orangeLedBlockDurationMs",
-        "soundEventIntervalMs",
-        "dhtReadIntervalMs"
+        "redLockDurationMs",
+        "orangeLockDurationMs",
+        "eventResetIntervalMs",
+        "redEventTriggerCount",
+        "orangeEventTriggerCount"
       ]
     }
   },
@@ -65,22 +80,36 @@
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}/deviceConfiguration/default",
+        "path": "/users/{userId}",
         "definition": {
-          "entityName": "DeviceConfiguration",
+          "entityName": "user",
           "schema": {
-            "$ref": "#/backend/entities/DeviceConfiguration"
+            "$ref": "#/backend/entities/user"
           },
-          "description": "Stores the single, default device configuration for a specific user. The 'id' field within the document should be 'default'. Includes 'userId' in the path for direct authorization via security rules.",
+          "description": "Represents a user profile. This top-level collection serves as the root for user-owned data, enabling path-based authorization for all nested user-specific entities."
+        }
+      },
+      {
+        "path": "/users/{userId}/sensorConfigurations/{configId}",
+        "definition": {
+          "entityName": "SensorConfiguration",
+          "schema": {
+            "$ref": "#/backend/entities/SensorConfiguration"
+          },
+          "description": "Stores individual sensor configuration documents owned by a specific user. Authorization is achieved independently through the path itself; 'request.auth.uid' must match the '{userId}' wildcard, eliminating the need for 'get()' calls to parent documents for basic ownership verification. This structure enables QAP-compliant list operations for a user's configurations.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier of the user who owns this device configuration."
+              "description": "The unique identifier of the user who owns this sensor configuration."
+            },
+            {
+              "name": "configId",
+              "description": "The unique identifier for a specific sensor configuration (e.g., 'default' for the active configuration, or a custom name for a saved preset)."
             }
           ]
         }
       }
     ],
-    "reasoning": "The recommended Firestore structure prioritizes Authorization Independence and Structural Segregation to ensure secure, scalable, and debuggable rules. Each user will have their own dedicated device configuration stored under their unique user ID.\n\n**Authorization Independence (Strategy A):** The core principle is achieved by placing the `DeviceConfiguration` document directly within a subcollection of the owning user's document. The path `/users/{userId}/deviceConfiguration/default` explicitly includes the `userId` as a path parameter. This denormalizes the ownership information directly into the document's path. Consequently, Firestore security rules for accessing a `DeviceConfiguration` document can directly compare `request.auth.uid` with the `{userId}` wildcard in the path, eliminating the need for expensive and complex `get()` calls to a parent user document. This enables atomic operations and simplifies rule debugging.\n\n**Structural Segregation (Strategy B):** All documents within a user's `deviceConfiguration` subcollection (in this case, only the 'default' document) share the same security posture: only the owner (`userId`) can read or write. This prevents mixing data with different access requirements in the same collection, making security rules straightforward and easier to reason about.\n\n**QAPs (Rules are not Filters):** By using path-based ownership, `list` operations become inherently secure. A user would query `/users/{request.auth.uid}/deviceConfiguration` to retrieve their configuration. The security rules can then easily enforce that `request.auth.uid` matches the `{userId}` in the path, ensuring that users can only list *their own* configurations and not accidentally access or filter others' data. This avoids inefficient and insecure queries where rules act as filters rather than enforcers."
+    "reasoning": "The recommended Firestore structure is designed to be secure, scalable, and debuggable, primarily focusing on user-owned configurations.\n\n**Authorization Independence:** The core principle of Authorization Independence is achieved by utilizing hierarchical paths for user-owned data. Each `SensorConfiguration` document is stored under a specific user's path: `/users/{userId}/sensorConfigurations/{configId}`. This structure inherently ties a configuration document to its owner. Security rules can directly check if `request.auth.uid` matches the `{userId}` wildcard in the path, without needing to perform `get()` calls to a parent `user` document or denormalize an `ownerId` field within the `SensorConfiguration` document itself. This design allows for atomic operations (transactions/batches) that create or modify a user's configuration without complex authorization checks across multiple documents, greatly simplifying security rules and improving performance.\n\n**QAPs (Rules are not Filters):** This structure naturally supports QAP-compliant `list` operations. A user can query their own configurations by directly accessing the subcollection: `db.collection('users').doc(request.auth.uid).collection('sensorConfigurations').get()`. Firestore rules can easily enforce that a user can only list documents within their own `/users/{uid}/sensorConfigurations` path, ensuring that the results returned by the query are precisely what the user is authorized to see, without relying on security rules to filter results after the fact.\n\n**DBAC (No Custom Claims):** User roles, if needed (e.g., for an admin to manage all users' configurations), would be stored in dedicated collections like `/roles_admin/{uid}`, allowing authorization logic to rely solely on `request.auth.uid` and database content, not custom claims.\n\n**Structural Segregation:** All documents within the `/sensorConfigurations` subcollection for a given user will share the same security posture (owned by the `{userId}`). There is no mixing of public and private configurations within the same path, which simplifies rule writing.\n\n**Access Modeling:** The design leverages the 'Path-Based ownership' model for private, user-specific data. Each `SensorConfiguration` is treated as a 1:N relationship with a `user`, allowing a user to manage one or more configurations (e.g., a 'default' active configuration, or saved presets).\n\n**Data Clarity and Predictability:** The `SensorConfiguration` schema explicitly defines all configurable parameters, including `createdAt` and `updatedAt` for auditing. The use of descriptive wildcards (`{userId}`, `{configId}`) enhances the clarity and predictability of the data model."
   }
 }

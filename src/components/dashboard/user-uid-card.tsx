@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -12,9 +11,8 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { KeyRound, Copy, Check, LogOut, Info } from 'lucide-react';
+import { KeyRound, Copy, Check, LogOut } from 'lucide-react';
 import { useAuth } from '@/firebase';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface UserUidCardProps {
   user: User | null;
@@ -62,14 +60,6 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert variant="default" className="bg-background border-primary/20">
-          <Info className="h-4 w-4 text-primary" />
-          <AlertTitle className="text-xs font-bold uppercase tracking-wider text-primary">Paso a paso</AlertTitle>
-          <AlertDescription className="text-xs text-muted-foreground">
-            Copia este UID y pégalo en el código Arduino. No olvides crear el usuario "esp32@safeday.com" con la contraseña que elijas en el panel de Firebase.
-          </AlertDescription>
-        </Alert>
-
         <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase text-muted-foreground">Tu Device UID:</span>
             {isLoading ? (

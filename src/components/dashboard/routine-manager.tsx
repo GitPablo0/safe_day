@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -8,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Music, Clock, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Music, Clock, CheckCircle2, Pencil, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -46,31 +45,50 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', time: '', trackNumber: 1 });
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskForm, setTaskForm] = useState({ title: '', time: '', trackNumber: 1 });
 
-  const addTask = () => {
-    if (!newTask.title || !newTask.time || !firestore) return;
-    const id = crypto.randomUUID();
+  const resetForm = () => {
+    setTaskForm({ title: '', time: '', trackNumber: 1 });
+    setIsAdding(false);
+    setEditingTaskId(null);
+  };
+
+  const handleSave = () => {
+    if (!taskForm.title || !taskForm.time || !firestore) return;
+    
+    const id = editingTaskId || crypto.randomUUID();
     const taskRef = doc(firestore, `users/${userId}/routine/${id}`);
     
     const data = {
-      ...newTask,
+      ...taskForm,
       id,
       isActive: true,
-      trackNumber: Number(newTask.trackNumber)
+      trackNumber: Number(taskForm.trackNumber)
     };
 
-    setDoc(taskRef, data).catch(async (error) => {
+    setDoc(taskRef, data, { merge: true }).catch(async (error) => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: taskRef.path,
-        operation: 'create',
+        operation: editingTaskId ? 'update' : 'create',
         requestResourceData: data,
       }));
     });
 
-    setNewTask({ title: '', time: '', trackNumber: 1 });
-    setIsAdding(false);
-    toast({ title: 'Actividad añadida', description: 'La rutina se ha actualizado.' });
+    toast({ 
+      title: editingTaskId ? 'Actividad actualizada' : 'Actividad añadida', 
+      description: 'La rutina se ha actualizado correctamente.' 
+    });
+    resetForm();
+  };
+
+  const startEditing = (task: Task) => {
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title,
+      time: task.time,
+      trackNumber: task.trackNumber
+    });
   };
 
   const deleteTask = (id: string) => {
@@ -96,39 +114,99 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
       )}
 
       {routine.map((task) => (
-        <Card key={task.id} className="group overflow-hidden transition-all hover:border-primary/50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-primary/10 p-3 rounded-full text-primary">
-                <Clock className="size-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg">{task.title}</h3>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <Badge variant="outline" className="gap-1 border-primary/20">
-                    <Clock className="size-3" /> {task.time}
-                  </Badge>
-                  <Badge variant="secondary" className="gap-1 bg-primary/5">
-                    <Music className="size-3" /> {AUDIO_TRACKS.find(t => t.id === task.trackNumber)?.label || `Pista ${task.trackNumber}`}
-                  </Badge>
-                  {task.lastCompletedAt && (
-                    <Badge variant="default" className="bg-green-500 hover:bg-green-600 gap-1">
-                      <CheckCircle2 className="size-3" /> Realizado: {task.lastCompletedAt}
-                    </Badge>
-                  )}
+        <div key={task.id}>
+          {editingTaskId === task.id ? (
+            <Card className="border-primary bg-primary/5">
+              <CardContent className="p-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input 
+                      value={taskForm.title} 
+                      onChange={(e) => setTaskForm({...taskForm, title: e.target.value})}
+                      className="bg-background"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Hora</Label>
+                    <Input 
+                      type="time" 
+                      value={taskForm.time} 
+                      onChange={(e) => setTaskForm({...taskForm, time: e.target.value})}
+                      className="bg-background"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Audio</Label>
+                    <Select 
+                      value={taskForm.trackNumber.toString()} 
+                      onValueChange={(val) => setTaskForm({...taskForm, trackNumber: parseInt(val)})}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AUDIO_TRACKS.map(track => (
+                          <SelectItem key={track.id} value={track.id.toString()}>
+                            {track.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => deleteTask(task.id)}
-            >
-              <Trash2 className="size-5" />
-            </Button>
-          </CardContent>
-        </Card>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={resetForm}><X className="size-4 mr-2"/>Cancelar</Button>
+                  <Button size="sm" onClick={handleSave}><Check className="size-4 mr-2"/>Guardar Cambios</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="group overflow-hidden transition-all hover:border-primary/50">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="bg-primary/10 p-3 rounded-full text-primary">
+                    <Clock className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">{task.title}</h3>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <Badge variant="outline" className="gap-1 border-primary/20">
+                        <Clock className="size-3" /> {task.time}
+                      </Badge>
+                      <Badge variant="secondary" className="gap-1 bg-primary/5">
+                        <Music className="size-3" /> {AUDIO_TRACKS.find(t => t.id === task.trackNumber)?.label || `Pista ${task.trackNumber}`}
+                      </Badge>
+                      {task.lastCompletedAt && (
+                        <Badge variant="default" className="bg-green-500 hover:bg-green-600 gap-1">
+                          <CheckCircle2 className="size-3" /> Realizado: {task.lastCompletedAt}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-muted-foreground hover:text-primary"
+                    onClick={() => startEditing(task)}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteTask(task.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       ))}
 
       {isAdding ? (
@@ -139,8 +217,8 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
                 <Label>Nombre de la Actividad</Label>
                 <Input 
                   placeholder="Ej: Almuerzo" 
-                  value={newTask.title} 
-                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                  value={taskForm.title} 
+                  onChange={(e) => setTaskForm({...taskForm, title: e.target.value})}
                   className="bg-background"
                 />
               </div>
@@ -148,21 +226,21 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
                 <Label>Hora</Label>
                 <Input 
                   type="time" 
-                  value={newTask.time} 
-                  onChange={(e) => setNewTask({...newTask, time: e.target.value})}
+                  value={taskForm.time} 
+                  onChange={(e) => setTaskForm({...taskForm, time: e.target.value})}
                   className="bg-background"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Instrucción de Audio</Label>
                 <Select 
-                  value={newTask.trackNumber.toString()} 
+                  value={taskForm.trackNumber.toString()} 
                   onValueChange={(val) => {
                     const track = AUDIO_TRACKS.find(t => t.id.toString() === val);
-                    setNewTask({
-                      ...newTask, 
+                    setTaskForm({
+                      ...taskForm, 
                       trackNumber: parseInt(val),
-                      title: newTask.title || (track ? track.label : '')
+                      title: taskForm.title || (track ? track.label : '')
                     });
                   }}
                 >
@@ -180,15 +258,17 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAdding(false)}>Cancelar</Button>
-              <Button onClick={addTask}>Guardar Tarea</Button>
+              <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+              <Button onClick={handleSave}>Guardar Tarea</Button>
             </div>
           </CardContent>
         </Card>
       ) : (
-        <Button className="w-full h-12 gap-2 border-primary/30 text-primary hover:bg-primary/5" variant="outline" onClick={() => setIsAdding(true)}>
-          <Plus className="size-5" /> Añadir a la Rutina
-        </Button>
+        !editingTaskId && (
+          <Button className="w-full h-12 gap-2 border-primary/30 text-primary hover:bg-primary/5" variant="outline" onClick={() => setIsAdding(true)}>
+            <Plus className="size-5" /> Añadir a la Rutina
+          </Button>
+        )
       )}
     </div>
   );

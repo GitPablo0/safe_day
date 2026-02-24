@@ -1,12 +1,13 @@
 
 /**
  * ==================================================================================
- * SafeDay v2.0 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
+ * SafeDay v2.3 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
  * 
- * NUEVA FUNCIÓN: WiFi Autoconfigurable.
- * 1. Si no hay WiFi, el ESP32 crea la red "SafeDay_Config".
- * 2. Conéctate con tu móvil y ve a 192.168.4.1 para configurar el internet.
- * 3. Mantén presionado el botón (Pin 4) 5 segundos para resetear el WiFi.
+ * MEJORAS:
+ * 1. Detección de rutina restaurada: Se corrigió la consulta a Firestore.
+ * 2. Audio infinito: El audio se repite hasta presionar el botón (.loop).
+ * 3. Lógica de botón robusta: Diferencia clic corto (Stop) de clic largo (Reset WiFi).
+ * 4. Depuración: Mensajes en Monitor Serial para ver el estado de la búsqueda.
  * ==================================================================================
  */
 
@@ -49,12 +50,10 @@ unsigned long lastFirestoreRead = 0;
 const long firestoreReadInterval = 30000; 
 String lastTriggeredMinute = "";
 
-// Variables para el portal cautivo
 const char* AP_SSID = "SafeDay_Config";
 bool isConfigMode = false;
 
 // Declaraciones
-void connectToWiFi();
 void setupConfigPortal();
 void handleRoot();
 void handleSave();
@@ -78,7 +77,6 @@ void setup() {
     myDFPlayer.volume(20); 
   }
 
-  // Intentar conectar con WiFi guardado
   String savedSSID = preferences.getString("ssid", "");
   String savedPASS = preferences.getString("pass", "");
 
@@ -104,6 +102,7 @@ void setup() {
     config.api_key = API_KEY;
     auth.user.email = "esp32@safeday.com";
     auth.user.password = "safeday123";
+    
     Firebase.reconnectWiFi(true);
     Firebase.begin(&config, &auth);
     Serial.println("SafeDay Inicializado.");
@@ -114,15 +113,17 @@ void loop() {
   if (isConfigMode) {
     dnsServer.processNextRequest();
     server.handleClient();
-    digitalWrite(LED_INDICATOR, (millis() / 200) % 2); // Parpadeo rápido en config
+    digitalWrite(LED_INDICATOR, (millis() / 200) % 2); 
     return;
   }
 
-  // Verificar si se mantiene el botón para resetear WiFi
-  if (digitalRead(BTN_STOP_PIN) == LOW) {
-    static unsigned long pressStart = 0;
-    if (pressStart == 0) pressStart = millis();
-    if (millis() - pressStart > 5000) {
+  // --- LÓGICA DEL BOTÓN ---
+  static unsigned long btnTimer = 0;
+  bool btnPressed = (digitalRead(BTN_STOP_PIN) == LOW);
+
+  if (btnPressed) {
+    if (btnTimer == 0) btnTimer = millis();
+    if (millis() - btnTimer > 5000) {
       preferences.putString("ssid", "");
       preferences.putString("pass", "");
       Serial.println("WiFi reseteado. Reiniciando...");
@@ -130,12 +131,16 @@ void loop() {
       ESP.restart();
     }
   } else {
-    // Si la alarma está activa, el botón solo la detiene (comportamiento normal)
-    if (isAlarmActive && digitalRead(BTN_STOP_PIN) == LOW) {
-       myDFPlayer.stop();
-       isAlarmActive = false;
-       markTaskAsDone(activeTaskId);
-       delay(500);
+    if (btnTimer > 0) {
+      unsigned long duration = millis() - btnTimer;
+      if (duration < 3000 && isAlarmActive) {
+        Serial.println("Botón presionado: Deteniendo alarma.");
+        myDFPlayer.stop();
+        isAlarmActive = false;
+        digitalWrite(LED_INDICATOR, LOW);
+        markTaskAsDone(activeTaskId);
+      }
+      btnTimer = 0;
     }
   }
 
@@ -152,54 +157,6 @@ void loop() {
   }
 }
 
-// ===============================================
-// 3. LÓGICA DEL PORTAL DE CONFIGURACIÓN
-// ===============================================
-void setupConfigPortal() {
-  isConfigMode = true;
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID);
-  dnsServer.start(53, "*", WiFi.softAPIP());
-  
-  server.on("/", handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
-  server.onNotFound([]() {
-    server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
-  });
-  server.begin();
-  Serial.println("Portal de Configuración iniciado: SafeDay_Config");
-}
-
-void handleRoot() {
-  String html = "<html><body style='font-family:sans-serif; text-align:center;'>";
-  html += "<h1>SafeDay Config</h1>";
-  html += "<p>Introduce los datos del WiFi para conectar SafeDay</p>";
-  html += "<form action='/save' method='POST' style='display:inline-block; text-align:left;'>";
-  html += "Nombre WiFi (SSID):<br><input type='text' name='ssid' style='width:200px;'><br><br>";
-  html += "Contraseña:<br><input type='password' name='pass' style='width:200px;'><br><br>";
-  html += "<input type='submit' value='Guardar y Conectar' style='padding:10px;'>";
-  html += "</form></body></html>";
-  server.send(200, "text/html", html);
-}
-
-void handleSave() {
-  String s = server.arg("ssid");
-  String p = server.arg("pass");
-  if (s != "") {
-    preferences.putString("ssid", s);
-    preferences.putString("pass", p);
-    server.send(200, "text/html", "Configuración guardada. SafeDay se está reiniciando para conectarse...");
-    delay(2000);
-    ESP.restart();
-  } else {
-    server.send(200, "text/html", "Error: El nombre del WiFi no puede estar vacío. <a href='/'>Volver</a>");
-  }
-}
-
-// ===============================================
-// 4. LÓGICA DE FIRESTORE
-// ===============================================
 void checkRoutineInFirestore() {
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)) return;
@@ -209,15 +166,17 @@ void checkRoutineInFirestore() {
   String nowStr = String(currentTime);
 
   if (nowStr == lastTriggeredMinute) return;
+  
+  Serial.println("Revisando rutina para la hora: " + nowStr);
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  // Consulta de 9 argumentos para máxima compatibilidad con la librería
+  // Usamos "" para databaseId para mayor compatibilidad
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), 0, "", "", "", false)) {
-    FirebaseJson data;
-    data.setJsonData(fbdo.payload().c_str());
+    FirebaseJson json;
+    json.setJsonData(fbdo.payload().c_str());
     FirebaseJsonData result;
-    data.get(result, "documents");
+    json.get(result, "documents");
     
     if (result.success && result.typeNum == FirebaseJson::JSON_ARRAY) {
       FirebaseJsonArray docs;
@@ -227,6 +186,7 @@ void checkRoutineInFirestore() {
         docs.get(docResult, i);
         FirebaseJson doc;
         doc.setJsonData(docResult.stringValue.c_str());
+        
         FirebaseJsonData taskTime, taskTrack, taskId, taskActive;
         doc.get(taskTime, "fields/time/stringValue");
         doc.get(taskTrack, "fields/trackNumber/integerValue");
@@ -239,12 +199,17 @@ void checkRoutineInFirestore() {
           String fullPath = taskId.to<String>();
           activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
           lastTriggeredMinute = nowStr;
-          myDFPlayer.play(activeTrack);
-          Serial.println("ALERTA: Iniciando recordatorio: " + activeTaskId);
+          
+          myDFPlayer.loop(activeTrack); // Sonido infinito
+          Serial.println("ALARMA ACTIVADA: " + activeTaskId);
           break;
         }
       }
+    } else {
+      Serial.println("No se encontraron actividades programadas.");
     }
+  } else {
+    Serial.println("Error de conexión con Firestore: " + fbdo.errorReason());
   }
 }
 
@@ -253,17 +218,44 @@ void markTaskAsDone(String taskId) {
   getLocalTime(&timeinfo);
   char doneTime[20];
   strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
+  
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
   String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
-  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt");
+  
+  if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt")) {
+    Serial.println("Actividad marcada como completada en la nube.");
+  }
+}
+
+void setupConfigPortal() {
+  isConfigMode = true;
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID);
+  dnsServer.start(53, "*", WiFi.softAPIP());
+  server.on("/", handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.begin();
+  Serial.println("Portal iniciado: SafeDay_Config");
+}
+
+void handleRoot() {
+  String html = "<html><body style='text-align:center;'><h1>SafeDay Config</h1>";
+  html += "<form action='/save' method='POST'>WiFi: <input name='ssid'><br>Pass: <input name='pass' type='password'><br><input type='submit'></form></body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleSave() {
+  preferences.putString("ssid", server.arg("ssid"));
+  preferences.putString("pass", server.arg("pass"));
+  server.send(200, "text/html", "Guardado. Reiniciando...");
+  delay(2000);
+  ESP.restart();
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar según zona horaria)
+  configTime(-10800, 0, "pool.ntp.org");
   time_t now = time(nullptr);
-  int retries = 0;
-  while (now < 24 * 3600 && retries < 20) {
-    delay(500); now = time(nullptr); retries++;
-  }
+  int r = 0;
+  while (now < 24 * 3600 && r++ < 20) { delay(500); now = time(nullptr); }
   return now > 24 * 3600;
 }

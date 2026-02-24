@@ -10,7 +10,7 @@ import {
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 /**
- * Registra un nuevo cuidador e inicializa su perfil de SafeDay.
+ * Registra un nuevo cuidador.
  */
 export async function signUpWithEmail(
   auth: Auth,
@@ -24,24 +24,12 @@ export async function signUpWithEmail(
     try {
       const db = getFirestore(auth.app);
       
-      // 1. Inicializar settings del dispositivo para el nuevo usuario
+      // Inicializar perfil mínimo
       await setDoc(doc(db, `users/${user.uid}/settings/device`), {
-        volume: 15,
-        isMuted: false
+        volume: 20
       });
-
-      // 2. Crear una tarea de rutina inicial como ejemplo/bienvenida
-      const initialTaskId = crypto.randomUUID();
-      await setDoc(doc(db, `users/${user.uid}/routine/${initialTaskId}`), {
-        id: initialTaskId,
-        title: '¡Bienvenido a SafeDay!',
-        time: '08:00',
-        trackNumber: 1,
-        isActive: true
-      });
-
     } catch (dbError) {
-      console.error('Error al inicializar datos de SafeDay:', dbError);
+      console.error('Error al inicializar SafeDay:', dbError);
     }
   }
 

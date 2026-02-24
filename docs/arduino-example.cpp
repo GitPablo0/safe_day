@@ -1,8 +1,11 @@
 
 /**
  * ==================================================================================
- * SafeDay v1.3 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
+ * SafeDay v1.4 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
  * Hardware: ESP32, DFPlayer Mini, Pulsador (Pin 14), LED (Pin 2), Parlante.
+ * 
+ * VINCULACIÓN: Solo necesitas copiar tu USER_UID desde el Dashboard de la App.
+ * No requiere email ni password en el código.
  * ==================================================================================
  */
 
@@ -13,17 +16,14 @@
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-// 1. CONFIGURACIÓN DE RED Y FIREBASE
+// 1. CONFIGURACIÓN DE RED
 #define WIFI_SSID "TU_WIFI_NAME"
 #define WIFI_PASSWORD "TU_WIFI_PASSWORD"
 
+// 2. CONFIGURACIÓN DE FIREBASE (Copia esto desde tu Dashboard)
 #define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
 #define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
-
-// 2. CREDENCIALES DE LA APP (Usa las mismas que creaste en la App Web)
-#define USER_EMAIL "tu@correo.com"
-#define USER_PASSWORD "tu_password"
-#define USER_UID "TU_USER_UID_AQUI" // Copia esto desde el Dashboard de la App
+#define USER_UID "COPIA_TU_UID_AQUI" 
 
 // 3. PINES
 #define BTN_STOP_PIN 14
@@ -58,7 +58,7 @@ void syncTime() {
   if (getLocalTime(&timeinfo)) {
     char timeStr[20];
     strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
-    Serial.printf("Hora actual sincronizada: %s\n", timeStr);
+    Serial.printf("Hora actual: %s\n", timeStr);
   }
 }
 
@@ -71,10 +71,10 @@ void setup() {
   digitalWrite(LED_INDICATOR, LOW);
   
   if (!myDFPlayer.begin(softSerial)) {
-    Serial.println("Error: DFPlayer no detectado. Revisa conexiones y SD.");
+    Serial.println("Error: DFPlayer no detectado.");
   } else {
     Serial.println("DFPlayer Mini Online.");
-    myDFPlayer.volume(20); // Volumen inicial (0-30)
+    myDFPlayer.volume(20); 
   }
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -83,15 +83,12 @@ void setup() {
   
   syncTime();
 
-  // Configuración de Firebase con Autenticación
+  // Configuración de Firebase (Sin Auth para lectura pública permitida por UID)
   config.api_key = API_KEY;
-  auth.user.email = USER_EMAIL;
-  auth.user.password = USER_PASSWORD;
-
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   
-  Serial.println("Conectando a Firebase...");
+  Serial.println("Sistema SafeDay Inicializado.");
 }
 
 void markTaskAsDone(String taskId) {
@@ -104,11 +101,12 @@ void markTaskAsDone(String taskId) {
   FirebaseJson json;
   json.set("fields/lastCompletedAt/stringValue", String(doneTime)); 
   
-  Serial.println("Registrando cumplimiento...");
+  // Nota: Esto requiere que las reglas de Firestore permitan escritura por UID o pública.
+  // En SafeDay permitimos escritura si el dispositivo conoce el UID.
   if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), json.raw(), "lastCompletedAt")) {
-    Serial.println("Evento guardado en Firestore.");
+    Serial.println("Cumplimiento registrado en la nube.");
   } else {
-    Serial.println("Error al guardar: " + fbdo.errorReason());
+    Serial.println("Error al registrar: " + fbdo.errorReason());
   }
 }
 
@@ -154,7 +152,7 @@ void checkRoutine() {
         
         lastTriggeredMinute = nowStr;
         myDFPlayer.play(activeTrack);
-        Serial.printf("¡ALARMA ACTIVADA! Pista: %d\n", activeTrack);
+        Serial.printf("¡ALARMA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
         break;
       }
     }
@@ -163,27 +161,24 @@ void checkRoutine() {
 
 void loop() {
   if (isAlarmActive) {
-    // Parpadeo del LED (500ms encendido, 500ms apagado)
+    // Parpadeo del LED mientras suena
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2);
     
-    // Repetir el audio si se detiene (puedes ajustar el tiempo según el largo de tus audios)
+    // Repetir audio cada 15 seg si no se ha detenido
     static unsigned long lastPlay = 0;
     if (millis() - lastPlay > 15000) { 
        myDFPlayer.play(activeTrack);
        lastPlay = millis();
     }
 
-    // El paciente presiona el botón físico
     if (digitalRead(BTN_STOP_PIN) == LOW) {
-      Serial.println("Botón presionado: Actividad completada.");
       myDFPlayer.stop();
       digitalWrite(LED_INDICATOR, LOW);
       isAlarmActive = false;
       markTaskAsDone(activeTaskId);
-      delay(1000); // Debounce
+      delay(1000); 
     }
   } else {
-    // Verificación periódica de la rutina
     if (millis() - lastCheck > checkInterval) {
       lastCheck = millis();
       checkRoutine();

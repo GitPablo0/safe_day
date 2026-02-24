@@ -3,31 +3,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper: Check if user is signed in
+    // Helper: Determinar si el usuario está autenticado en la web
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper: Check if user owns the document path
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
+    // Reglas para la colección de usuarios
     match /users/{userId} {
-      allow get, create, update: if isOwner(userId);
+      // El cuidador tiene control total sobre sus datos
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
       
-      // Routine collection rules
+      // Permitimos lectura de la rutina si se conoce el UID (para el ESP32)
+      // También permitimos actualizar 'lastCompletedAt' desde el dispositivo
       match /routine/{taskId} {
-        allow read, write: if isOwner(userId);
+        allow read: if true; 
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastCompletedAt']);
       }
       
-      // Settings collection rules
-      match /settings/{settingId} {
-        allow read, write: if isOwner(userId);
+      // Ajustes del dispositivo: lectura pública por UID
+      match /settings/device {
+        allow read: if true;
       }
     }
     
-    // Default deny
+    // Denegar todo lo demás por defecto
     match /{path=**} {
       allow read, write: if false;
     }

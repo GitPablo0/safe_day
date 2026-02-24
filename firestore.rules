@@ -1,25 +1,104 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    /**
+     * NeuroSense Dashboard Security Rules
+     *
+     * CORE PHILOSOPHY:
+     * This ruleset enforces a strict User-Ownership model. Access to data is gated by the 
+     * user's authenticated identity, ensuring that sensitive device configurations for 
+     * neurodivergent individuals remain private and secure.
+     *
+     * DATA STRUCTURE:
+     * All application data is organized hierarchically under the user's unique identifier:
+     * `/users/{userId}/configurationProfiles/{profileId}`. This structure provides
+     * "Authorization Independence," where the path itself determines access rights.
+     *
+     * KEY SECURITY DECISIONS:
+     * 1. Path-Based Authorization: We rely on the `{userId}` wildcard in the document 
+     *    path to verify ownership, matching it against `request.auth.uid`.
+     * 2. No User Enumeration: Listing the top-level `/users` collection is strictly 
+     *    forbidden to prevent attackers from discovering user IDs.
+     * 3. Relational Integrity: On creation, we enforce that the document's internal 'id' 
+     *    matches the Firestore document ID to ensure data consistency.
+     * 4. State Validation: Destructive operations (update, delete) require the 
+     *    resource to exist and the user to be the confirmed owner.
+     *
+     * PROTOTYPING MODE:
+     * These rules prioritize authorization over schema validation. While we strictly 
+     * control WHO can access data, we allow flexibility in the shape of the data 
+     * (e.g., specific threshold values) to facilitate rapid development and iteration.
+     */
+
+    // --- GLOBAL HELPER FUNCTIONS ---
+
+    /** 
+     * @description Checks if the request is made by an authenticated user.
+     */
     function isSignedIn() {
       return request.auth != null;
     }
+
+    /** 
+     * @description Checks if the authenticated user matches the provided userId.
+     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if isOwner(userId);
+    /** 
+     * @description Combines ownership check with existence check for updates and deletes.
+     */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
     }
-    
-    // Permitir que el dispositivo (con su propio UID) pueda leer la rutina del usuario vinculado
-    // Para simplificar el prototipo, permitimos lectura si está autenticado.
-    match /users/{ownerId}/routine/{taskId} {
-      allow read: if isSignedIn();
+
+    // --- COLLECTION RULES ---
+
+    /**
+     * @description Rules for the root user document.
+     * @path /users/{userId}
+     * @allow (get, create, update) if the user's UID matches the document ID.
+     * @deny (list) to prevent user enumeration.
+     * @principle Pattern 4: Self-Creation and ownership for root identity.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Rules for Configuration Profiles containing device thresholds.
+       * @path /users/{userId}/configurationProfiles/{profileId}
+       * @allow (create) if the owner matches the path and the data ID matches the document ID.
+       * @allow (update) if the owner matches the path and the data ID remains immutable.
+       * @deny (list, get) if the requester is not the path owner.
+       * @principle Pattern 1: Ownership-based access to private subcollections.
+       */
+      match /configurationProfiles/{profileId} {
+        
+        // Read Access: Only the owner can view or list their own profiles.
+        allow get, list: if isOwner(userId);
+
+        // Create: User must be the owner. We enforce that the 'id' field matches the profileId.
+        allow create: if isOwner(userId) 
+                      && request.resource.data.id == profileId;
+
+        // Update: User must be the owner. We enforce that the 'id' field cannot be changed.
+        allow update: if isExistingOwner(userId) 
+                      && request.resource.data.id == resource.data.id;
+
+        // Delete: User must be the owner and the document must exist.
+        allow delete: if isExistingOwner(userId);
+      }
     }
-    match /users/{ownerId}/settings/device {
-      allow read: if isSignedIn();
+
+    // Default deny for any paths not explicitly matched.
+    match /{path=**} {
+      allow read, write: if false;
     }
   }
 }

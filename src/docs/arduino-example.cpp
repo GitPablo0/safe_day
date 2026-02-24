@@ -1,244 +1,179 @@
+
 /**
  * ==================================================================================
- * Código de control para un sistema de alarma PIR conectado a Firebase RTDB.
- * Versión corregida para la biblioteca Firebase-ESP-Client v4.4.17.
- *
- * --- ¡IMPORTANTE! INSTRUCCIONES DE CONEXIÓN ---
- * 1. Abre la aplicación web del dashboard.
- * 2. Inicia sesión.
- * 3. Crea un usuario en Firebase Authentication con el email y contraseña que quieras.
- * 4. Pon ese mismo email y contraseña en las constantes de abajo.
+ * SafeDay v1.7 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
+ * 
+ * INSTRUCCIONES:
+ * 1. Crea un usuario en Firebase Auth: "esp32@safeday.com" / "safeday123".
+ * 2. El UID ya está configurado abajo.
  * ==================================================================================
  */
 
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
+#include "time.h"
+#include "DFRobotDFPlayerMini.h"
 
-// ===============================================================
-// 1. CONFIGURACIÓN DE WIFI Y USUARIO
-// ===============================================================
+#define USER_UID "WWxcJu01odP4dFIp42sHjKUliQ13"
+
 struct WiFiNetwork {
   const char* ssid;
   const char* password;
 };
 
-// Lista de redes WiFi conocidas. Añade las tuyas aquí.
 WiFiNetwork knownNetworks[] = {
   {"Telecentro-416b", "ATNMFMY2MM5Q"},
-  {"Pablooo13", "brenda123"},
-  {"Estudiantes", "Escuelas_2025"}
+  {"Xiomi", "NTXR1956"}
 };
 const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
+#define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
+#define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
 
-// ===============================================================
-// 2. CONFIGURACIÓN DE FIREBASE
-// ===============================================================
-#define API_KEY "AIzaSyD26vBFuUd45oUiio76gLNAz6Mh3062Muw"
-#define FIREBASE_PROJECT_ID "sistemaalarma-11019109-94c6b"
-#define DATABASE_URL "https://sistemaalarma-11019109-94c6b-default-rtdb.firebaseio.com/"
+#define BTN_STOP_PIN 14
+#define LED_INDICATOR 2
+#define DF_RX 16
+#define DF_TX 17
 
-
-// ===============================================
-// 3. PINES Y SENSORES
-// ===============================================
-#define PIR_PIN 23       // Pin para el sensor de movimiento PIR
-#define LED_ROJO_PIN 16  // Pin para el LED rojo (detección de presencia)
-#define LED_AZUL_PIN 15  // Pin para el LED azul (sistema armado)
-#define BUZZER_PIN 22    // Pin para el buzzer
-
-
-// ===============================================
-// 4. OBJETOS Y VARIABLES DE ESTADO
-// ===============================================
-
-// Objetos de Firebase
+DFRobotDFPlayerMini myDFPlayer;
 FirebaseData fbdo;
-FirebaseData stream;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-// Variables de estado del sistema
-bool isArmed = false;
-bool presenceDetected = false;
-unsigned long lastBuzzerToggleTime = 0;
-const long buzzerToggleInterval = 250; // Intervalo para el parpadeo del buzzer
+bool isAlarmActive = false;
+int activeTrack = 0;
+String activeTaskId = "";
+unsigned long lastFirestoreRead = 0;
+const long firestoreReadInterval = 30000;
+String lastTriggeredMinute = "";
 
-// Declaración de funciones
-void streamCallback(FirebaseStream data);
-void streamTimeoutCallback(bool timeout);
 void connectToWiFi();
+bool syncTime();
 void tokenStatusCallback(TokenInfo info);
+void checkRoutineInFirestore();
+void markTaskAsDone(String taskId);
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Inicializando sistema de alarma...");
-
-  // Inicializar pines
-  pinMode(PIR_PIN, INPUT);
-  pinMode(LED_ROJO_PIN, OUTPUT);
-  pinMode(LED_AZUL_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-
-  // Apagar todos los actuadores al inicio
-  digitalWrite(LED_ROJO_PIN, LOW);
-  digitalWrite(LED_AZUL_PIN, LOW);
-  digitalWrite(BUZZER_PIN, LOW);
+  Serial2.begin(9600, SERIAL_8N1, DF_RX, DF_TX);
+  
+  pinMode(BTN_STOP_PIN, INPUT_PULLUP);
+  pinMode(LED_INDICATOR, OUTPUT);
+  digitalWrite(LED_INDICATOR, LOW);
+  
+  if (!myDFPlayer.begin(Serial2)) {
+    Serial.println("Error DFPlayer.");
+  } else {
+    myDFPlayer.volume(20); 
+  }
 
   connectToWiFi();
+  syncTime();
 
-  // Configuración de Firebase
-  Serial.println("Configurando Firebase...");
   config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-  
-  // ¡IMPORTANTE! Credenciales para el dispositivo.
-  // ¡Este usuario debe existir en Firebase Authentication!
-  auth.user.email = "esp32@alumnosuade.com";
-  auth.user.password = "password";
+  auth.user.email = "esp32@safeday.com";
+  auth.user.password = "safeday123";
 
   config.token_status_callback = tokenStatusCallback;
-
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
-
-  Serial.println("Sistema de Alarma Inicializado. Esperando conexión a Firebase...");
 }
 
 void loop() {
-  // 1. Leer datos del stream de Firebase si está listo
-  if (Firebase.ready()) {
-    if (!Firebase.RTDB.readStream(&stream)) {
-        // Handle stream read error
-        Serial.printf("Error al leer stream: %s\n", stream.errorReason().c_str());
+  unsigned long currentMillis = millis();
+  if (!Firebase.ready()) return;
+
+  if (isAlarmActive) {
+    digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
+    static unsigned long lastPlay = 0;
+    if (millis() - lastPlay > 12000) { 
+       myDFPlayer.play(activeTrack);
+       lastPlay = millis();
+    }
+    if (digitalRead(BTN_STOP_PIN) == LOW) {
+      myDFPlayer.stop();
+      digitalWrite(LED_INDICATOR, LOW);
+      isAlarmActive = false;
+      markTaskAsDone(activeTaskId);
+      delay(1000);
+    }
+  } else {
+    digitalWrite(LED_INDICATOR, LOW);
+    if (currentMillis - lastFirestoreRead > firestoreReadInterval) {
+      lastFirestoreRead = currentMillis;
+      checkRoutineInFirestore();
     }
   }
-  
-  // Si el sistema está armado y se detecta presencia por primera vez
-  if (isArmed && digitalRead(PIR_PIN) == HIGH && !presenceDetected) {
-      Serial.println("¡PRESENCIA DETECTADA!");
-      presenceDetected = true;
-      
-      // Enviar el estado a Firebase Realtime Database
-      String path = "/alarm/state/presenceDetected";
-      if (Firebase.RTDB.setBool(&fbdo, path.c_str(), true)) {
-        Serial.println("  - Estado 'presenceDetected' enviado a Firebase.");
-      } else {
-        Serial.printf("  - Error al enviar estado a Firebase: %s\n", fbdo.errorReason().c_str());
+}
+
+void checkRoutineInFirestore() {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)) return;
+  char currentTime[6];
+  sprintf(currentTime, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  String nowStr = String(currentTime);
+  if (nowStr == lastTriggeredMinute) return;
+  String path = "users/" + String(USER_UID) + "/routine";
+  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) {
+    FirebaseJson data;
+    data.setJsonData(fbdo.payload().c_str());
+    FirebaseJsonArray docs;
+    data.get(docs, "documents");
+    for (size_t i = 0; i < docs.size(); i++) {
+      FirebaseJsonData result;
+      docs.get(result, i);
+      FirebaseJson doc;
+      doc.setJsonData(result.stringValue.c_str());
+      FirebaseJsonData taskTime, taskTrack, taskId, taskActive;
+      doc.get(taskTime, "fields/time/stringValue");
+      doc.get(taskTrack, "fields/trackNumber/integerValue");
+      doc.get(taskActive, "fields/isActive/booleanValue");
+      doc.get(taskId, "name");
+      if (taskActive.boolValue && taskTime.stringValue == nowStr) {
+        isAlarmActive = true;
+        activeTrack = taskTrack.intValue;
+        String fullPath = taskId.stringValue;
+        activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
+        lastTriggeredMinute = nowStr;
+        myDFPlayer.play(activeTrack);
+        break;
       }
-  }
-
-  // 3. Control de actuadores
-  digitalWrite(LED_AZUL_PIN, isArmed);
-
-  if (presenceDetected) {
-    digitalWrite(LED_ROJO_PIN, HIGH);
-    unsigned long currentMillis = millis();
-    if (currentMillis - lastBuzzerToggleTime > buzzerToggleInterval) {
-      lastBuzzerToggleTime = currentMillis;
-      digitalWrite(BUZZER_PIN, !digitalRead(BUZZER_PIN));
     }
-  } else {
-    digitalWrite(LED_ROJO_PIN, LOW);
-    digitalWrite(BUZZER_PIN, LOW);
-  }
-  
-  delay(100);
-}
-
-// Callback para cuando llegan datos del stream
-void streamCallback(FirebaseStream data) {
-    Serial.printf("Stream de datos recibido, ruta: %s, tipo de evento: %s\n", data.dataPath().c_str(), data.eventType().c_str());
-    
-    if (data.dataTypeEnum() == fb_esp_rtdb_data_type_json) {
-        FirebaseJson *json = data.to<FirebaseJson *>();
-        FirebaseJsonData result;
-        
-        String path = data.dataPath();
-
-        // Si cambia todo el objeto /alarm/state
-        if (path == "/") {
-            if (json->get(result, "isArmed")) {
-                if (result.typeNum == FirebaseJson::JSON_BOOL) {
-                    isArmed = result.to<bool>();
-                    Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-                }
-            }
-        }
-        // Si solo cambia el campo isArmed
-        else if (path == "/isArmed") {
-            if(data.dataTypeEnum() == fb_esp_rtdb_data_type_boolean) {
-                isArmed = data.to<bool>();
-                Serial.printf("  - Estado 'isArmed' actualizado a: %s\n", isArmed ? "TRUE" : "FALSE");
-            }
-        }
-
-        // Si se desarma el sistema, reseteamos la detección de presencia.
-        if (!isArmed && presenceDetected) {
-            presenceDetected = false;
-            Serial.println("  - Sistema desarmado, reseteando presencia en Firebase.");
-            String presencePath = "/alarm/state/presenceDetected";
-            Firebase.RTDB.setBool(&fbdo, presencePath.c_str(), false);
-        }
-    }
-}
-
-// Callback para cuando el stream expira
-void streamTimeoutCallback(bool timeout) {
-  if (timeout) {
-    Serial.println("Stream de Firebase ha expirado. Se intentará reconectar en el próximo ciclo.");
   }
 }
 
-// Callback para el estado del token de autenticación
+void markTaskAsDone(String taskId) {
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  char doneTime[20];
+  strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
+  String path = "users/" + String(USER_UID) + "/routine/" + taskId;
+  String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
+  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt");
+}
+
 void tokenStatusCallback(TokenInfo info) {
-  if (info.status == token_status_ready) {
-    Serial.printf("Token de Firebase listo. UID de Auth: %s\n", auth.token.uid.c_str());
-    Serial.println("Conectando al stream de Realtime Database...");
-    String path = "/alarm/state";
-    if (!Firebase.RTDB.beginStream(&stream, path.c_str())) {
-        Serial.printf("Error al iniciar stream: %s\n", stream.errorReason().c_str());
-    } else {
-      Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
-    }
-  } else {
-    Serial.printf("------------------------------------\n");
-    Serial.printf("Error de token de Firebase: %s\n", info.error.message.c_str());
-    Serial.printf("------------------------------------\n");
-  }
+  if (info.status == token_status_ready) Serial.println("Autenticado.");
 }
 
-// Función para conectar a la red WiFi
+bool syncTime() {
+  configTime(-10800, 0, "pool.ntp.org");
+  time_t now = time(nullptr);
+  int retries = 0;
+  while (now < 24 * 3600 && retries < 20) {
+    delay(500); now = time(nullptr); retries++;
+  }
+  return now > 24 * 3600;
+}
+
 void connectToWiFi() {
   WiFi.mode(WIFI_STA);
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Buscando redes WiFi conocidas...");
-    for (int i = 0; i < numKnownNetworks; i++) {
-      Serial.print("Intentando conectar a: ");
-      Serial.println(knownNetworks[i].ssid);
-      
-      WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
-      
-      unsigned long startAttemptTime = millis();
-      while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
-        Serial.print(".");
-        delay(500);
-      }
-      
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n¡Conectado a WiFi!");
-        Serial.print("Red: ");
-        Serial.println(WiFi.SSID());
-        Serial.print("Dirección IP: ");
-        Serial.println(WiFi.localIP());
-        return;
-      } else {
-        Serial.println("\nFallo al conectar. Probando siguiente red...");
-        WiFi.disconnect();
-      }
-    }
-    Serial.println("No se encontró ninguna red conocida. Reintentando en 10 segundos...");
-    delay(10000);
+  for (int i = 0; i < numKnownNetworks; i++) {
+    WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) { delay(500); Serial.print("."); }
+    if (WiFi.status() == WL_CONNECTED) return;
+    WiFi.disconnect();
   }
 }

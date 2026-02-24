@@ -1,12 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v1.6 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
+ * SafeDay v1.7 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
  * Basado en la arquitectura robusta v3 de Sound Alarm.
  * 
  * INSTRUCCIONES:
  * 1. Crea un usuario en Firebase Auth: "esp32@safeday.com" / "safeday123".
- * 2. Copia el Device UID de tu cuenta personal de la App Web abajo.
+ * 2. El UID ya está configurado abajo.
  * 3. Conexiones: 
  *    - DFPlayer RX -> ESP32 TX2 (GPIO 17)
  *    - DFPlayer TX -> ESP32 RX2 (GPIO 16)
@@ -24,8 +24,8 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
-// ¡¡¡ PEGA EL UID DE TU USUARIO DE FIREBASE AQUÍ !!!
-#define USER_UID "PCCPns02ocS6SKiWT03X0y5LEOi1"
+// UID FIJO CONFIGURADO POR EL USUARIO
+#define USER_UID "WWxcJu01odP4dFIp42sHjKUliQ13"
 
 struct WiFiNetwork {
   const char* ssid;
@@ -33,6 +33,7 @@ struct WiFiNetwork {
 };
 
 WiFiNetwork knownNetworks[] = {
+  {"Telecentro-416b", "ATNMFMY2MM5Q"},
   {"Xiomi", "NTXR1956"},
   {"Pablooo13", "brenda123"},
   {"Estudiantes", "Escuelas_2025"}
@@ -50,8 +51,8 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================
 #define BTN_STOP_PIN 14   // Pulsador físico para detener alarma
 #define LED_INDICATOR 2   // LED indicador (parpadea al sonar)
-#define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32
-#define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32
+#define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32 (HardwareSerial)
+#define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32 (HardwareSerial)
 
 // ===============================================
 // 4. OBJETOS Y VARIABLES
@@ -78,7 +79,8 @@ void markTaskAsDone(String taskId);
 void setup() {
   Serial.begin(115200);
   
-  // Inicializar Serial2 para el DFPlayer (HardwareSerial Nativo)
+  // Inicializar Serial2 para el DFPlayer (HardwareSerial Nativo en ESP32)
+  // Pines: RX2 = GPIO 16, TX2 = GPIO 17
   Serial2.begin(9600, SERIAL_8N1, DF_RX, DF_TX);
   
   pinMode(BTN_STOP_PIN, INPUT_PULLUP);
@@ -87,7 +89,7 @@ void setup() {
   
   Serial.println("Iniciando DFPlayer...");
   if (!myDFPlayer.begin(Serial2)) {
-    Serial.println("Error: DFPlayer no detectado. Revisa conexiones RX2/TX2 y SD.");
+    Serial.println("Error: DFPlayer no detectado. Revisa conexiones RX2/TX2 y tarjeta SD.");
   } else {
     Serial.println("DFPlayer Mini Online.");
     myDFPlayer.volume(20); 
@@ -104,7 +106,7 @@ void setup() {
   Firebase.reconnectWiFi(true);
   Firebase.begin(&config, &auth);
 
-  Serial.println("SafeDay Inicializado.");
+  Serial.println("SafeDay Inicializado con UID y WiFi configurados.");
 }
 
 void loop() {
@@ -182,7 +184,7 @@ void checkRoutineInFirestore() {
         activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
         lastTriggeredMinute = nowStr;
         myDFPlayer.play(activeTrack);
-        Serial.printf("¡ALERTA ACTIVADA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
+        Serial.printf("¡ACTIVADA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
         break;
       }
     }
@@ -211,7 +213,7 @@ void tokenStatusCallback(TokenInfo info) {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Argentina/Uruguay/Chile) - Ajustar si es necesario
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar si es necesario)
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

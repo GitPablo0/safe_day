@@ -3,85 +3,84 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * FIRESTORE SECURITY RULES - PROTOTYPING PHASE
+     * FIRESTORE SECURITY RULES - PROTOTYPING MODE
      * 
-     * CORE PHILOSOPHY:
-     * This ruleset enforces a strict Path-Based Ownership model. Access to data is 
-     * primarily determined by the hierarchical structure of the database, where 
-     * user-specific data is nested under their unique authenticated UID.
+     * Core Philosophy:
+     * This ruleset enforces a strict Path-Based Ownership model. Security is tied directly 
+     * to the document hierarchy, ensuring that users can only access data nested under 
+     * their own unique identifier.
      * 
-     * DATA STRUCTURE:
-     * - /users/{userId}: The root document for a user's profile.
-     * - /users/{userId}/sensorConfigurations/{configId}: User-specific sensor settings.
+     * Data Structure:
+     * All user-specific data is organized under the top-level path /users/{userId}. 
+     * Specifically, system configurations are stored at:
+     * /users/{userId}/systemConfigurations/{systemConfigurationId}
      * 
-     * KEY SECURITY DECISIONS:
-     * 1. Authorization Independence: We rely on the {userId} wildcard in the document 
-     *    path to verify ownership, avoiding expensive get() calls to parent documents.
-     * 2. QAP Compliance: List operations are restricted to the user's own subcollections, 
-     *    ensuring that queries naturally only return data the user is authorized to see.
-     * 3. Schema Flexibility: While authorization is strictly enforced (who can write), 
-     *    the internal shape of the data is not validated to allow for rapid UI/UX iteration.
-     * 4. Relational Integrity: We enforce consistency between the document ID in the path 
-     *    and the 'id' field within the document data during creation and updates.
+     * Key Security Decisions:
+     * 1. Authorization Independence: By using the userId in the path, we verify ownership 
+     *    by comparing the path wildcard to the 'request.auth.uid'. This avoids slow and 
+     *    costly 'get()' lookups.
+     * 2. Flexible Prototyping: While access is strictly controlled, the rules do not 
+     *    enforce strict data types or schemas for non-relational fields (e.g., sensor 
+     *    threshold values), allowing for rapid frontend iteration.
+     * 3. Relational Integrity: On document creation, the rules enforce that internal 
+     *    ID fields match the Firestore document ID to ensure data consistency.
      */
 
-    // --- HELPER FUNCTIONS ---
+    // --- GLOBAL HELPER FUNCTIONS ---
 
     /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user matches the provided userId. */
+    /** @description Checks if the authenticated user's UID matches the provided userId. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Combines ownership check with an existence check for updates and deletes. */
+    /** @description Checks ownership and ensures the document already exists for update/delete. */
     function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
+      return isOwner(userId) && resource != null;
     }
 
     // --- COLLECTION RULES ---
 
     /**
-     * @description Rules for the user profile document.
-     * @path /users/{userId}
-     * @allow (get) If auth.uid matches {userId}.
-     * @deny (list) If auth.uid does not match {userId} (prevents user discovery).
-     * @principle Path-based ownership for private user data.
+     * @description Rules for managing user-owned system configuration profiles.
+     * @path /users/{userId}/systemConfigurations/{systemConfigurationId}
+     * @allow (create) if auth.uid matches {userId} and data.id matches {systemConfigurationId}.
+     * @deny (list) if auth.uid does not match {userId}.
+     * @principle Restricts access to a user's own data tree and validates path/ID consistency.
      */
-    match /users/{userId} {
+    match /users/{userId}/systemConfigurations/{systemConfigurationId} {
+      
+      // Read Permissions
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
+
+      // Write Permissions
+      allow create: if isOwner(userId) && request.resource.data.id == systemConfigurationId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Root user document rules.
+     * @path /users/{userId}
+     * @allow (create) if auth.uid matches the document ID being created.
+     * @deny (update) if the user attempts to change their own document ID.
+     * @principle Implements Self-Creation and ownership for the root user profile.
+     */
+    match /users/{userId} {
+      
+      // Read Permissions
+      allow get: if isOwner(userId);
+      allow list: if false; // Disallow listing all users for privacy.
+
+      // Write Permissions
       allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
-
-      /**
-       * @description Rules for sensor configurations owned by a user.
-       * @path /users/{userId}/sensorConfigurations/{configId}
-       * @allow (create) If auth.uid matches {userId} and data.id matches {configId}.
-       * @deny (update) If the configuration 'id' is being changed to a different value.
-       * @principle Relational integrity and owner-only subcollection access.
-       */
-      match /sensorConfigurations/{configId} {
-        allow get, list: if isOwner(userId);
-        
-        // Ensure the ID in the document matches the ID in the path for relational integrity.
-        allow create: if isOwner(userId) && request.resource.data.id == configId;
-        
-        // Ensure the ID is immutable and the document exists.
-        allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-        
-        allow delete: if isExistingOwner(userId);
-      }
-    }
-
-    // --- GLOBAL DENY ---
-    // Explicitly deny access to any other paths not defined above.
-    match /{path=**} {
-      allow read, write: if false;
     }
   }
 }

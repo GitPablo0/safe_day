@@ -1,12 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v2.0 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
+ * SafeDay v2.1 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
  * 
- * NUEVA FUNCIÓN: WiFi Autoconfigurable.
- * 1. Si no hay WiFi, el ESP32 crea la red "SafeDay_Config".
- * 2. Conéctate con tu móvil y ve a 192.168.4.1 para configurar el internet.
- * 3. Mantén presionado el botón (Pin 4) 5 segundos para resetear el WiFi.
+ * MEJORAS:
+ * 1. Gestión de memoria optimizada para evitar SSL Timeouts.
+ * 2. Portal Cautivo para configuración de WiFi inicial.
+ * 3. Botón físico en PIN 4 y LED en PIN 2.
  * ==================================================================================
  */
 
@@ -49,7 +49,6 @@ unsigned long lastFirestoreRead = 0;
 const long firestoreReadInterval = 30000; 
 String lastTriggeredMinute = "";
 
-// Variables para el portal cautivo
 const char* AP_SSID = "SafeDay_Config";
 bool isConfigMode = false;
 
@@ -78,7 +77,6 @@ void setup() {
     myDFPlayer.volume(20); 
   }
 
-  // Intentar conectar con WiFi guardado
   String savedSSID = preferences.getString("ssid", "");
   String savedPASS = preferences.getString("pass", "");
 
@@ -104,7 +102,11 @@ void setup() {
     config.api_key = API_KEY;
     auth.user.email = "esp32@safeday.com";
     auth.user.password = "safeday123";
+    
+    // Configuración para mayor estabilidad
     Firebase.reconnectWiFi(true);
+    fbdo.setResponseSize(2048); 
+    
     Firebase.begin(&config, &auth);
     Serial.println("SafeDay Inicializado.");
   }
@@ -114,11 +116,11 @@ void loop() {
   if (isConfigMode) {
     dnsServer.processNextRequest();
     server.handleClient();
-    digitalWrite(LED_INDICATOR, (millis() / 200) % 2); // Parpadeo rápido en config
+    digitalWrite(LED_INDICATOR, (millis() / 200) % 2); 
     return;
   }
 
-  // Verificar si se mantiene el botón para resetear WiFi
+  // Lógica de reset (Botón presionado 5 segundos)
   if (digitalRead(BTN_STOP_PIN) == LOW) {
     static unsigned long pressStart = 0;
     if (pressStart == 0) pressStart = millis();
@@ -130,7 +132,6 @@ void loop() {
       ESP.restart();
     }
   } else {
-    // Si la alarma está activa, el botón solo la detiene (comportamiento normal)
     if (isAlarmActive && digitalRead(BTN_STOP_PIN) == LOW) {
        myDFPlayer.stop();
        isAlarmActive = false;
@@ -152,9 +153,6 @@ void loop() {
   }
 }
 
-// ===============================================
-// 3. LÓGICA DEL PORTAL DE CONFIGURACIÓN
-// ===============================================
 void setupConfigPortal() {
   isConfigMode = true;
   WiFi.mode(WIFI_AP);
@@ -168,7 +166,7 @@ void setupConfigPortal() {
     server.send(302, "text/plain", "");
   });
   server.begin();
-  Serial.println("Portal de Configuración iniciado: SafeDay_Config");
+  Serial.println("Portal de Configuracion iniciado: SafeDay_Config");
 }
 
 void handleRoot() {
@@ -192,9 +190,6 @@ void handleSave() {
   ESP.restart();
 }
 
-// ===============================================
-// 4. LÓGICA DE FIRESTORE (SIN CAMBIOS CRÍTICOS)
-// ===============================================
 void checkRoutineInFirestore() {
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)) return;
@@ -207,11 +202,10 @@ void checkRoutineInFirestore() {
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), 0, "", "", "", false)) {
-    FirebaseJson data;
-    data.setJsonData(fbdo.payload().c_str());
+  // Usamos (default) explícitamente y 0 para el tamaño de página (pageSize)
+  if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "(default)", path.c_str(), 0, "", "", "", false)) {
     FirebaseJsonData result;
-    data.get(result, "documents");
+    fbdo.jsonObject().get(result, "documents");
     
     if (result.success && result.typeNum == FirebaseJson::JSON_ARRAY) {
       FirebaseJsonArray docs;
@@ -221,6 +215,7 @@ void checkRoutineInFirestore() {
         docs.get(docResult, i);
         FirebaseJson doc;
         doc.setJsonData(docResult.stringValue.c_str());
+        
         FirebaseJsonData taskTime, taskTrack, taskId, taskActive;
         doc.get(taskTime, "fields/time/stringValue");
         doc.get(taskTrack, "fields/trackNumber/integerValue");
@@ -234,6 +229,7 @@ void checkRoutineInFirestore() {
           activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
           lastTriggeredMinute = nowStr;
           myDFPlayer.play(activeTrack);
+          Serial.println("TAREA ACTIVADA: " + activeTaskId);
           break;
         }
       }
@@ -248,7 +244,7 @@ void markTaskAsDone(String taskId) {
   strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
   String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
-  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt");
+  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "(default)", path.c_str(), content.c_str(), "lastCompletedAt");
 }
 
 bool syncTime() {

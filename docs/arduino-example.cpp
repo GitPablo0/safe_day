@@ -1,7 +1,7 @@
 
 /**
  * ==================================================================================
- * SafeDay v1.2 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
+ * SafeDay v1.3 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
  * Hardware: ESP32, DFPlayer Mini, Pulsador (Pin 14), LED (Pin 2), Parlante.
  * ==================================================================================
  */
@@ -13,33 +13,37 @@
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-// 1. CONFIGURACIÓN - REEMPLAZAR CON TUS DATOS
+// 1. CONFIGURACIÓN DE RED Y FIREBASE
 #define WIFI_SSID "TU_WIFI_NAME"
 #define WIFI_PASSWORD "TU_WIFI_PASSWORD"
 
 #define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
 #define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
+
+// 2. CREDENCIALES DE LA APP (Usa las mismas que creaste en la App Web)
+#define USER_EMAIL "tu@correo.com"
+#define USER_PASSWORD "tu_password"
 #define USER_UID "TU_USER_UID_AQUI" // Copia esto desde el Dashboard de la App
 
-// 2. PINES
+// 3. PINES
 #define BTN_STOP_PIN 14
 #define LED_INDICATOR 2
 #define DF_RX 16
 #define DF_TX 17
 
-// 3. OBJETOS
+// 4. OBJETOS
 SoftwareSerial softSerial(DF_RX, DF_TX);
 DFRobotDFPlayerMini myDFPlayer;
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-// 4. VARIABLES DE ESTADO
+// 5. VARIABLES DE ESTADO
 bool isAlarmActive = false;
 int activeTrack = 0;
 String activeTaskId = "";
 unsigned long lastCheck = 0;
-const long checkInterval = 30000; // Revisar cada 30 segundos
+const long checkInterval = 20000; // Revisar cada 20 segundos
 String lastTriggeredMinute = "";
 
 // Configuración NTP
@@ -51,7 +55,11 @@ void syncTime() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   Serial.println("Sincronizando hora...");
   struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) Serial.println(&timeinfo, "Hora actual: %H:%M:%S");
+  if (getLocalTime(&timeinfo)) {
+    char timeStr[20];
+    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
+    Serial.printf("Hora actual sincronizada: %s\n", timeStr);
+  }
 }
 
 void setup() {
@@ -63,10 +71,10 @@ void setup() {
   digitalWrite(LED_INDICATOR, LOW);
   
   if (!myDFPlayer.begin(softSerial)) {
-    Serial.println("Error: DFPlayer no detectado.");
+    Serial.println("Error: DFPlayer no detectado. Revisa conexiones y SD.");
   } else {
     Serial.println("DFPlayer Mini Online.");
-    myDFPlayer.volume(20); // Volumen 0-30
+    myDFPlayer.volume(20); // Volumen inicial (0-30)
   }
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -75,24 +83,38 @@ void setup() {
   
   syncTime();
 
+  // Configuración de Firebase con Autenticación
   config.api_key = API_KEY;
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
+  
+  Serial.println("Conectando a Firebase...");
 }
 
 void markTaskAsDone(String taskId) {
-  // Registra en Firestore que el paciente tocó el botón
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  char doneTime[20];
+  strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
+  
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
   FirebaseJson json;
-  // Firestore requiere un formato específico para timestamps o podemos usar strings
-  json.set("fields/lastCompletedAt/stringValue", "Completado a las " + String(millis())); 
+  json.set("fields/lastCompletedAt/stringValue", String(doneTime)); 
   
+  Serial.println("Registrando cumplimiento...");
   if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), json.raw(), "lastCompletedAt")) {
-    Serial.println("Evento registrado en Firebase.");
+    Serial.println("Evento guardado en Firestore.");
+  } else {
+    Serial.println("Error al guardar: " + fbdo.errorReason());
   }
 }
 
 void checkRoutine() {
+  if (!Firebase.ready()) return;
+
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)) return;
 
@@ -102,9 +124,6 @@ void checkRoutine() {
 
   if (nowStr == lastTriggeredMinute) return;
 
-  Serial.print("Buscando tareas para las: "); Serial.println(nowStr);
-
-  // Obtener documentos de la colección routine
   String path = "users/" + String(USER_UID) + "/routine";
   
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) {
@@ -124,19 +143,18 @@ void checkRoutine() {
       doc.get(taskTime, "fields/time/stringValue");
       doc.get(taskTrack, "fields/trackNumber/integerValue");
       doc.get(taskActive, "fields/isActive/booleanValue");
-      doc.get(taskId, "name"); // El path completo del doc
+      doc.get(taskId, "name");
 
       if (taskActive.boolValue && taskTime.stringValue == nowStr) {
         isAlarmActive = true;
         activeTrack = taskTrack.intValue;
         
-        // Extraer solo el ID del final del path
         String fullPath = taskId.stringValue;
         activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
         
         lastTriggeredMinute = nowStr;
         myDFPlayer.play(activeTrack);
-        Serial.printf("¡ALARMA! Pista: %d\n", activeTrack);
+        Serial.printf("¡ALARMA ACTIVADA! Pista: %d\n", activeTrack);
         break;
       }
     }
@@ -145,26 +163,27 @@ void checkRoutine() {
 
 void loop() {
   if (isAlarmActive) {
-    // Parpadeo del LED
+    // Parpadeo del LED (500ms encendido, 500ms apagado)
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2);
     
-    // Si el audio terminó y la alarma sigue activa, repetir
-    // Nota: Dependiendo de la versión del DFPlayer, esto puede variar
+    // Repetir el audio si se detiene (puedes ajustar el tiempo según el largo de tus audios)
     static unsigned long lastPlay = 0;
-    if (millis() - lastPlay > 10000) { // Repetir cada 10s si es necesario
+    if (millis() - lastPlay > 15000) { 
        myDFPlayer.play(activeTrack);
        lastPlay = millis();
     }
 
+    // El paciente presiona el botón físico
     if (digitalRead(BTN_STOP_PIN) == LOW) {
-      Serial.println("Paciente presionó el botón.");
+      Serial.println("Botón presionado: Actividad completada.");
       myDFPlayer.stop();
       digitalWrite(LED_INDICATOR, LOW);
       isAlarmActive = false;
       markTaskAsDone(activeTaskId);
-      delay(1000);
+      delay(1000); // Debounce
     }
   } else {
+    // Verificación periódica de la rutina
     if (millis() - lastCheck > checkInterval) {
       lastCheck = millis();
       checkRoutine();

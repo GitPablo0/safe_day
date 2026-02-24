@@ -1,12 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v2.1 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
+ * SafeDay v2.2 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
  * 
- * MEJORAS:
- * 1. Gestión de memoria optimizada para evitar SSL Timeouts.
- * 2. Portal Cautivo para configuración de WiFi inicial.
- * 3. Botón físico en PIN 4 y LED en PIN 2.
+ * CORRECCIONES:
+ * 1. Audio infinito: El audio se repite hasta presionar el botón.
+ * 2. Lógica de botón corregida: Separa clic corto (Stop) de clic largo (Reset WiFi).
+ * 3. Marcado de tarea: Ahora actualiza Firestore correctamente al detener la alarma.
  * ==================================================================================
  */
 
@@ -103,7 +103,6 @@ void setup() {
     auth.user.email = "esp32@safeday.com";
     auth.user.password = "safeday123";
     
-    // Configuración para mayor estabilidad
     Firebase.reconnectWiFi(true);
     fbdo.setResponseSize(2048); 
     
@@ -120,11 +119,15 @@ void loop() {
     return;
   }
 
-  // Lógica de reset (Botón presionado 5 segundos)
-  if (digitalRead(BTN_STOP_PIN) == LOW) {
-    static unsigned long pressStart = 0;
-    if (pressStart == 0) pressStart = millis();
-    if (millis() - pressStart > 5000) {
+  // --- LÓGICA MEJORADA DEL BOTÓN ---
+  static unsigned long btnTimer = 0;
+  bool btnPressed = (digitalRead(BTN_STOP_PIN) == LOW);
+
+  if (btnPressed) {
+    if (btnTimer == 0) btnTimer = millis(); // Empezar a contar
+    
+    // CASO A: Reset WiFi (Mantener pulsado 5 segundos)
+    if (millis() - btnTimer > 5000) {
       preferences.putString("ssid", "");
       preferences.putString("pass", "");
       Serial.println("WiFi reseteado. Reiniciando...");
@@ -132,20 +135,31 @@ void loop() {
       ESP.restart();
     }
   } else {
-    if (isAlarmActive && digitalRead(BTN_STOP_PIN) == LOW) {
-       myDFPlayer.stop();
-       isAlarmActive = false;
-       markTaskAsDone(activeTaskId);
-       delay(500);
+    // Cuando se suelta el botón
+    if (btnTimer > 0) {
+      unsigned long duration = millis() - btnTimer;
+      
+      // CASO B: Detener Alarma (Pulsación corta)
+      if (duration < 3000 && isAlarmActive) {
+        Serial.println("Deteniendo alarma...");
+        myDFPlayer.stop();
+        isAlarmActive = false;
+        digitalWrite(LED_INDICATOR, LOW);
+        markTaskAsDone(activeTaskId);
+        delay(500);
+      }
+      btnTimer = 0; // Resetear temporizador del botón
     }
   }
 
   if (!Firebase.ready()) return;
 
   if (isAlarmActive) {
+    // Parpadeo de LED mientras suena
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
   } else {
     digitalWrite(LED_INDICATOR, LOW);
+    // Solo chequear Firestore si no hay alarma activa
     if (millis() - lastFirestoreRead > firestoreReadInterval) {
       lastFirestoreRead = millis();
       checkRoutineInFirestore();
@@ -202,7 +216,7 @@ void checkRoutineInFirestore() {
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  // Usamos (default) explícitamente y 0 para el tamaño de página (pageSize)
+  // Usamos el UID correcto y los 9 argumentos necesarios
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "(default)", path.c_str(), 0, "", "", "", false)) {
     FirebaseJsonData result;
     fbdo.jsonObject().get(result, "documents");
@@ -228,7 +242,10 @@ void checkRoutineInFirestore() {
           String fullPath = taskId.to<String>();
           activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
           lastTriggeredMinute = nowStr;
-          myDFPlayer.play(activeTrack);
+          
+          // REPETICIÓN INFINITA: Usamos .loop() en lugar de .play()
+          myDFPlayer.loop(activeTrack); 
+          
           Serial.println("TAREA ACTIVADA: " + activeTaskId);
           break;
         }
@@ -242,13 +259,20 @@ void markTaskAsDone(String taskId) {
   getLocalTime(&timeinfo);
   char doneTime[20];
   strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
+  
   String path = "users/" + String(USER_UID) + "/routine/" + taskId;
   String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
-  Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "(default)", path.c_str(), content.c_str(), "lastCompletedAt");
+  
+  // Notificar a Firestore que la tarea se completó
+  if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "(default)", path.c_str(), content.c_str(), "lastCompletedAt")) {
+    Serial.println("Tarea marcada como realizada en la nube.");
+  } else {
+    Serial.println("Error al marcar tarea: " + fbdo.errorReason());
+  }
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org");
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

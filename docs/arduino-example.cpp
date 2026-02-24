@@ -174,10 +174,11 @@ void setupConfigPortal() {
 void handleRoot() {
   String html = "<html><body style='font-family:sans-serif; text-align:center;'>";
   html += "<h1>SafeDay Config</h1>";
-  html += "<form action='/save' method='POST'>";
-  html += "WiFi: <input type='text' name='ssid'><br><br>";
-  html += "Pass: <input type='password' name='pass'><br><br>";
-  html += "<input type='submit' value='Guardar y Conectar'>";
+  html += "<p>Introduce los datos del WiFi para conectar SafeDay</p>";
+  html += "<form action='/save' method='POST' style='display:inline-block; text-align:left;'>";
+  html += "Nombre WiFi (SSID):<br><input type='text' name='ssid' style='width:200px;'><br><br>";
+  html += "Contraseña:<br><input type='password' name='pass' style='width:200px;'><br><br>";
+  html += "<input type='submit' value='Guardar y Conectar' style='padding:10px;'>";
   html += "</form></body></html>";
   server.send(200, "text/html", html);
 }
@@ -185,15 +186,19 @@ void handleRoot() {
 void handleSave() {
   String s = server.arg("ssid");
   String p = server.arg("pass");
-  preferences.putString("ssid", s);
-  preferences.putString("pass", p);
-  server.send(200, "text/html", "Configuracion guardada. Reiniciando SafeDay...");
-  delay(2000);
-  ESP.restart();
+  if (s != "") {
+    preferences.putString("ssid", s);
+    preferences.putString("pass", p);
+    server.send(200, "text/html", "Configuración guardada. SafeDay se está reiniciando para conectarse...");
+    delay(2000);
+    ESP.restart();
+  } else {
+    server.send(200, "text/html", "Error: El nombre del WiFi no puede estar vacío. <a href='/'>Volver</a>");
+  }
 }
 
 // ===============================================
-// 4. LÓGICA DE FIRESTORE (SIN CAMBIOS CRÍTICOS)
+// 4. LÓGICA DE FIRESTORE
 // ===============================================
 void checkRoutineInFirestore() {
   struct tm timeinfo;
@@ -207,6 +212,7 @@ void checkRoutineInFirestore() {
 
   String path = "users/" + String(USER_UID) + "/routine";
   
+  // Consulta de 9 argumentos para máxima compatibilidad con la librería
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), 0, "", "", "", false)) {
     FirebaseJson data;
     data.setJsonData(fbdo.payload().c_str());
@@ -234,6 +240,7 @@ void checkRoutineInFirestore() {
           activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
           lastTriggeredMinute = nowStr;
           myDFPlayer.play(activeTrack);
+          Serial.println("ALERTA: Iniciando recordatorio: " + activeTaskId);
           break;
         }
       }
@@ -252,7 +259,7 @@ void markTaskAsDone(String taskId) {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org");
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar según zona horaria)
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

@@ -9,7 +9,7 @@
  * 3. Conexiones: 
  *    - DFPlayer RX -> ESP32 TX2 (GPIO 17)
  *    - DFPlayer TX -> ESP32 RX2 (GPIO 16)
- *    - Botón Stop -> GPIO 14 y GND
+ *    - Botón Stop -> GPIO 4 y GND
  *    - LED -> GPIO 2 y GND
  * ==================================================================================
  */
@@ -47,8 +47,8 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 // ===============================================
 // 3. PINES
 // ===============================================
-#define BTN_STOP_PIN 14   // Pulsador físico para detener alarma
-#define LED_INDICATOR 2   // LED indicador (parpadea al sonar)
+#define BTN_STOP_PIN 4    // Pulsador físico para detener alarma (GPIO 4)
+#define LED_INDICATOR 2   // LED indicador (GPIO 2)
 #define DF_RX 16          // TX del DFPlayer -> RX2 del ESP32
 #define DF_TX 17          // RX del DFPlayer -> TX2 del ESP32
 

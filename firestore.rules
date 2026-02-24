@@ -7,21 +7,38 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      // Reglas para el documento de perfil del usuario
+      allow read, write: if isOwner(userId);
       
-      // El dispositivo SafeDay puede leer la rutina si conoce el UID
-      // y actualizar el campo de cumplimiento.
+      // Reglas para la subcolección de rutinas
       match /routine/{taskId} {
+        // El dueño de la cuenta tiene control total (Crear, Leer, Actualizar, Borrar)
+        allow read, write: if isOwner(userId);
+        
+        // El dispositivo físico SafeDay puede leer la rutina si conoce el UID del usuario
         allow read: if true; 
+        
+        // El dispositivo físico puede registrar el cumplimiento de una tarea
+        // permitiendo actualizar únicamente el campo 'lastCompletedAt'
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastCompletedAt']);
       }
       
+      // Reglas para la configuración del dispositivo
       match /settings/device {
+        // El dueño tiene control total para ajustar el volumen, etc.
+        allow read, write: if isOwner(userId);
+        
+        // El dispositivo físico puede leer su configuración
         allow read: if true;
       }
     }
     
+    // Denegar cualquier otro acceso por defecto
     match /{path=**} {
       allow read, write: if false;
     }

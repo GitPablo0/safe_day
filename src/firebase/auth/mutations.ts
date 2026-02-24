@@ -24,9 +24,9 @@ export async function signUpWithEmail(
     try {
       const db = getFirestore(auth.app);
       
-      // Inicializar perfil mínimo
+      // Inicializar perfil mínimo sin volumen
       await setDoc(doc(db, `users/${user.uid}/settings/device`), {
-        volume: 20
+        status: 'online'
       });
     } catch (dbError) {
       console.error('Error al inicializar SafeDay:', dbError);

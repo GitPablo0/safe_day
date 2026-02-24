@@ -1,14 +1,13 @@
 
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
 import { RoutineManager } from './routine-manager';
-import { DeviceConfig } from './device-config';
 import { UserUidCard } from './user-uid-card';
 import { Skeleton } from '../ui/skeleton';
 import { ClipboardList, HeartPulse } from 'lucide-react';
@@ -62,7 +61,6 @@ export function Dashboard() {
         </div>
 
         <div className="space-y-6">
-          <DeviceConfig userId={user.uid} />
           <UserUidCard user={user} isLoading={isUserLoading} />
         </div>
       </div>
@@ -79,7 +77,6 @@ function DashboardSkeleton() {
           <Skeleton className="h-[400px] w-full" />
         </div>
         <div className="space-y-6">
-          <Skeleton className="h-40 w-full" />
           <Skeleton className="h-40 w-full" />
         </div>
       </div>

@@ -38,12 +38,11 @@
       "type": "object",
       "description": "Operational parameters for the physical SafeDay device.",
       "properties": {
-        "volume": {
-          "type": "number",
-          "description": "Volume level for the DFPlayer Mini (0-30)."
+        "status": {
+          "type": "string",
+          "description": "General status of the device."
         }
-      },
-      "required": ["volume"]
+      }
     }
   },
   "auth": {
@@ -64,7 +63,7 @@
         "definition": {
           "entityName": "DeviceSettings",
           "schema": { "$ref": "#/backend/entities/DeviceSettings" },
-          "description": "Stores device-specific configurations like volume."
+          "description": "Stores device-specific configurations."
         }
       }
     ]

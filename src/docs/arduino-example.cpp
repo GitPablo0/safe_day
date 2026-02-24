@@ -73,6 +73,7 @@ void setup() {
   if (!myDFPlayer.begin(Serial2)) {
     Serial.println("DFPlayer no detectado.");
   } else {
+    // Volumen fijo en 25 (ajustable manualmente aquí si se desea)
     myDFPlayer.volume(25); 
   }
 
@@ -116,13 +117,12 @@ void loop() {
     return;
   }
 
-  // --- LÓGICA DEL BOTÓN (MEJORADA) ---
+  // --- LÓGICA DEL BOTÓN ---
   static unsigned long btnTimer = 0;
   bool btnPressed = (digitalRead(BTN_STOP_PIN) == LOW);
 
   if (btnPressed) {
     if (btnTimer == 0) btnTimer = millis();
-    // 5 segundos para resetear WiFi
     if (millis() - btnTimer > 5000) {
       preferences.putString("ssid", "");
       preferences.putString("pass", "");
@@ -133,7 +133,6 @@ void loop() {
   } else {
     if (btnTimer > 0) {
       unsigned long duration = millis() - btnTimer;
-      // Clic normal para detener alarma
       if (duration < 3000 && isAlarmActive) {
         Serial.println("Botón presionado: Deteniendo alarma.");
         myDFPlayer.stop();
@@ -148,7 +147,6 @@ void loop() {
   if (!Firebase.ready()) return;
 
   if (isAlarmActive) {
-    // Parpadeo de alarma
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
   } else {
     digitalWrite(LED_INDICATOR, LOW);
@@ -196,8 +194,6 @@ void checkRoutineInFirestore() {
 
         if (taskActive.to<bool>() && taskTime.to<String>() == nowStr) {
           activeTrack = taskTrack.to<int>();
-          
-          // Si por alguna razón el track llega como 0, intentamos leerlo como string
           if (activeTrack == 0) {
             FirebaseJsonData trackStr;
             doc.get(trackStr, "fields/trackNumber/stringValue");
@@ -210,10 +206,9 @@ void checkRoutineInFirestore() {
             activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
             lastTriggeredMinute = nowStr;
             
-            Serial.print("ALARMA ACTIVADA! Buscando pista en carpeta /mp3: "); 
+            Serial.print("ALARMA ACTIVADA! Pista: "); 
             Serial.println(activeTrack);
             
-            // MÉTODO ROBUSTO: Carpeta "mp3" y habilitar bucle
             myDFPlayer.playMp3Folder(activeTrack);
             delay(200);
             myDFPlayer.enableLoop(); 
@@ -265,7 +260,7 @@ void handleSave() {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // Ajustar según zona horaria
+  configTime(-10800, 0, "pool.ntp.org"); 
   time_t now = time(nullptr);
   int r = 0;
   while (now < 24 * 3600 && r++ < 20) { delay(500); now = time(nullptr); }

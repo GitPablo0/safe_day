@@ -1,11 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v1.4 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
- * Hardware: ESP32, DFPlayer Mini, Pulsador (Pin 14), LED (Pin 2), Parlante.
+ * SafeDay v1.5 - Sistema de apoyo Alzheimer (ESP32 + DFPlayer Mini)
+ * Basado en la arquitectura robusta v3 de Sound Alarm.
  * 
- * VINCULACIÓN: Solo necesitas copiar tu USER_UID desde el Dashboard de la App.
- * No requiere email ni password en el código.
+ * INSTRUCCIONES:
+ * 1. Crea un usuario en Firebase Auth: "esp32@safeday.com" / "safeday123".
+ * 2. Copia el Device UID de tu cuenta personal de la App Web abajo.
  * ==================================================================================
  */
 
@@ -16,51 +17,58 @@
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-// 1. CONFIGURACIÓN DE RED
-#define WIFI_SSID "TU_WIFI_NAME"
-#define WIFI_PASSWORD "TU_WIFI_PASSWORD"
-
-// 2. CONFIGURACIÓN DE FIREBASE (Copia esto desde tu Dashboard)
-#define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
-#define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
+// ===============================================================
+// 1. CONFIGURACIÓN DE USUARIO Y WIFI
+// ===============================================================
 #define USER_UID "COPIA_TU_UID_AQUI" 
 
+struct WiFiNetwork {
+  const char* ssid;
+  const char* password;
+};
+
+WiFiNetwork knownNetworks[] = {
+  {"Xiomi", "NTXR1956"},
+  {"Pablooo13", "brenda123"},
+  {"Estudiantes", "Escuelas_2025"}
+};
+const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
+
+// ===============================================================
+// 2. CONFIGURACIÓN DE FIREBASE (Ajustado a SafeDay)
+// ===============================================================
+#define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
+#define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
+
+// ===============================================
 // 3. PINES
+// ===============================================
 #define BTN_STOP_PIN 14
 #define LED_INDICATOR 2
 #define DF_RX 16
 #define DF_TX 17
 
-// 4. OBJETOS
+// ===============================================
+// 4. OBJETOS Y VARIABLES
+// ===============================================
 SoftwareSerial softSerial(DF_RX, DF_TX);
 DFRobotDFPlayerMini myDFPlayer;
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-// 5. VARIABLES DE ESTADO
 bool isAlarmActive = false;
 int activeTrack = 0;
 String activeTaskId = "";
-unsigned long lastCheck = 0;
-const long checkInterval = 20000; // Revisar cada 20 segundos
+unsigned long lastFirestoreRead = 0;
+const long firestoreReadInterval = 30000; // Revisar rutina cada 30 seg
 String lastTriggeredMinute = "";
 
-// Configuración NTP
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = -10800; // Ajustar según tu país (ej: -3h = -10800s)
-const int   daylightOffset_sec = 0;
-
-void syncTime() {
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  Serial.println("Sincronizando hora...");
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) {
-    char timeStr[20];
-    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
-    Serial.printf("Hora actual: %s\n", timeStr);
-  }
-}
+void connectToWiFi();
+bool syncTime();
+void tokenStatusCallback(TokenInfo info);
+void checkRoutineInFirestore();
+void markTaskAsDone(String taskId);
 
 void setup() {
   Serial.begin(115200);
@@ -77,42 +85,53 @@ void setup() {
     myDFPlayer.volume(20); 
   }
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.println("\nWiFi Conectado.");
-  
+  connectToWiFi();
   syncTime();
 
-  // Configuración de Firebase (Sin Auth para lectura pública permitida por UID)
   config.api_key = API_KEY;
-  Firebase.begin(&config, &auth);
+  auth.user.email = "esp32@safeday.com";
+  auth.user.password = "safeday123";
+
+  config.token_status_callback = tokenStatusCallback;
   Firebase.reconnectWiFi(true);
-  
-  Serial.println("Sistema SafeDay Inicializado.");
+  Firebase.begin(&config, &auth);
+
+  Serial.println("SafeDay Inicializado.");
 }
 
-void markTaskAsDone(String taskId) {
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-  char doneTime[20];
-  strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
-  
-  String path = "users/" + String(USER_UID) + "/routine/" + taskId;
-  FirebaseJson json;
-  json.set("fields/lastCompletedAt/stringValue", String(doneTime)); 
-  
-  // Nota: Esto requiere que las reglas de Firestore permitan escritura por UID o pública.
-  // En SafeDay permitimos escritura si el dispositivo conoce el UID.
-  if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), json.raw(), "lastCompletedAt")) {
-    Serial.println("Cumplimiento registrado en la nube.");
+void loop() {
+  unsigned long currentMillis = millis();
+
+  if (!Firebase.ready()) return;
+
+  // Lógica de Alarma Activa
+  if (isAlarmActive) {
+    digitalWrite(LED_INDICATOR, (millis() / 500) % 2); // Parpadeo
+    
+    // Repetir audio cada 12 segundos si no se ha detenido
+    static unsigned long lastPlay = 0;
+    if (millis() - lastPlay > 12000) { 
+       myDFPlayer.play(activeTrack);
+       lastPlay = millis();
+    }
+
+    if (digitalRead(BTN_STOP_PIN) == LOW) {
+      myDFPlayer.stop();
+      digitalWrite(LED_INDICATOR, LOW);
+      isAlarmActive = false;
+      markTaskAsDone(activeTaskId);
+      delay(1000); 
+    }
   } else {
-    Serial.println("Error al registrar: " + fbdo.errorReason());
+    // Revisar rutina periódicamente
+    if (currentMillis - lastFirestoreRead > firestoreReadInterval) {
+      lastFirestoreRead = currentMillis;
+      checkRoutineInFirestore();
+    }
   }
 }
 
-void checkRoutine() {
-  if (!Firebase.ready()) return;
-
+void checkRoutineInFirestore() {
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)) return;
 
@@ -127,7 +146,6 @@ void checkRoutine() {
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str())) {
     FirebaseJson data;
     data.setJsonData(fbdo.payload().c_str());
-    
     FirebaseJsonArray docs;
     data.get(docs, "documents");
     
@@ -146,42 +164,53 @@ void checkRoutine() {
       if (taskActive.boolValue && taskTime.stringValue == nowStr) {
         isAlarmActive = true;
         activeTrack = taskTrack.intValue;
-        
         String fullPath = taskId.stringValue;
         activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
-        
         lastTriggeredMinute = nowStr;
         myDFPlayer.play(activeTrack);
-        Serial.printf("¡ALARMA! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
+        Serial.printf("¡ACTIVADO! Tarea: %s, Audio: %d\n", activeTaskId.c_str(), activeTrack);
         break;
       }
     }
   }
 }
 
-void loop() {
-  if (isAlarmActive) {
-    // Parpadeo del LED mientras suena
-    digitalWrite(LED_INDICATOR, (millis() / 500) % 2);
-    
-    // Repetir audio cada 15 seg si no se ha detenido
-    static unsigned long lastPlay = 0;
-    if (millis() - lastPlay > 15000) { 
-       myDFPlayer.play(activeTrack);
-       lastPlay = millis();
-    }
+void markTaskAsDone(String taskId) {
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  char doneTime[20];
+  strftime(doneTime, sizeof(doneTime), "%H:%M", &timeinfo);
+  
+  String path = "users/" + String(USER_UID) + "/routine/" + taskId;
+  String content = "{\"fields\":{\"lastCompletedAt\":{\"stringValue\":\"" + String(doneTime) + "\"}}}";
+  
+  if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), content.c_str(), "lastCompletedAt")) {
+    Serial.println("Cumplimiento registrado en Firestore.");
+  }
+}
 
-    if (digitalRead(BTN_STOP_PIN) == LOW) {
-      myDFPlayer.stop();
-      digitalWrite(LED_INDICATOR, LOW);
-      isAlarmActive = false;
-      markTaskAsDone(activeTaskId);
-      delay(1000); 
-    }
-  } else {
-    if (millis() - lastCheck > checkInterval) {
-      lastCheck = millis();
-      checkRoutine();
-    }
+void tokenStatusCallback(TokenInfo info) {
+  if (info.status == token_status_ready) {
+    Serial.println("Dispositivo Autenticado en SafeDay.");
+  }
+}
+
+bool syncTime() {
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 por defecto
+  time_t now = time(nullptr);
+  int retries = 0;
+  while (now < 24 * 3600 && retries < 20) {
+    delay(500); now = time(nullptr); retries++;
+  }
+  return now > 24 * 3600;
+}
+
+void connectToWiFi() {
+  WiFi.mode(WIFI_STA);
+  for (int i = 0; i < numKnownNetworks; i++) {
+    WiFi.begin(knownNetworks[i].ssid, knownNetworks[i].password);
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) delay(500);
+    if (WiFi.status() == WL_CONNECTED) return;
   }
 }

@@ -38,7 +38,7 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
   };
 
   return (
-    <Card>
+    <Card className="border-primary/20 bg-primary/5">
       <CardHeader>
         <div className="flex justify-between items-start">
             <div>
@@ -47,7 +47,7 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
                 <span>Vinculación</span>
                 </CardTitle>
                 <CardDescription>
-                Configura tu dispositivo SafeDay.
+                Identificador para tu dispositivo SafeDay.
                 </CardDescription>
             </div>
              <Button
@@ -62,11 +62,11 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert variant="default" className="bg-primary/5 border-primary/20">
+        <Alert variant="default" className="bg-background border-primary/20">
           <Info className="h-4 w-4 text-primary" />
-          <AlertTitle className="text-xs font-bold uppercase tracking-wider text-primary">Instrucciones</AlertTitle>
+          <AlertTitle className="text-xs font-bold uppercase tracking-wider text-primary">Paso a paso</AlertTitle>
           <AlertDescription className="text-xs text-muted-foreground">
-            Usa el correo y la contraseña de esta cuenta en tu código Arduino, junto con este UID.
+            Copia este UID y pégalo en el código Arduino. No necesitas configurar correos en el dispositivo.
           </AlertDescription>
         </Alert>
 
@@ -76,14 +76,14 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
             <Skeleton className="h-10 w-full" />
             ) : user ? (
             <div className="flex items-center gap-2">
-                <pre className="truncate rounded-md bg-muted px-3 py-2 text-xs font-mono text-muted-foreground w-full border border-border">
+                <pre className="truncate rounded-md bg-background px-3 py-2 text-xs font-mono text-muted-foreground w-full border border-primary/20">
                 <code>{user.uid}</code>
                 </pre>
                 <Button
                 variant="outline"
                 size="icon"
                 onClick={handleCopy}
-                className="shrink-0"
+                className="shrink-0 border-primary/20 hover:bg-primary/10"
                 >
                 {copied ? (
                     <Check className="size-4 text-primary" />
@@ -94,7 +94,7 @@ export function UserUidCard({ user, isLoading }: UserUidCardProps) {
             </div>
             ) : (
             <p className="text-sm text-destructive">
-                No autenticado.
+                Inicia sesión para ver tu UID.
             </p>
             )}
         </div>

@@ -71,7 +71,7 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
   return (
     <div className="space-y-4">
       {routine.length === 0 && !isAdding && (
-        <Card className="border-dashed">
+        <Card className="border-dashed border-primary/30">
           <CardContent className="py-10 text-center text-muted-foreground">
             No hay actividades programadas. Empieza creando la rutina diaria.
           </CardContent>
@@ -88,15 +88,15 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
               <div>
                 <h3 className="font-bold text-lg">{task.title}</h3>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  <Badge variant="outline" className="gap-1">
+                  <Badge variant="outline" className="gap-1 border-primary/20">
                     <Clock className="size-3" /> {task.time}
                   </Badge>
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 bg-primary/5">
                     <Music className="size-3" /> {AUDIO_TRACKS.find(t => t.id === task.trackNumber)?.label || `Pista ${task.trackNumber}`}
                   </Badge>
                   {task.lastCompletedAt && (
                     <Badge variant="default" className="bg-green-500 hover:bg-green-600 gap-1">
-                      <CheckCircle2 className="size-3" /> {task.lastCompletedAt}
+                      <CheckCircle2 className="size-3" /> Realizado: {task.lastCompletedAt}
                     </Badge>
                   )}
                 </div>
@@ -115,7 +115,7 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
       ))}
 
       {isAdding ? (
-        <Card className="border-primary">
+        <Card className="border-primary bg-primary/5">
           <CardContent className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -124,6 +124,7 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
                   placeholder="Ej: Almuerzo" 
                   value={newTask.title} 
                   onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                  className="bg-background"
                 />
               </div>
               <div className="space-y-2">
@@ -132,15 +133,23 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
                   type="time" 
                   value={newTask.time} 
                   onChange={(e) => setNewTask({...newTask, time: e.target.value})}
+                  className="bg-background"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Instrucción de Audio</Label>
                 <Select 
                   value={newTask.trackNumber.toString()} 
-                  onValueChange={(val) => setNewTask({...newTask, trackNumber: parseInt(val)})}
+                  onValueChange={(val) => {
+                    const track = AUDIO_TRACKS.find(t => t.id.toString() === val);
+                    setNewTask({
+                      ...newTask, 
+                      trackNumber: parseInt(val),
+                      title: newTask.title || (track ? track.label : '')
+                    });
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Selecciona un audio" />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,7 +169,7 @@ export function RoutineManager({ routine, userId }: { routine: Task[], userId: s
           </CardContent>
         </Card>
       ) : (
-        <Button className="w-full h-12 gap-2" variant="outline" onClick={() => setIsAdding(true)}>
+        <Button className="w-full h-12 gap-2 border-primary/30 text-primary hover:bg-primary/5" variant="outline" onClick={() => setIsAdding(true)}>
           <Plus className="size-5" /> Añadir a la Rutina
         </Button>
       )}

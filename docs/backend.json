@@ -4,7 +4,7 @@
     "RoutineTask": {
       "title": "RoutineTask",
       "type": "object",
-      "description": "Represents a scheduled activity for a patient with Alzheimer's, including the time and the audio track to play.",
+      "description": "Represents a scheduled activity for a patient, including the time and the audio track to play.",
       "properties": {
         "id": {
           "type": "string",
@@ -12,7 +12,7 @@
         },
         "title": {
           "type": "string",
-          "description": "Name of the activity (e.g., 'Take medication', 'Lunch time')."
+          "description": "Name of the activity."
         },
         "time": {
           "type": "string",

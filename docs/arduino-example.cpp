@@ -20,6 +20,7 @@
 // ===============================================================
 // 1. CONFIGURACIÓN DE USUARIO Y WIFI
 // ===============================================================
+// ¡¡¡ PEGA EL UID DE TU USUARIO DE FIREBASE AQUÍ !!!
 #define USER_UID "COPIA_TU_UID_AQUI" 
 
 struct WiFiNetwork {
@@ -36,17 +37,17 @@ const int numKnownNetworks = sizeof(knownNetworks) / sizeof(knownNetworks[0]);
 
 // ===============================================================
 // 2. CONFIGURACIÓN DE FIREBASE (Ajustado a SafeDay)
-// ===============================================================
+// ===============================================
 #define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
 #define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
 
 // ===============================================
 // 3. PINES
 // ===============================================
-#define BTN_STOP_PIN 14
-#define LED_INDICATOR 2
-#define DF_RX 16
-#define DF_TX 17
+#define BTN_STOP_PIN 14   // Pulsador físico para detener alarma
+#define LED_INDICATOR 2   // LED indicador (parpadea al sonar)
+#define DF_RX 16          // TX del ESP32 -> RX del DFPlayer
+#define DF_TX 17          // RX del ESP32 -> TX del DFPlayer
 
 // ===============================================
 // 4. OBJETOS Y VARIABLES
@@ -79,7 +80,7 @@ void setup() {
   digitalWrite(LED_INDICATOR, LOW);
   
   if (!myDFPlayer.begin(softSerial)) {
-    Serial.println("Error: DFPlayer no detectado.");
+    Serial.println("Error: DFPlayer no detectado. Revisa conexiones y SD.");
   } else {
     Serial.println("DFPlayer Mini Online.");
     myDFPlayer.volume(20); 
@@ -106,7 +107,7 @@ void loop() {
 
   // Lógica de Alarma Activa
   if (isAlarmActive) {
-    digitalWrite(LED_INDICATOR, (millis() / 500) % 2); // Parpadeo
+    digitalWrite(LED_INDICATOR, (millis() / 500) % 2); // Parpadeo cada 500ms
     
     // Repetir audio cada 12 segundos si no se ha detenido
     static unsigned long lastPlay = 0;
@@ -120,7 +121,7 @@ void loop() {
       digitalWrite(LED_INDICATOR, LOW);
       isAlarmActive = false;
       markTaskAsDone(activeTaskId);
-      delay(1000); 
+      delay(1000); // Debounce
     }
   } else {
     // Revisar rutina periódicamente
@@ -164,6 +165,7 @@ void checkRoutineInFirestore() {
       if (taskActive.boolValue && taskTime.stringValue == nowStr) {
         isAlarmActive = true;
         activeTrack = taskTrack.intValue;
+        // Extraer ID del documento del path completo
         String fullPath = taskId.stringValue;
         activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
         lastTriggeredMinute = nowStr;
@@ -196,7 +198,7 @@ void tokenStatusCallback(TokenInfo info) {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 por defecto
+  configTime(-10800, 0, "pool.ntp.org"); // GMT-3 (Ajustar según país)
   time_t now = time(nullptr);
   int retries = 0;
   while (now < 24 * 3600 && retries < 20) {

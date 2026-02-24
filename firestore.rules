@@ -10,6 +10,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
       
+      // El dispositivo SafeDay puede leer la rutina si conoce el UID
+      // y actualizar el campo de cumplimiento.
       match /routine/{taskId} {
         allow read: if true; 
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastCompletedAt']);

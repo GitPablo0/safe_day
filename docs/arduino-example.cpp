@@ -1,13 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v2.3 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
+ * SafeDay v2.5 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
  * 
  * MEJORAS:
- * 1. Detección de rutina restaurada: Se corrigió la consulta a Firestore.
- * 2. Audio infinito: El audio se repite hasta presionar el botón (.loop).
- * 3. Lógica de botón robusta: Diferencia clic corto (Stop) de clic largo (Reset WiFi).
- * 4. Depuración: Mensajes en Monitor Serial para ver el estado de la búsqueda.
+ * 1. Corrección Pista 9: Se usa playMp3Folder para forzar la búsqueda en carpeta /mp3.
+ * 2. Audio Infinito: Se activa enableLoop() tras iniciar la reproducción.
+ * 3. Robusted: Mejor extracción de datos desde Firestore JSON.
  * ==================================================================================
  */
 
@@ -21,7 +20,7 @@
 #include "DFRobotDFPlayerMini.h"
 
 // ===============================================================
-// 1. CONFIGURACIÓN FIJA
+// 1. CONFIGURACIÓN FIJA (Vincular con UID de la Web)
 // ===============================================================
 #define USER_UID "WWxcJu01odP4dFIp42sHjKUliQ13"
 #define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
@@ -74,7 +73,7 @@ void setup() {
   if (!myDFPlayer.begin(Serial2)) {
     Serial.println("DFPlayer no detectado.");
   } else {
-    myDFPlayer.volume(20); 
+    myDFPlayer.volume(25); 
   }
 
   String savedSSID = preferences.getString("ssid", "");
@@ -117,12 +116,13 @@ void loop() {
     return;
   }
 
-  // --- LÓGICA DEL BOTÓN ---
+  // --- LÓGICA DEL BOTÓN (MEJORADA) ---
   static unsigned long btnTimer = 0;
   bool btnPressed = (digitalRead(BTN_STOP_PIN) == LOW);
 
   if (btnPressed) {
     if (btnTimer == 0) btnTimer = millis();
+    // 5 segundos para resetear WiFi
     if (millis() - btnTimer > 5000) {
       preferences.putString("ssid", "");
       preferences.putString("pass", "");
@@ -133,6 +133,7 @@ void loop() {
   } else {
     if (btnTimer > 0) {
       unsigned long duration = millis() - btnTimer;
+      // Clic normal para detener alarma
       if (duration < 3000 && isAlarmActive) {
         Serial.println("Botón presionado: Deteniendo alarma.");
         myDFPlayer.stop();
@@ -147,6 +148,7 @@ void loop() {
   if (!Firebase.ready()) return;
 
   if (isAlarmActive) {
+    // Parpadeo de alarma
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
   } else {
     digitalWrite(LED_INDICATOR, LOW);
@@ -167,11 +169,10 @@ void checkRoutineInFirestore() {
 
   if (nowStr == lastTriggeredMinute) return;
   
-  Serial.println("Revisando rutina para la hora: " + nowStr);
+  Serial.print("Hora actual: "); Serial.println(nowStr);
 
   String path = "users/" + String(USER_UID) + "/routine";
   
-  // Usamos "" para databaseId para mayor compatibilidad
   if (Firebase.Firestore.listDocuments(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), 0, "", "", "", false)) {
     FirebaseJson json;
     json.setJsonData(fbdo.payload().c_str());
@@ -194,22 +195,33 @@ void checkRoutineInFirestore() {
         doc.get(taskId, "name");
 
         if (taskActive.to<bool>() && taskTime.to<String>() == nowStr) {
-          isAlarmActive = true;
           activeTrack = taskTrack.to<int>();
-          String fullPath = taskId.to<String>();
-          activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
-          lastTriggeredMinute = nowStr;
           
-          myDFPlayer.loop(activeTrack); // Sonido infinito
-          Serial.println("ALARMA ACTIVADA: " + activeTaskId);
-          break;
+          // Si por alguna razón el track llega como 0, intentamos leerlo como string
+          if (activeTrack == 0) {
+            FirebaseJsonData trackStr;
+            doc.get(trackStr, "fields/trackNumber/stringValue");
+            activeTrack = trackStr.to<int>();
+          }
+
+          if (activeTrack > 0) {
+            isAlarmActive = true;
+            String fullPath = taskId.to<String>();
+            activeTaskId = fullPath.substring(fullPath.lastIndexOf('/') + 1);
+            lastTriggeredMinute = nowStr;
+            
+            Serial.print("ALARMA ACTIVADA! Buscando pista en carpeta /mp3: "); 
+            Serial.println(activeTrack);
+            
+            // MÉTODO ROBUSTO: Carpeta "mp3" y habilitar bucle
+            myDFPlayer.playMp3Folder(activeTrack);
+            delay(200);
+            myDFPlayer.enableLoop(); 
+            break;
+          }
         }
       }
-    } else {
-      Serial.println("No se encontraron actividades programadas.");
     }
-  } else {
-    Serial.println("Error de conexión con Firestore: " + fbdo.errorReason());
   }
 }
 
@@ -253,7 +265,7 @@ void handleSave() {
 }
 
 bool syncTime() {
-  configTime(-10800, 0, "pool.ntp.org");
+  configTime(-10800, 0, "pool.ntp.org"); // Ajustar según zona horaria
   time_t now = time(nullptr);
   int r = 0;
   while (now < 24 * 3600 && r++ < 20) { delay(500); now = time(nullptr); }

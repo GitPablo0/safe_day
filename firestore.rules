@@ -1,86 +1,25 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * FIRESTORE SECURITY RULES - PROTOTYPING MODE
-     * 
-     * Core Philosophy:
-     * This ruleset enforces a strict Path-Based Ownership model. Security is tied directly 
-     * to the document hierarchy, ensuring that users can only access data nested under 
-     * their own unique identifier.
-     * 
-     * Data Structure:
-     * All user-specific data is organized under the top-level path /users/{userId}. 
-     * Specifically, system configurations are stored at:
-     * /users/{userId}/systemConfigurations/{systemConfigurationId}
-     * 
-     * Key Security Decisions:
-     * 1. Authorization Independence: By using the userId in the path, we verify ownership 
-     *    by comparing the path wildcard to the 'request.auth.uid'. This avoids slow and 
-     *    costly 'get()' lookups.
-     * 2. Flexible Prototyping: While access is strictly controlled, the rules do not 
-     *    enforce strict data types or schemas for non-relational fields (e.g., sensor 
-     *    threshold values), allowing for rapid frontend iteration.
-     * 3. Relational Integrity: On document creation, the rules enforce that internal 
-     *    ID fields match the Firestore document ID to ensure data consistency.
-     */
-
-    // --- GLOBAL HELPER FUNCTIONS ---
-
-    /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
-
-    /** @description Checks if the authenticated user's UID matches the provided userId. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Checks ownership and ensures the document already exists for update/delete. */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if isOwner(userId);
     }
-
-    // --- COLLECTION RULES ---
-
-    /**
-     * @description Rules for managing user-owned system configuration profiles.
-     * @path /users/{userId}/systemConfigurations/{systemConfigurationId}
-     * @allow (create) if auth.uid matches {userId} and data.id matches {systemConfigurationId}.
-     * @deny (list) if auth.uid does not match {userId}.
-     * @principle Restricts access to a user's own data tree and validates path/ID consistency.
-     */
-    match /users/{userId}/systemConfigurations/{systemConfigurationId} {
-      
-      // Read Permissions
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-
-      // Write Permissions
-      allow create: if isOwner(userId) && request.resource.data.id == systemConfigurationId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+    
+    // Permitir que el dispositivo (con su propio UID) pueda leer la rutina del usuario vinculado
+    // Para simplificar el prototipo, permitimos lectura si está autenticado.
+    match /users/{ownerId}/routine/{taskId} {
+      allow read: if isSignedIn();
     }
-
-    /**
-     * @description Root user document rules.
-     * @path /users/{userId}
-     * @allow (create) if auth.uid matches the document ID being created.
-     * @deny (update) if the user attempts to change their own document ID.
-     * @principle Implements Self-Creation and ownership for the root user profile.
-     */
-    match /users/{userId} {
-      
-      // Read Permissions
-      allow get: if isOwner(userId);
-      allow list: if false; // Disallow listing all users for privacy.
-
-      // Write Permissions
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+    match /users/{ownerId}/settings/device {
+      allow read: if isSignedIn();
     }
   }
 }

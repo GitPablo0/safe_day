@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -9,12 +10,7 @@ import {
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 /**
- * Creates a new user with email and password, and then creates their
- * initial sound alarm state document in Firestore.
- * @param auth The Firebase Auth instance.
- * @param email The user's email.
- * @param pass The user's password.
- * @returns A promise that resolves with the UserCredential.
+ * Registra un nuevo cuidador e inicializa su perfil de SafeDay.
  */
 export async function signUpWithEmail(
   auth: Auth,
@@ -27,20 +23,25 @@ export async function signUpWithEmail(
   if (user) {
     try {
       const db = getFirestore(auth.app);
-      const alarmStateRef = doc(db, `users/${user.uid}/soundAlarm/state`);
+      
+      // Inicializar settings del dispositivo
+      await setDoc(doc(db, `users/${user.uid}/settings/device`), {
+        volume: 20,
+        isMuted: false
+      });
 
-      const initialAlarmState = {
-        isArmed: false,
-        soundDetected: false,
-      };
+      // Crear tarea de bienvenida en la rutina
+      const welcomeTaskId = crypto.randomUUID();
+      await setDoc(doc(db, `users/${user.uid}/routine/${welcomeTaskId}`), {
+        id: welcomeTaskId,
+        title: 'Primeros pasos con SafeDay',
+        time: '09:00',
+        trackNumber: 1,
+        isActive: true
+      });
 
-      await setDoc(alarmStateRef, initialAlarmState);
     } catch (dbError) {
-      console.error(
-        'User created, but failed to create initial sound alarm state:',
-        dbError
-      );
-      throw new Error('User created, but failed to initialize database state.');
+      console.error('Error inicializando SafeDay:', dbError);
     }
   }
 

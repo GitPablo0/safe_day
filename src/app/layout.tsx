@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Inter } from 'next/font/google';
@@ -7,8 +8,8 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'BabyAlarm',
-  description: 'Panel de control para sistema de alarma con sensor de sonido.',
+  title: 'SafeDay - Cuidado Alzheimer',
+  description: 'Gestión de rutinas diarias para pacientes con Alzheimer.',
 };
 
 export default function RootLayout({

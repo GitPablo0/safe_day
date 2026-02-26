@@ -1,12 +1,12 @@
 
 /**
  * ==================================================================================
- * SafeDay v2.5 - Sistema de apoyo Alzheimer (ESP32 + WiFi Dinámico)
+ * SafeDay v2.6 - Sistema de apoyo Alzheimer (ESP32 + Portal Cautivo)
  * 
  * MEJORAS:
- * 1. Corrección Pista 9: Se usa playMp3Folder para forzar la búsqueda en carpeta /mp3.
- * 2. Audio Infinito: Se activa enableLoop() tras iniciar la reproducción.
- * 3. Robusted: Mejor extracción de datos desde Firestore JSON.
+ * 1. IP Fija: 192.168.4.1 para configuración.
+ * 2. Volumen Fijo: Eliminada la sincronización de volumen de la nube (fijo en 25).
+ * 3. Captive Portal: DNS Server para redirección automática.
  * ==================================================================================
  */
 
@@ -56,6 +56,7 @@ bool isConfigMode = false;
 void setupConfigPortal();
 void handleRoot();
 void handleSave();
+void handleNotFound();
 bool syncTime();
 void checkRoutineInFirestore();
 void markTaskAsDone(String taskId);
@@ -73,8 +74,7 @@ void setup() {
   if (!myDFPlayer.begin(Serial2)) {
     Serial.println("DFPlayer no detectado.");
   } else {
-    // Volumen fijo en 25 (ajustable manualmente aquí si se desea)
-    myDFPlayer.volume(25); 
+    myDFPlayer.volume(25); // Volumen fijo 
   }
 
   String savedSSID = preferences.getString("ssid", "");
@@ -123,6 +123,7 @@ void loop() {
 
   if (btnPressed) {
     if (btnTimer == 0) btnTimer = millis();
+    // 5 segundos para resetear WiFi
     if (millis() - btnTimer > 5000) {
       preferences.putString("ssid", "");
       preferences.putString("pass", "");
@@ -133,6 +134,7 @@ void loop() {
   } else {
     if (btnTimer > 0) {
       unsigned long duration = millis() - btnTimer;
+      // Clic normal para detener alarma
       if (duration < 3000 && isAlarmActive) {
         Serial.println("Botón presionado: Deteniendo alarma.");
         myDFPlayer.stop();
@@ -147,6 +149,7 @@ void loop() {
   if (!Firebase.ready()) return;
 
   if (isAlarmActive) {
+    // Parpadeo de alarma
     digitalWrite(LED_INDICATOR, (millis() / 500) % 2); 
   } else {
     digitalWrite(LED_INDICATOR, LOW);
@@ -237,26 +240,42 @@ void markTaskAsDone(String taskId) {
 void setupConfigPortal() {
   isConfigMode = true;
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID);
+  WiFi.softAP(AP_SSID); // IP default: 192.168.4.1
+  
   dnsServer.start(53, "*", WiFi.softAPIP());
+  
   server.on("/", handleRoot);
   server.on("/save", HTTP_POST, handleSave);
+  server.onNotFound(handleNotFound); // Redirigir todo a la raíz
+  
   server.begin();
   Serial.println("Portal iniciado: SafeDay_Config");
+  Serial.println("IP: 192.168.4.1");
 }
 
 void handleRoot() {
-  String html = "<html><body style='text-align:center;'><h1>SafeDay Config</h1>";
-  html += "<form action='/save' method='POST'>WiFi: <input name='ssid'><br>Pass: <input name='pass' type='password'><br><input type='submit'></form></body></html>";
+  String html = "<html><body style='text-align:center; font-family:sans-serif;'>";
+  html += "<h1>SafeDay Config</h1>";
+  html += "<p>Ingresa los datos del WiFi de la casa.</p>";
+  html += "<form action='/save' method='POST'>";
+  html += "WiFi: <input name='ssid' style='padding:10px; margin:5px;'><br>";
+  html += "Pass: <input name='pass' type='password' style='padding:10px; margin:5px;'><br>";
+  html += "<input type='submit' value='Guardar y Conectar' style='padding:10px 20px; background:#e11d48; color:white; border:none; border-radius:5px;'>";
+  html += "</form></body></html>";
   server.send(200, "text/html", html);
 }
 
 void handleSave() {
   preferences.putString("ssid", server.arg("ssid"));
   preferences.putString("pass", server.arg("pass"));
-  server.send(200, "text/html", "Guardado. Reiniciando...");
+  server.send(200, "text/html", "Guardado con exito. El aparato se reiniciara para conectarse.");
   delay(2000);
   ESP.restart();
+}
+
+void handleNotFound() {
+  server.sendHeader("Location", "/", true);
+  server.send(302, "text/plain", "");
 }
 
 bool syncTime() {

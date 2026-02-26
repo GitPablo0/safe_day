@@ -24,7 +24,7 @@ export async function signUpWithEmail(
     try {
       const db = getFirestore(auth.app);
       
-      // Inicializar perfil mínimo sin volumen
+      // Inicializar perfil mínimo del dispositivo
       await setDoc(doc(db, `users/${user.uid}/settings/device`), {
         status: 'online'
       });

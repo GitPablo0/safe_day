@@ -22,7 +22,7 @@
 // ===============================================================
 // 1. CONFIGURACIÓN FIJA (Vincular con UID de la Web)
 // ===============================================================
-#define USER_UID "WWxcJu01odP4dFIp42sHjKUliQ13"
+#define USER_UID "4YPEdHMBTZTFgb3XO6IfPmFaBNt1"
 #define API_KEY "AIzaSyAdUgSVPEpdoLF15UleY65qm3PtjC82h-8"
 #define FIREBASE_PROJECT_ID "safeday-29789405-ff4df"
 
